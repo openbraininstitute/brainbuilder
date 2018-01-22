@@ -1,6 +1,6 @@
 '''compatibility functions with existing BBP formats'''
 
-#pylint: disable=too-many-lines
+# pylint: disable=too-many-lines
 
 import os
 import itertools
@@ -744,7 +744,7 @@ def transform_neurondb_into_spatial_distribution(annotation, neurondb, region_la
         offset = len(all_dists.columns)
         dists.columns += offset
         flat_field[flat_mask] = voxel_dist_indices + offset
-        all_dists = pd.concat([all_dists, dists], axis=1) # pylint: disable=redefined-variable-type
+        all_dists = pd.concat([all_dists, dists], axis=1)  # pylint: disable=redefined-variable-type
 
     field = annotation.with_data(flat_field.reshape(annotation.raw.shape))
 

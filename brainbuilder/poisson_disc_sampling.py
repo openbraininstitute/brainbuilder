@@ -195,7 +195,7 @@ def generate_points(bbox, nb_points, min_distance, seed=None,
     # generate points
     if display_progress:
         progress_bar = tqdm(total=nb_points)
-        progress_bar.update(1) # count the seed as the first
+        progress_bar.update(1)  # count the seed as the first
     else:
         progress_bar = None
 
