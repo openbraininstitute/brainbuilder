@@ -55,7 +55,7 @@ def create_density_profile(desired_nb_points):
     '''Create density profile with dimensions so that total cell count is
     desired_nb_points.'''
     nb_voxels = 100
-    voxel_size = 10 # length unit is um
+    voxel_size = 10  # length unit is um
     data = np.full((nb_voxels, nb_voxels, nb_voxels), desired_nb_points)
     return vd.VoxelData(data, (voxel_size, voxel_size, voxel_size))
 
@@ -70,7 +70,7 @@ def error_nb_points(distance, bbox, desired_nb_points):
         and distances between generated cell positions.
         '''
         if point is None:
-            return distance # for the creation of the spatial grid
+            return distance  # for the creation of the spatial grid
         return distance
 
     points = poisson_disc.generate_points(
