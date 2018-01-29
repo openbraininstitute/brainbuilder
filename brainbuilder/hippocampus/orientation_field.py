@@ -1,10 +1,10 @@
 '''algorithm to compute orientation fields for Hippocampus'''
+from scipy.optimize import leastsq  # pylint: disable=E0611
+import numpy as np
+
 from voxcell import build
 from voxcell import vector_fields as vf
 from brainbuilder.select_region import select_hemisphere
-
-from scipy.optimize import leastsq  # pylint: disable=E0611
-import numpy as np
 
 
 def leastsq_circle(x, y):

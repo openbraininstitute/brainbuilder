@@ -1,11 +1,11 @@
 """ Build atlas for SSCX column based on BBP recipe. """
 
+import numpy as np
+
 import voxcell.build as vb
 from voxcell import VoxelData, Hierarchy
 
 from brainbuilder.utils import bbp
-
-import numpy as np
 
 
 def build_column_atlas(recipe_filename):
