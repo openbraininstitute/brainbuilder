@@ -9,6 +9,13 @@ from brainbuilder.exceptions import BrainBuilderError
 import brainbuilder.nexus.voxelbrain as test_module
 
 
+def test_open_atlas():
+    nt.assert_is_instance(test_module.Atlas.open('foo'), test_module.LocalAtlas)
+    nt.assert_is_instance(test_module.Atlas.open('file://foo'), test_module.LocalAtlas)
+    nt.assert_raises(BrainBuilderError, test_module.Atlas.open, 'foo://bar')
+    nt.assert_raises(BrainBuilderError, test_module.Atlas.open, 'http://foo/bar')
+
+
 class TestLocalAtlas(object):
     def setUp(self):
         self.atlas = test_module.Atlas.open('/foo')

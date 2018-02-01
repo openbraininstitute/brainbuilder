@@ -8,12 +8,18 @@ import os
 import abc
 import requests
 
+try:
+    import urlparse
+except ImportError:
+    # pylint: disable=no-name-in-module,import-error
+    from urllib import parse as urlparse
+
 from voxcell import VoxelData, Hierarchy
 
 from brainbuilder.exceptions import BrainBuilderError
 
 
-def _download_file(url, filepath, overwrite):
+def _download_file(url, filepath, overwrite, allow_empty=False):
     """ Download file from `url` if it is missing. """
     if os.path.exists(filepath) and not overwrite:
         return filepath
@@ -22,6 +28,8 @@ def _download_file(url, filepath, overwrite):
     try:
         resp = requests.get(url)
         resp.raise_for_status()
+        if not (allow_empty or resp.content):
+            raise BrainBuilderError("Empty content")
         with open(tmp_filepath, "wb") as f:
             f.write(resp.content)
         os.rename(tmp_filepath, filepath)
@@ -41,12 +49,17 @@ class Atlas(object):
     @staticmethod
     def open(url, cache_dir=None):
         """ Get Atlas object to access atlas stored at URL. """
-        if url.startswith("/"):
+        parsed = urlparse.urlsplit(url)
+        if parsed.scheme in ('', 'file'):
             return LocalAtlas(url)
-        else:
+        elif parsed.scheme in ('http', 'https'):
+            if not parsed.path.startswith('/api/analytics/atlas/releases/'):
+                raise BrainBuilderError("Unexpected URL: '%s'" % url)
             if cache_dir is None:
                 raise BrainBuilderError("`cache_dir` should be specified")
             return VoxelBrainAtlas(url, cache_dir)
+        else:
+            raise BrainBuilderError("Unexpected URL: '%s'" % url)
 
     @abc.abstractmethod
     def _fetch_data(self, data_type):
