@@ -1,2 +1,2 @@
 """brainbuilder version"""
-VERSION = '0.5.7.dev0'
+VERSION = '0.5.7'
