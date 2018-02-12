@@ -115,6 +115,7 @@ def _build_distance(brain_regions):
     voxel_side = brain_regions.voxel_dimensions[1]
     for j in range(brain_regions.raw.shape[1]):
         raw[:, j, :] = brain_regions.offset[1] + voxel_side * (0.5 + j)
+    raw[raw < 0] = np.nan
     return brain_regions.with_data(raw)
 
 
