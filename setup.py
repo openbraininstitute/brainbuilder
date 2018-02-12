@@ -49,6 +49,5 @@ setup(
     scripts=[
         'apps/bind2atlas',
         'apps/brainbuilder',
-    ],
-    test_suite='nose.collector'
+    ]
 )
