@@ -118,69 +118,6 @@ def test_load_neurondb_v4_as_v3():
     assert_frame_equal(actual, expected, check_like=True)
 
 
-def test_parse_mvd2():
-    data = bbp.parse_mvd2(os.path.join(DATA_PATH, 'circuit.mvd2'))
-    eq_(len(data['CircuitSeeds']), 1)
-    eq_(len(data['ElectroTypes']), 3)
-    eq_(len(data['MorphTypes']), 5)
-    eq_(len(data['MicroBox Data']), 1)
-    eq_(len(data['MiniColumnsPosition']), 5)
-    eq_(len(data['Neurons Loaded']), 5)
-
-
-def test_load_mvd2():
-    cells = bbp.load_mvd2(os.path.join(DATA_PATH, 'circuit.mvd2'))
-
-    eq_(cells.positions.shape, (5, 3))
-
-    eq_(cells.orientations.shape, (5, 3, 3))
-
-    assert_almost_equal(
-        cells.orientations[0],
-        [[ 0.5639686,  0.       , -0.8257962],
-         [ 0.       ,  1.       ,  0.       ],
-         [ 0.8257962,  0.       ,  0.5639686]],
-    )
-
-    eq_(set(cells.properties.columns),
-        set(['etype', 'morphology', 'mtype', 'synapse_class', 'morph_class',
-             'layer', 'hypercolumn', 'minicolumn', 'me_combo']))
-
-    eq_(list(cells.properties.synapse_class.unique()),
-        ['INH', 'EXC'])
-
-    eq_(list(cells.properties.mtype.unique()),
-        ['L1_DLAC', 'L23_PC', 'L4_NBC', 'L5_TTPC1', 'L6_LBC'])
-
-    eq_(list(cells.properties.etype.unique()),
-        ['cNAC', 'cADpyr', 'dNAC'])
-
-    eq_(list(cells.properties.synapse_class),
-        ['INH', 'EXC', 'INH', 'EXC', 'INH'])
-
-    eq_(list(cells.properties.layer),
-        ['1', '2', '4', '5', '6'])
-
-    eq_(cells.properties.me_combo[0],
-        'cNAC187_L1_DLAC_1_sm080904a3_-_Scale_x1.000_y1.050_z1.000')
-
-
-def test_roundtrip_mvd2():
-    original = bbp.load_mvd2(os.path.join(DATA_PATH, 'circuit.mvd2'))
-
-    cwd = tempfile.mkdtemp()
-
-    try:
-        filename = os.path.join(cwd, 'exported.mvd2')
-        bbp.save_mvd2(filename, '/here', original)
-        restored = bbp.load_mvd2(filename)
-        assert_almost_equal(original.orientations, restored.orientations)
-        assert_almost_equal(original.positions, restored.positions)
-        assert_frame_equal(original.properties, restored.properties)
-    finally:
-        shutil.rmtree(cwd)
-
-
 def test_gid2str():
     actual = bbp.gid2str(42)
     eq_(actual, "a42")
