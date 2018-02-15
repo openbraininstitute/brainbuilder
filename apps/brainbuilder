@@ -14,19 +14,101 @@ import numpy as np
 import pandas as pd
 
 from voxcell import CellCollection, VoxelData
+
+import brainbuilder.app.cells
+
+from brainbuilder import app
 from brainbuilder.utils import bbp
 
 
+L = logging.getLogger('brainbuilder')
+
+
 @click.group()
-def app():
+def _app():
     """ Collection of tools for circuit building """
     pass
 
 
-@app.group(name="mvd3")
+@_app.group(name="cells")
+def _cells():
+    """ Building CellCollection """
+    pass
+
+
+@_cells.command(short_help="Create CellCollection", help=app.cells.create.__doc__)
+@click.option("--composition", help="Path to ME-type composition YAML", required=True)
+@click.option("--mtype-taxonomy", help="Path to mtype taxonomy TSV", required=True)
+@click.option("--atlas", help="Atlas URL / path", required=True)
+@click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
+@click.option("--region-ids", help="Comma-separated region IDs", default=None, show_default=True)
+@click.option("--density-factor", help="Density factor", type=float, default=1.0, show_default=True)
+@click.option("--soma-placement", help="Soma placement method", default='basic', show_default=True)
+@click.option(
+    "--assign-layer", is_flag=True, help="Assign 'layer' property", show_default=True)
+@click.option(
+    "--assign-column", is_flag=True, help="Assign 'hypercolumn' property", show_default=True)
+@click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
+@click.option("-o", "--output", help="Path to output MVD3", required=True)
+def create(
+    composition, mtype_taxonomy,
+    atlas, atlas_cache, region_ids,
+    density_factor, soma_placement,
+    assign_layer, assign_column,
+    seed,
+    output
+):
+    if region_ids is not None:
+        region_ids = map(int, region_ids.split(","))
+
+    np.random.seed(seed)
+
+    cells = app.cells.create(
+        composition,
+        mtype_taxonomy,
+        atlas, atlas_cache, region_ids,
+        density_factor=density_factor,
+        soma_placement=soma_placement,
+        assign_layer=assign_layer,
+        assign_column=assign_column,
+    )
+
+    L.info("Export to MVD3...")
+    cells.save(output)
+
+
+@_cells.command()
+@click.argument("mvd3")
+@click.option("--morphdb", help="Path to extNeuronDB.dat", required=True)
+@click.option("--seed", type=int, help="Pseudo-random generator seed", default=0)
+@click.option("-o", "--output", help="Path to output MVD3", required=True)
+def assign_emodels(mvd3, morphdb, seed, output):
+    """ Assign 'me_combo' property """
+    np.random.seed(seed)
+
+    mvd3 = CellCollection.load(mvd3)
+    morphdb = bbp.load_neurondb_v3(morphdb)
+
+    result = bbp.assign_emodels(mvd3, morphdb)
+    result.save(output)
+
+
+@_app.group(name="mvd3")
 def _mvd3():
     """ Tools for working with MVD3 """
     pass
+
+
+@_mvd3.command()
+@click.argument("mvd3")
+@click.option("--recipe", help="Path to builder recipe XML", required=True)
+@click.option("-o", "--output", help="Path to output MVD3", required=True)
+def reorder_mtypes(mvd3, recipe, output):
+    """ Align /library/mtypes with builder recipe """
+    tmp_path = output + "~"
+    shutil.copy(mvd3, tmp_path)
+    bbp.reorder_mtypes(tmp_path, recipe)
+    shutil.move(tmp_path, output)
 
 
 @_mvd3.command()
@@ -50,38 +132,10 @@ def add_property(mvd3, prop, voxel_data, output):
 
 @_mvd3.command()
 @click.argument("mvd3")
-@click.option("--recipe", help="Path to builder recipe XML", required=True)
-@click.option("-o", "--output", help="Path to output MVD3", required=True)
-def reorder_mtypes(mvd3, recipe, output):
-    """ Align /library/mtypes with builder recipe """
-    tmp_path = output + "~"
-    shutil.copy(mvd3, tmp_path)
-    bbp.reorder_mtypes(tmp_path, recipe)
-    shutil.move(tmp_path, output)
-
-
-@_mvd3.command()
-@click.argument("mvd3")
-@click.option("--morphdb", help="Path to extNeuronDB.dat", required=True)
-@click.option("--seed", type=int, help="Pseudo-random generator seed", default=0)
-@click.option("-o", "--output", help="Path to output MVD3", required=True)
-def assign_emodels(mvd3, morphdb, seed, output):
-    """ Assign /cells/properties/me_combo """
-    np.random.seed(seed)
-
-    mvd3 = CellCollection.load(mvd3)
-    morphdb = bbp.load_neurondb_v3(morphdb)
-
-    result = bbp.assign_emodels(mvd3, morphdb)
-    result.save(output)
-
-
-@_mvd3.command()
-@click.argument("mvd3")
 @click.option("--seeds", help="Comma-separated circuit seeds (4 floats)", required=True)
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
-def assign_seeds(mvd3, seeds, output):
-    """ Assign /circuit/seeds """
+def set_seeds(mvd3, seeds, output):
+    """ Set /circuit/seeds """
     seeds = [float(x) for x in seeds.split(",")]
     assert len(seeds) == 4
     mvd3 = CellCollection.load(mvd3)
@@ -110,7 +164,7 @@ def merge(mvd3, output):
     CellCollection.from_dataframe(merged).save(output)
 
 
-@app.group(name="targets")
+@_app.group(name="targets")
 def _targets():
     """ Tools for working with .target files """
     pass
@@ -147,4 +201,4 @@ def from_mvd3(mvd3, etype, region, layer, column, output):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    app()
+    _app()

@@ -27,6 +27,7 @@ setup(
     license='BBP-internal-confidential',
     install_requires=[
         'click>=6.0',
+        'future>=0.16',
         'h5py>=2.6',
         'lxml>=3.3',
         'numpy>=1.9',
@@ -36,11 +37,12 @@ setup(
         'scipy>=0.13',
         'six>=1.0',
         'tqdm',
-        # BBP
+    ] + [
         'voxcell>=2.3,<3.0',
     ],
     packages=[
         'brainbuilder',
+        'brainbuilder.app',
         'brainbuilder.nexus',
         'brainbuilder.sscx',
         'brainbuilder.hippocampus',
