@@ -48,8 +48,12 @@ setup(
         'brainbuilder.hippocampus',
         'brainbuilder.utils',
     ],
+    entry_points={
+      'console_scripts': [
+          'brainbuilder=brainbuilder.app.__main__:main'
+      ]
+    },
     scripts=[
         'apps/bind2atlas',
-        'apps/brainbuilder',
     ]
 )

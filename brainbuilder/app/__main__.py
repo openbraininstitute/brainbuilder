@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 """
 Collection of tools for circuit building.
 """
@@ -15,10 +13,10 @@ import pandas as pd
 
 from voxcell import CellCollection, VoxelData
 
-import brainbuilder.app.cells
-import brainbuilder.app.targets
-
-from brainbuilder import app
+from brainbuilder.app import (
+    cells as app_cells,
+    targets as app_targets
+)
 from brainbuilder.utils import bbp
 
 
@@ -26,18 +24,18 @@ L = logging.getLogger('brainbuilder')
 
 
 @click.group()
-def _app():
+def main():
     """ Collection of tools for circuit building """
-    pass
+    logging.basicConfig(level=logging.INFO)
 
 
-@_app.group(name="cells")
+@main.group(name="cells")
 def _cells():
     """ Building CellCollection """
     pass
 
 
-@_cells.command(short_help="Create CellCollection", help=app.cells.create.__doc__)
+@_cells.command(short_help="Create CellCollection", help=app_cells.create.__doc__)
 @click.option("--composition", help="Path to ME-type composition YAML", required=True)
 @click.option("--mtype-taxonomy", help="Path to mtype taxonomy TSV", required=True)
 @click.option("--atlas", help="Atlas URL / path", required=True)
@@ -59,12 +57,13 @@ def create(
     seed,
     output
 ):
+    # pylint: disable=missing-docstring,too-many-arguments
     if region_ids is not None:
         region_ids = map(int, region_ids.split(","))
 
     np.random.seed(seed)
 
-    cells = app.cells.create(
+    cells = app_cells.create(
         composition,
         mtype_taxonomy,
         atlas, atlas_cache, region_ids,
@@ -94,7 +93,7 @@ def assign_emodels(mvd3, morphdb, seed, output):
     result.save(output)
 
 
-@_app.group(name="mvd3")
+@main.group(name="mvd3")
 def _mvd3():
     """ Tools for working with MVD3 """
     pass
@@ -165,7 +164,7 @@ def merge(mvd3, output):
     CellCollection.from_dataframe(merged).save(output)
 
 
-@_app.group(name="targets")
+@main.group(name="targets")
 def _targets():
     """ Tools for working with .target files """
     pass
@@ -178,9 +177,8 @@ def from_mvd3(mvd3, output):
     """ Generate .target file from MVD3 """
     cells = CellCollection.load(mvd3)
     with open(output, 'w') as f:
-        app.targets.write_start_targets(cells, f)
+        app_targets.write_start_targets(cells, f)
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    _app()
+    main()
