@@ -1,5 +1,5 @@
 """
-`brainbuilder` app internals.
+CellCollection building.
 """
 
 import re
