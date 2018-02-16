@@ -15,7 +15,8 @@ from voxcell import CellCollection, VoxelData
 
 from brainbuilder.app import (
     cells as app_cells,
-    targets as app_targets
+    targets as app_targets,
+    nrn as app_nrn
 )
 from brainbuilder.utils import bbp
 
@@ -178,6 +179,21 @@ def from_mvd3(mvd3, output):
     cells = CellCollection.load(mvd3)
     with open(output, 'w') as f:
         app_targets.write_start_targets(cells, f)
+
+
+@main.group(name="nrn")
+def _nrn():
+    """ Tools for working with NRN files """
+    pass
+
+
+@_nrn.command(name="merge", short_help="Merge NRN files", help=app_nrn.merge.__doc__)
+@click.argument("nrn_dir")
+@click.option(
+    "--only", help="merge only the specified file (e.g --only=nrn_positions.h5)", default=""
+)
+def _nrn_merge(nrn_dir, only):
+    app_nrn.merge(nrn_dir, only)
 
 
 if __name__ == '__main__':
