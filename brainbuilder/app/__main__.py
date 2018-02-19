@@ -19,12 +19,15 @@ from brainbuilder.app import (
     nrn as app_nrn
 )
 from brainbuilder.utils import bbp
+from brainbuilder.version import VERSION
 
 
-L = logging.getLogger('brainbuilder')
+APP_NAME = 'brainbuilder'
+L = logging.getLogger(APP_NAME)
 
 
 @click.group()
+@click.version_option(version=VERSION, prog_name=APP_NAME)
 def main():
     """ Collection of tools for circuit building """
     logging.basicConfig(level=logging.INFO)
