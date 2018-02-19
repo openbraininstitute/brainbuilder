@@ -192,8 +192,11 @@ def _nrn():
 @click.option(
     "--only", help="merge only the specified file (e.g --only=nrn_positions.h5)", default=""
 )
-def _nrn_merge(nrn_dir, only):
-    app_nrn.merge(nrn_dir, only)
+@click.option(
+    "--link", is_flag=True, help="make symbolic links instead of copying datasets"
+)
+def _nrn_merge(nrn_dir, only, link):
+    app_nrn.merge(nrn_dir, only, link=link)
 
 
 if __name__ == '__main__':
