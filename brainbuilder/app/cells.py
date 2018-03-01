@@ -19,7 +19,6 @@ from brainbuilder import BrainBuilderError
 from brainbuilder.cell_positions import create_cell_positions
 from brainbuilder.cell_orientations import apply_random_rotation
 from brainbuilder.nexus.voxelbrain import Atlas
-from brainbuilder.utils import bbp
 
 
 L = logging.getLogger('brainbuilder')
@@ -69,19 +68,14 @@ def load_mtype_taxonomy(filepath):
     return pd.read_csv(filepath, sep=r'\s+', index_col='mtype')
 
 
-def _load_density(value, mask, relative_distance):
-    """ Load density from .nrrd / .dat or single float value + mask. """
+def _load_density(value, mask):
+    """ Load density from .nrrd or single float value + mask. """
     if isinstance(value, numbers.Number):
         result = np.zeros_like(mask, dtype=np.float32)
         result[mask] = float(value)
     elif value.endswith(".nrrd"):
         L.info("Loading 3D density profile from %s...", value)
         result = VoxelData.load_nrrd(value).raw.astype(np.float32)
-        result[~mask] = 0
-    elif value.endswith(".dat"):
-        L.info("Loading 1D density profile from %s...", value)
-        profile1d = np.loadtxt(value)
-        result = bbp.bind_profile1d_to_atlas(profile1d, relative_distance).raw.astype(np.float32)
         result[~mask] = 0
     else:
         raise BrainBuilderError("Unexpected density value: '%s'" % value)
@@ -109,15 +103,6 @@ def _bind_to_atlas(composition, atlas, include_region_ids=None):
             for rid in hierarchy.collect('id', root_id, 'id')
         }
 
-    try:
-        relative_distance = atlas.load_data('relative_distance')
-    except Exception as e:  # pylint: disable=broad-except
-        L.info("Could not load 'relative_distance' dataset: %s", e)
-        L.info("Using 'distance' / 'height' ratio instead")
-        distance = atlas.load_data('distance')
-        height = atlas.load_data('height')
-        relative_distance = distance.with_data(distance.raw / height.raw)
-
     densities, traits = [], []
 
     L.info("Loading mtype densities...")
@@ -135,7 +120,7 @@ def _bind_to_atlas(composition, atlas, include_region_ids=None):
             continue
         for mtype in sorted(composition[region]):
             params = composition[region][mtype]
-            density = _load_density(params['density'], region_mask, relative_distance)
+            density = _load_density(params['density'], region_mask)
             densities.append(density)
             traits.append((region, mtype))
 
