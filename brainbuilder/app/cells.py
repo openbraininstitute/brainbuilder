@@ -53,7 +53,7 @@ def load_composition(filepath):
         content = yaml.load(f)
 
     # TODO: validate the content against schema
-    assert content['version'] == 'v1.0'
+    assert content['version'] in ('v1.0', 'v1.1')
 
     return content['composition']
 
@@ -68,13 +68,33 @@ def load_mtype_taxonomy(filepath):
     return pd.read_csv(filepath, sep=r'\s+', index_col='mtype')
 
 
-def _load_density(value, mask):
-    """ Load density from .nrrd or single float value + mask. """
+def _load_density(value, mask, atlas):
+    """ Load density as 3D numpy array.
+
+        Args:
+            value: one of
+                - float value (constant density per `mask`)
+                - path to NRRD file (load from file, filter by `mask`)
+                - dataset in `atlas` (load from atlas, filter by `mask`)
+            mask: 0/1 3D mask
+            atlas: Atlas to use for loading atlas datasets
+
+        `value` of form '{name}' is recognized as atlas dataset 'name'.
+
+        Returns:
+            3D float32 numpy array of same shape as `mask`.
+    """
     if isinstance(value, numbers.Number):
         result = np.zeros_like(mask, dtype=np.float32)
         result[mask] = float(value)
+    elif value.startswith("{"):
+        assert value.endswith("}")
+        dataset = value[1:-1]
+        L.info("Loading 3D density profile from '%s' atlas dataset...", dataset)
+        result = atlas.load_data(dataset, cls=VoxelData).raw.astype(np.float32)
+        result[~mask] = 0
     elif value.endswith(".nrrd"):
-        L.info("Loading 3D density profile from %s...", value)
+        L.info("Loading 3D density profile from '%s'...", value)
         result = VoxelData.load_nrrd(value).raw.astype(np.float32)
         result[~mask] = 0
     else:
@@ -120,7 +140,7 @@ def _bind_to_atlas(composition, atlas, include_region_ids=None):
             continue
         for mtype in sorted(composition[region]):
             params = composition[region][mtype]
-            density = _load_density(params['density'], region_mask)
+            density = _load_density(params['density'], region_mask, atlas)
             densities.append(density)
             traits.append((region, mtype))
 
