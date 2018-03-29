@@ -9,8 +9,7 @@ import numbers
 import numpy as np
 import pandas as pd
 import yaml
-
-from six import iteritems
+import six
 
 from voxcell import CellCollection, OrientationField, VoxelData
 from voxcell import traits as tt
@@ -24,9 +23,9 @@ from brainbuilder.nexus.voxelbrain import Atlas
 L = logging.getLogger('brainbuilder')
 
 
-def load_composition(filepath):
+def load_recipe(filepath):
     """
-    Load me-type composition from YAML recipe.
+    Load me-type composition and rotation from YAML recipe.
 
     TODO: link to spec
 
@@ -53,9 +52,9 @@ def load_composition(filepath):
         content = yaml.load(f)
 
     # TODO: validate the content against schema
-    assert content['version'] in ('v1.0', 'v1.1')
+    assert content['version'] in ('v1.0', 'v1.1', 'v1.2')
 
-    return content['composition']
+    return content['composition'], content.get('rotation')
 
 
 def load_mtype_taxonomy(filepath):
@@ -180,9 +179,9 @@ def _get_etype_ratios(composition):
         ('region', 'mtype') -> { etype_ratios }
     """
     return {
-        (region, mtype): mtype_config['etypes']
-        for region, region_config in iteritems(composition)
-        for mtype, mtype_config in iteritems(region_config)
+        (region, mtype): mtype_group['etypes']
+        for region, region_group in six.iteritems(composition)
+        for mtype, mtype_group in six.iteritems(region_group)
     }
 
 
@@ -252,7 +251,7 @@ def create(
     # pylint: disable=too-many-arguments,too-many-locals
     atlas = Atlas.open(atlas_url, cache_dir=atlas_cache)
 
-    composition = load_composition(composition_path)
+    composition, rotation = load_recipe(composition_path)
     mtype_taxonomy = load_mtype_taxonomy(mtype_taxonomy_path)
 
     total_density, mtype_sdist = _bind_to_atlas(composition, atlas, region_ids)
@@ -269,9 +268,7 @@ def create(
 
     L.info("Assigning cell orientations...")
     orientation_field = atlas.load_data('orientation', cls=OrientationField)
-    cells.orientations = apply_random_rotation(
-        orientation_field.lookup(cells.positions), axis='y'
-    )
+    cells.orientations = orientation_field.lookup(cells.positions)
 
     L.info("Assigning region / mtype...")
     cells.properties = mtype_sdist.collect(cells.positions, names=['region', 'mtype'])
@@ -291,6 +288,26 @@ def create(
     if assign_column:
         L.info("Assigning hypercolumn...")
         cells.properties['hypercolumn'] = _get_hypercolumn(cells.positions, atlas)
+
+    if rotation is None:
+        L.warning("Applying random uniform rotation around Y-axis for all cells...")
+        cells.orientations = apply_random_rotation(
+            cells.orientations, axis='y', distr=('uniform', {'low': -np.pi, 'high': np.pi})
+        )
+    else:
+        for region, region_group in six.iteritems(rotation):
+            for mtype, mtype_group in six.iteritems(region_group):
+                L.info("Applying random rotation for (%s, %s) cells", region, mtype)
+                mask = np.logical_and(
+                    cells.properties['region'] == region,
+                    cells.properties['mtype'] == mtype
+                )
+                if np.count_nonzero(mask) == 0:
+                    raise BrainBuilderError("No (%s, %s) cells in the circuit" % (region, mtype))
+                for axis, distr, params in mtype_group:
+                    cells.orientations[mask] = apply_random_rotation(
+                        cells.orientations[mask], axis=axis, distr=(distr, params)
+                    )
 
     L.info("Done!")
     return cells

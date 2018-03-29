@@ -22,16 +22,23 @@ def apply_rotation(A, angles, axis):
     return np.einsum('...ij,...jk->...ik', A, rotations)
 
 
-def apply_random_rotation(A, axis):
+def _get_random_sample(distr, size):
+    func, params = distr
+    return getattr(np.random, func)(size=size, **params)
+
+
+def apply_random_rotation(A, axis, distr):
     """
     Apply random rotation around given `axis`.
 
     Args:
         A: (N, 3, 3) array of rotation matrices
         axis: one of ('x', 'y', 'z')
+        distr: a pair of distribution name and dict of parameters, for instance:
+            ('uniform', {'low': -np.pi, 'high': +np.pi})
 
     Returns:
         (N, 3, 3) array of mutated rotation matrices
     """
-    angles = 2 * np.pi * np.random.random(A.shape[0])
+    angles = _get_random_sample(distr, size=A.shape[0])
     return apply_rotation(A, angles, axis)

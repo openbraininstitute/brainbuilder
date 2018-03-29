@@ -29,6 +29,17 @@ def test_apply_rotation_2():
     npt.assert_almost_equal(result, expected)
 
 
+def test_get_random_sample():
+    test_module._get_random_sample(('uniform', {'low': 1, 'high': 2}), 5)
+    test_module._get_random_sample(('normal', {'loc': 1, 'scale': 2}), 5)
+
+
+def test_get_random_sample_raises():
+    nt.assert_raises(TypeError, test_module._get_random_sample, ('normal', {'mean': 2}), 5)
+    nt.assert_raises(AttributeError, test_module._get_random_sample, ('gaussian', None), 5)
+
+
 def test_apply_random_rotation():
     A = np.random.random((2, 3, 3))
-    nt.assert_equal(test_module.apply_random_rotation(A, 'x').shape, (2, 3, 3))
+    A2 = test_module.apply_random_rotation(A, 'x', distr=('uniform', {'low': 0, 'high': np.pi}))
+    nt.assert_equal(A2.shape, A.shape)
