@@ -97,6 +97,17 @@ def assign_emodels(mvd3, morphdb, seed, output):
     result.save(output)
 
 
+@_cells.command()
+@click.argument("mvd3")
+@click.option("--db", help="Path to HDF5 with gene expressions", required=True)
+@click.option("--seed", type=int, help="Pseudo-random generator seed", default=0)
+@click.option("-o", "--output", help="Path to output transcriptome file", required=True)
+def assign_transcriptome(mvd3, db, seed, output):
+    """ Assign transcriptome """
+    np.random.seed(seed)
+    app_cells.assign_transcriptome(mvd3, db, output)
+
+
 @main.group(name="mvd3")
 def _mvd3():
     """ Tools for working with MVD3 """

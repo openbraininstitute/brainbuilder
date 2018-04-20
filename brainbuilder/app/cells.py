@@ -8,6 +8,7 @@ import numbers
 
 import numpy as np
 import pandas as pd
+import h5py
 import yaml
 import six
 
@@ -311,3 +312,24 @@ def create(
 
     L.info("Done!")
     return cells
+
+
+def assign_transcriptome(mvd3_path, db_path, output_path):
+    """ Assign transcriptome to cells based on their mtype. """
+    mapping = {}
+    with h5py.File(db_path, 'r') as h5f:
+        for mtype, idx in six.iteritems(h5f['/mapping/by_mtype']):
+            mapping[mtype] = idx[:]
+        genes = h5f['/library/genes'][:]
+        expressions = h5f['/library/expressions'][:]
+
+    cells = CellCollection.load(mvd3_path)
+
+    assigned = np.zeros(len(cells.properties), dtype=np.int32)
+    for mtype, group in cells.properties.groupby('mtype'):
+        assigned[group.index] = np.random.choice(mapping[mtype], size=len(group))
+
+    with h5py.File(output_path, 'w') as h5f:
+        h5f.create_dataset('/cells/expressions', data=assigned)
+        h5f.create_dataset('/library/genes', data=genes)
+        h5f.create_dataset('/library/expressions', data=expressions)
