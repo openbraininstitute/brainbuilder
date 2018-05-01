@@ -33,12 +33,11 @@ setup(
         'numpy>=1.9',
         'pandas>=0.17',
         'pyyaml',
-        'requests>=2.18',
         'scipy>=0.13',
         'six>=1.0',
         'tqdm',
     ] + [
-        'voxcell>=2.3,<3.0',
+        'voxcell>=2.4,<3.0',
     ],
     packages=[
         'brainbuilder',
