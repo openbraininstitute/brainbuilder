@@ -6,6 +6,7 @@ import re
 import logging
 import numbers
 
+import click
 import numpy as np
 import pandas as pd
 import h5py
@@ -14,14 +15,21 @@ import six
 
 from voxcell import CellCollection, OrientationField, VoxelData
 from voxcell import traits as tt
+from voxcell.nexus.voxelbrain import Atlas
 
 from brainbuilder import BrainBuilderError
 from brainbuilder.cell_positions import create_cell_positions
 from brainbuilder.cell_orientations import apply_random_rotation
-from brainbuilder.nexus.voxelbrain import Atlas
+from brainbuilder.utils import bbp
 
 
 L = logging.getLogger('brainbuilder')
+
+
+@click.group()
+def app():
+    """ Building CellCollection """
+    pass
 
 
 def load_recipe(filepath):
@@ -225,7 +233,7 @@ def _get_mtype_property(mtype_taxonomy, mtypes, prop):
     return mtype_taxonomy.loc[mtypes, prop].values
 
 
-def create(
+def _create(
     composition_path,
     mtype_taxonomy_path,
     atlas_url, atlas_cache=None, region_ids=None,
@@ -314,7 +322,65 @@ def create(
     return cells
 
 
-def assign_transcriptome(mvd3_path, db_path, output_path):
+@app.command(short_help="Create CellCollection", help=_create.__doc__)
+@click.option("--composition", help="Path to ME-type composition YAML", required=True)
+@click.option("--mtype-taxonomy", help="Path to mtype taxonomy TSV", required=True)
+@click.option("--atlas", help="Atlas URL / path", required=True)
+@click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
+@click.option("--region-ids", help="Comma-separated region IDs", default=None, show_default=True)
+@click.option("--density-factor", help="Density factor", type=float, default=1.0, show_default=True)
+@click.option("--soma-placement", help="Soma placement method", default='basic', show_default=True)
+@click.option(
+    "--assign-layer", is_flag=True, help="Assign 'layer' property", show_default=True)
+@click.option(
+    "--assign-column", is_flag=True, help="Assign 'hypercolumn' property", show_default=True)
+@click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
+@click.option("-o", "--output", help="Path to output MVD3", required=True)
+def create(
+    composition, mtype_taxonomy,
+    atlas, atlas_cache, region_ids,
+    density_factor, soma_placement,
+    assign_layer, assign_column,
+    seed,
+    output
+):
+    # pylint: disable=missing-docstring,too-many-arguments
+    if region_ids is not None:
+        region_ids = map(int, region_ids.split(","))
+
+    np.random.seed(seed)
+
+    cells = _create(
+        composition,
+        mtype_taxonomy,
+        atlas, atlas_cache, region_ids,
+        density_factor=density_factor,
+        soma_placement=soma_placement,
+        assign_layer=assign_layer,
+        assign_column=assign_column,
+    )
+
+    L.info("Export to MVD3...")
+    cells.save(output)
+
+
+@app.command()
+@click.argument("mvd3")
+@click.option("--morphdb", help="Path to extNeuronDB.dat", required=True)
+@click.option("--seed", type=int, help="Pseudo-random generator seed", default=0)
+@click.option("-o", "--output", help="Path to output MVD3", required=True)
+def assign_emodels(mvd3, morphdb, seed, output):
+    """ Assign 'me_combo' property """
+    np.random.seed(seed)
+
+    mvd3 = CellCollection.load(mvd3)
+    morphdb = bbp.load_neurondb_v3(morphdb)
+
+    result = bbp.assign_emodels(mvd3, morphdb)
+    result.save(output)
+
+
+def _assign_transcriptome(mvd3_path, db_path, output_path):
     """ Assign transcriptome to cells based on their mtype. """
     mapping = {}
     with h5py.File(db_path, 'r') as h5f:
@@ -333,3 +399,14 @@ def assign_transcriptome(mvd3_path, db_path, output_path):
         h5f.create_dataset('/cells/expressions', data=assigned)
         h5f.create_dataset('/library/genes', data=genes)
         h5f.create_dataset('/library/expressions', data=expressions)
+
+
+@app.command()
+@click.argument("mvd3")
+@click.option("--db", help="Path to HDF5 with gene expressions", required=True)
+@click.option("--seed", type=int, help="Pseudo-random generator seed", default=0)
+@click.option("-o", "--output", help="Path to output transcriptome file", required=True)
+def assign_transcriptome(mvd3, db, seed, output):
+    """ Assign transcriptome """
+    np.random.seed(seed)
+    _assign_transcriptome(mvd3, db, output)

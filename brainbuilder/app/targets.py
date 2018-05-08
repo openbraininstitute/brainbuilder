@@ -1,7 +1,17 @@
 """
 Target generation.
 """
+
+import click
+
+from voxcell import CellCollection
 from brainbuilder.utils import bbp
+
+
+@click.group()
+def app():
+    """ Tools for working with .target files """
+    pass
 
 
 def _synapse_class_name(synclass):
@@ -32,3 +42,13 @@ def write_start_targets(cells, output):
         bbp.write_property_targets(output, df, 'layer', mapping=_layer_name)
     if 'hypercolumn' in df:
         bbp.write_property_targets(output, df, 'hypercolumn', mapping=_column_name)
+
+
+@app.command()
+@click.argument("mvd3")
+@click.option("-o", "--output", help="Path to output .target file", required=True)
+def from_mvd3(mvd3, output):
+    """ Generate .target file from MVD3 """
+    cells = CellCollection.load(mvd3)
+    with open(output, 'w') as f:
+        write_start_targets(cells, f)

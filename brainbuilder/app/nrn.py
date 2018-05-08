@@ -14,7 +14,15 @@ import time
 from contextlib import contextmanager
 
 #import mpi4py
+import click
 import h5py
+
+
+
+@click.group()
+def app():
+    """ Tools for working with NRN files """
+    pass
 
 
 def progress_print(pstr):
@@ -118,6 +126,14 @@ def cd(dirpath):
         os.chdir(old_dirpath)
 
 
+@app.command()
+@click.argument("nrn_dir")
+@click.option(
+    "--only", help="merge only the specified file (e.g --only=nrn_positions.h5)", default=""
+)
+@click.option(
+    "--link", is_flag=True, help="make symbolic links instead of copying datasets"
+)
 def merge(nrn_dir, only, link):
     """
     Merge utility tool for nrn.h5 Blue Brain synapse file format.
