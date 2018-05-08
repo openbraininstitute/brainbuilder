@@ -3,6 +3,7 @@
 import numpy as np
 
 from voxcell.math_utils import angles_to_matrices
+from brainbuilder.utils.random import parse_distr
 
 
 def apply_rotation(A, angles, axis):
@@ -22,11 +23,6 @@ def apply_rotation(A, angles, axis):
     return np.einsum('...ij,...jk->...ik', A, rotations)
 
 
-def _get_random_sample(distr, size):
-    func, params = distr
-    return getattr(np.random, func)(size=size, **params)
-
-
 def apply_random_rotation(A, axis, distr):
     """
     Apply random rotation around given `axis`.
@@ -40,5 +36,5 @@ def apply_random_rotation(A, axis, distr):
     Returns:
         (N, 3, 3) array of mutated rotation matrices
     """
-    angles = _get_random_sample(distr, size=A.shape[0])
+    angles = parse_distr(distr).rvs(size=A.shape[0])
     return apply_rotation(A, angles, axis)
