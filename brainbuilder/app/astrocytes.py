@@ -75,3 +75,54 @@ def place(
 
     L.info("Export to MVD3...")
     cells.save(output)
+
+
+@app.group(name='domains')
+def _domains():
+    """ Generate astrocyte domains """
+    pass
+
+
+@_domains.command()
+@click.argument('mvd3')
+@click.option("--atlas", help="Atlas URL / path", required=True)
+@click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
+@click.option("-o", "--output", help="Path to output HDF5", required=True)
+def tesselate(mvd3, atlas, atlas_cache, output):
+    """ Laguerre tesselation """
+    import brainbuilder.ngv.microdomains as _impl
+
+    cells = CellCollection.load(mvd3)
+    brain_regions = Atlas.open(atlas, cache_dir=atlas_cache).load_data('brain_regions')
+
+    result = _impl.tesselate(cells.positions, cells.properties['radius'], brain_regions)
+
+    _impl.export_structure(result, output)
+
+
+@_domains.command()
+@click.argument('tesselation')
+@click.option("--distr", help="Overlap ratio distribution", required=True)
+@click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
+@click.option("-o", "--output", help="Path to output HDF5", required=True)
+def overlap(tesselation, distr, seed, output):
+    """ Scale isotropically in all dimensions """
+    import brainbuilder.ngv.microdomains as _impl
+
+    np.random.seed(seed)
+
+    source = _impl.load_structure(tesselation)
+    result = _impl.overlap(source, overlap_distr=parse_distr(distr))
+
+    _impl.export_structure(result, output)
+
+
+@_domains.command()
+@click.argument('tesselation')
+@click.option("-o", "--output", help="Path to output mesh file (.stl)", required=True)
+def mesh(tesselation, output):
+    """ Generate STL mesh of domain surfaces """
+    import brainbuilder.ngv.microdomains as _impl
+
+    source = _impl.load_structure(tesselation)
+    _impl.export_meshes(source, output)
