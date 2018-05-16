@@ -42,6 +42,7 @@ setup(
     packages=[
         'brainbuilder',
         'brainbuilder.app',
+        'brainbuilder.geometry',
         'brainbuilder.nexus',
         'brainbuilder.sscx',
         'brainbuilder.hippocampus',
