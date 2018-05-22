@@ -18,6 +18,7 @@ import pandas as pd
 from voxcell import CellCollection, VoxelData
 from voxcell import traits as tt
 from voxcell.math_utils import lcmm, angles_to_matrices
+from voxcell.utils import deprecate
 from scipy.ndimage import distance_transform_edt  # pylint: disable=E0611
 
 from brainbuilder.version import VERSION
@@ -34,6 +35,10 @@ def map_regions_to_layers(hierarchy, region_name):
         A dictionary where the key is the region id according to the Allen Brain data and
         the value is a tuple of the integer indices of the 6 layers used in BBP: 1, 2, 3, 4, 5, 6
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
 
     sub_area_names = hierarchy.collect('name', region_name, 'name')
 
@@ -70,6 +75,10 @@ def _parse_recipe(recipe_filename):
 
 def get_lattice_vectors(recipe_filename):
     ''' get lattice vectors from recipe '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     r = _parse_recipe(recipe_filename)
     lattice_vectors = r.find('column').findall('latticeVector')
 
@@ -88,6 +97,10 @@ def get_lattice_vectors(recipe_filename):
 
 def get_layer_thickness(recipe_filename):
     ''' get a map  id of the layer to their thickness '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     r = _parse_recipe(recipe_filename)
     layers = r.find('column').findall('layer')
     return dict((int(l.attrib['id']), float(l.attrib['thickness'])) for l in layers)
@@ -95,6 +108,10 @@ def get_layer_thickness(recipe_filename):
 
 def get_total_neurons(recipe_filename):
     ''' get the total number of neurons according to the recipe '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     r = _parse_recipe(recipe_filename)
     total_neurons = r.find('NeuronTypes').attrib['totalNeurons']
     return int(total_neurons)
@@ -107,6 +124,10 @@ def get_distribution_from_recipe(recipe_filename):
         A DataFrame with one row for each possibility and columns:
             layer, mtype, etype, morph_class, synapse_class, percentage
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     recipe_tree = _parse_recipe(recipe_filename)
 
     def read_records():
@@ -145,6 +166,10 @@ def load_recipe_density(recipe_filename, annotation, region_layers_map):
     Returns:
         VoxelData with cell density (expected cell count per voxel).
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     recipe_tree = _parse_recipe(recipe_filename)
 
     percentages = dict((layer.attrib['id'], float(layer.attrib['percentage']) / 100)
@@ -179,6 +204,10 @@ def transform_recipe_into_spatial_distribution(annotation, recipe, region_layers
         A SpatialDistribution object where the properties of the traits_collection are:
         mtype, etype, morph_class, synapse_class
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     distributions = pd.DataFrame(data=0.0,
                                  index=recipe.index,
                                  columns=region_layers_map.keys())
@@ -199,11 +228,19 @@ def load_recipe_as_spatial_distribution(recipe_filename, annotation, region_laye
     Returns:
         see transform_into_spatial_distribution
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     recipe = get_distribution_from_recipe(recipe_filename)
     return transform_recipe_into_spatial_distribution(annotation, recipe, region_layers_map)
 
 
 def _hex_prism_volume(side, height):
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     return 3 * np.sqrt(3) * side * side * height / 2
 
 
@@ -218,6 +255,10 @@ def load_builder_recipe(recipe_filename, atlas, region_map):
     Density is calculated for 'column' defined in the recipe and mapped to `atlas`.
     """
     # pylint: disable=too-many-locals
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     recipe_tree = _parse_recipe(recipe_filename)
 
     total_cell_count = int(recipe_tree.find('/NeuronTypes').attrib['totalNeurons'])
@@ -283,6 +324,10 @@ def load_recipe_cell_density(recipe_filename, atlas, region_map):
     Returns:
         VoxelData with cell densities (expected cell count per voxel).
     """
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     recipe_tree = _parse_recipe(recipe_filename)
 
     result = np.zeros_like(atlas.raw, dtype=np.float32)
@@ -307,6 +352,11 @@ def load_recipe_cell_traits(recipe_filename, atlas, region_map):
         SpatialDistribution where the properties of the traits_collection are:
             region, mtype, etype, morph_class, synapse_class
     """
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
+
     def _parse_type(elem):
         etype_attr = elem.attrib
         mtype_attr = elem.getparent().attrib
@@ -403,6 +453,11 @@ def load_metype_composition(filepath, atlas, region_map, relative_distance=None)
             ...
     """
     # pylint: disable=too-many-locals
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
+
     def _load_density(density, mask):
         """ Load density from NRRD or single float value + mask. """
         if isinstance(density, numbers.Number):
@@ -506,6 +561,10 @@ def load_neurondb_v4(neurondb_filename):
         A DataFrame where the columns are:
             morphology, layer, mtype, etype, me_combo, placement_hints
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
 
     def read_records(lines):
         '''parse each record in a neurondb file'''
@@ -535,6 +594,10 @@ def get_morphologies_by_layer(neurondb):
     Returns:
         A dictionary where the keys are layer ids and the values lists of morphologies
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     return dict((l, list(ns)) for l, ns in itertools.groupby(neurondb, lambda m: m['layer']))
 
 
@@ -549,6 +612,10 @@ def get_morphologies_by_layer_group(morphs_by_layer, layer_ids):
     Returns:
         A list of all of the available morphologies for a group of layers
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     return list(itertools.chain(*(morphs_by_layer[layer_id] for layer_id in layer_ids)))
 
 
@@ -561,6 +628,10 @@ def clip_columns_to_percentile(dists, percentile):
             probability is set to 0 (ie: not used) range from (0.0, 1.0]
     '''
     # TODO: Should be albe to do this without iterating across columns
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     for col_name in dists:
         dist = dists[col_name]
         percentile_value = np.percentile(dist, q=100 * percentile)
@@ -598,6 +669,10 @@ def get_placement_hints_table(morphs):
         A DataFrame array that contains the placement hint scores for the given morphologies.
         This table has one row for each morphology and one column for each region subdivision
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     subdivision_count = lcmm(morphs.placement_hints.map(len).as_matrix())
 
     region_dist_table = pd.DataFrame(dtype=np.float,
@@ -630,6 +705,10 @@ def reverse_region_layers_map(region_layers_map):
 
     Returns:
         A dict where the keys are tuples of layer ids and the keys lists of region ids'''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     inv_map = {}
     for k, v in iteritems(region_layers_map):
         inv_map[v] = inv_map.get(v, [])
@@ -655,7 +734,10 @@ def get_region_distributions_from_placement_hints(neurondb, region_layers_map, p
     Returns:
         A dict where each key is a tuple of region ids and the value a distribution collection.
     '''
-
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     regions_dists = {}
     for layer_ids, region_ids in iteritems(reverse_region_layers_map(region_layers_map)):
 
@@ -686,6 +768,10 @@ def assign_distributions_to_voxels(voxel_scores, bins):
         An array of the same shape as voxel_scores, where each value is an index
         in the interval [0, bins)
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     count_per_bin, _ = np.histogram(voxel_scores, bins=max(bins, 1))
     voxel_indices = np.argsort(voxel_scores)
 
@@ -725,6 +811,10 @@ def transform_neurondb_into_spatial_distribution(annotation, neurondb, region_la
         A SpatialDistribution object where the properties of the traits_collection are those
         obtained from the neurondb.
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     assert metric.shape == annotation.raw.shape
 
     metric = metric.flatten()
@@ -758,6 +848,10 @@ def get_distance_to_pia(annotation):
     # "outside" is tagged in the annotation_raw with 0
     # This will calculate, for every voxel, the euclidean distance to
     # the nearest voxel tagged as "outside" the brain
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     return distance_transform_edt(annotation.raw)
 
 
@@ -769,6 +863,10 @@ def load_neurondb_v4_as_spatial_distribution(neurondb_filename,
     Returns:
         see transform_into_spatial_distribution
     '''
+    deprecate.fail("""
+        This method would be removed in `brainbuilder>=0.7`.
+        Please contact NSE team in case you are using it.
+    """)
     neurondb = load_neurondb_v4(neurondb_filename)
 
     return transform_neurondb_into_spatial_distribution(annotation,
@@ -780,7 +878,6 @@ def load_neurondb_v4_as_spatial_distribution(neurondb_filename,
 
 def parse_mvd2(filepath):
     '''loads an mvd2 as a dict data structure with tagged fields'''
-
     sections = {
         'Neurons Loaded': (
             ('morphology', str),
@@ -844,6 +941,10 @@ def _matrices_to_angles(matrices):
 
 def load_mvd2(filepath):
     '''loads an mvd2 as a CellCollection'''
+    deprecate.warn("""
+        This method would be removed in `brainbuilder>=0.8`.
+        Please contact NSE team in case you are using it.
+    """)
     data = parse_mvd2(filepath)
 
     cells = CellCollection()
@@ -879,6 +980,10 @@ def save_mvd2(filepath, morphology_path, cells):
     and, optionally, 'hypercolumn', 'minicolumn', 'layer'.
     '''
     # pylint: disable=too-many-locals
+    deprecate.warn("""
+        This method would be removed in `brainbuilder>=0.8`.
+        Please contact NSE team in case you are using it.
+    """)
     rotations = 180 * _matrices_to_angles(cells.orientations) / np.pi
     if np.count_nonzero(np.isnan(rotations)):
         L.warning("save_mvd2: some rotations would be lost!")
