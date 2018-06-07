@@ -31,6 +31,7 @@ BASE_REQUIRES = [
 NGV_REQUIRES = [
     'tess>=0.2',
     'numpy-stl>=2.5',
+    'tables>=3.4',
 ]
 
 setup(
