@@ -74,7 +74,7 @@ def place(
     )
 
     L.info("Export to MVD3...")
-    cells.save(output)
+    cells.save_mvd3(output)
 
 
 @app.group(name='domains')
@@ -92,7 +92,7 @@ def tesselate(mvd3, atlas, atlas_cache, output):
     """ Laguerre tesselation """
     import brainbuilder.ngv.microdomains as _impl
 
-    cells = CellCollection.load(mvd3)
+    cells = CellCollection.load_mvd3(mvd3)
     brain_regions = Atlas.open(atlas, cache_dir=atlas_cache).load_data('brain_regions')
 
     result = _impl.tesselate(cells.positions, cells.properties['radius'], brain_regions)

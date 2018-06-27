@@ -360,7 +360,7 @@ def create(
     )
 
     L.info("Export to MVD3...")
-    cells.save(output)
+    cells.save_mvd3(output)
 
 
 @app.command()
@@ -372,8 +372,8 @@ def assign_emodels(mvd3, morphdb, seed, output):
     """ Assign 'me_combo' property """
     np.random.seed(seed)
 
-    mvd3 = CellCollection.load(mvd3)
+    mvd3 = CellCollection.load_mvd3(mvd3)
     morphdb = bbp.load_neurondb_v3(morphdb)
 
     result = bbp.assign_emodels(mvd3, morphdb)
-    result.save(output)
+    result.save_mvd3(output)

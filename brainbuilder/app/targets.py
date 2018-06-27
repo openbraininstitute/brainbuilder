@@ -49,6 +49,6 @@ def write_start_targets(cells, output):
 @click.option("-o", "--output", help="Path to output .target file", required=True)
 def from_mvd3(mvd3, output):
     """ Generate .target file from MVD3 """
-    cells = CellCollection.load(mvd3)
+    cells = CellCollection.load_mvd3(mvd3)
     with open(output, 'w') as f:
         write_start_targets(cells, f)

@@ -82,7 +82,7 @@ def assign(mvd3, gene_expressions, gene_mapping, cell_proteins, synapse_proteins
 
     np.random.seed(seed)
 
-    cells = CellCollection.load(mvd3).as_dataframe()
+    cells = CellCollection.load_mvd3(mvd3).as_dataframe()
 
     library = {
         'gene_expressions': gene_expressions,

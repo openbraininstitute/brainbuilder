@@ -37,7 +37,7 @@ def reorder_mtypes(mvd3, recipe, output):
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
 def add_property(mvd3, prop, voxel_data, output):
     """ Add property to MVD3 based on volumetric data """
-    cells = CellCollection.load(mvd3)
+    cells = CellCollection.load_mvd3(mvd3)
     if prop in cells.properties:
         choice = input(
             "There is already '%s' property in the provided MVD3. Overwrite (y/n)? " % prop
@@ -46,7 +46,7 @@ def add_property(mvd3, prop, voxel_data, output):
             return
     voxel_data = VoxelData.load_nrrd(voxel_data)
     cells.properties[prop] = voxel_data.lookup(cells.positions)
-    cells.save(output)
+    cells.save_mvd3(output)
 
 
 @app.command()
@@ -57,9 +57,9 @@ def set_seeds(mvd3, seeds, output):
     """ Set /circuit/seeds """
     seeds = [float(x) for x in seeds.split(",")]
     assert len(seeds) == 4
-    mvd3 = CellCollection.load(mvd3)
+    mvd3 = CellCollection.load_mvd3(mvd3)
     mvd3.seeds = np.array(seeds, dtype=np.float64)
-    mvd3.save(output)
+    mvd3.save_mvd3(output)
 
 
 @app.command()
@@ -68,7 +68,7 @@ def set_seeds(mvd3, seeds, output):
 @click.option("-o", "--output", help="Path to output MVD2", required=True)
 def to_mvd2(mvd3, morph_dir, output):
     """ Convert to MVD2 """
-    cells = CellCollection.load(mvd3)
+    cells = CellCollection.load_mvd3(mvd3)
     bbp.save_mvd2(output, morph_dir, cells)
 
 
@@ -77,7 +77,7 @@ def to_mvd2(mvd3, morph_dir, output):
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
 def merge(mvd3, output):
     """ Merge multiple MVD3 files """
-    chunks = [CellCollection.load(filepath).as_dataframe() for filepath in mvd3]
+    chunks = [CellCollection.load_mvd3(filepath).as_dataframe() for filepath in mvd3]
     merged = pd.concat(chunks, ignore_index=True)
     merged.index = 1 + np.arange(len(merged))
-    CellCollection.from_dataframe(merged).save(output)
+    CellCollection.from_dataframe(merged).save_mvd3(output)
