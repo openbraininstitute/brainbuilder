@@ -1,10 +1,32 @@
 """
 CellCollection building.
+
+A collection of commands for creating CellCollection and augmenting its properties, in particular:
+
+----
+
+# `brainbuilder cells create2`
+
+Based on YAML cell composition recipe, create MVD3 with:
+ - cell positions
+ - required cell properties: 'layer', 'mtype', 'etype'
+ - additional cell properties prescribed by the recipe
+
+----
+
+# `brainbuilder cells assign_emodels`
+
+Based on `extNeuronDB.dat` file, add 'me_combo' to existing MVD3.
+MVD3 is expected to have the following properties already assigned:
+ - 'layer', 'mtype', 'etype'
+
 """
 
 import re
 import logging
 import numbers
+
+from collections import Mapping
 
 import click
 import numpy as np
@@ -65,6 +87,21 @@ def load_recipe(filepath):
     return content['composition'], content.get('rotation')
 
 
+def load_recipe2(filepath):
+    """
+    Load cell composition YAML recipe.
+
+    TODO: link to spec
+    """
+    with open(filepath, 'r') as f:
+        content = yaml.safe_load(f)
+
+    # TODO: validate the content against schema
+    assert content['version'] in ('v2.0',)
+
+    return content
+
+
 def load_mtype_taxonomy(filepath):
     """
     Load mtype taxonomy from TSV file.
@@ -99,11 +136,15 @@ def _load_density(value, mask, atlas):
         dataset = value[1:-1]
         L.info("Loading 3D density profile from '%s' atlas dataset...", dataset)
         result = atlas.load_data(dataset, cls=VoxelData).raw.astype(np.float32)
-        result[~mask] = 0
+        if np.any(result[~mask] > 0):
+            L.warning("Non-zero density outside of region mask")
+            result[~mask] = 0
     elif value.endswith(".nrrd"):
         L.info("Loading 3D density profile from '%s'...", value)
         result = VoxelData.load_nrrd(value).raw.astype(np.float32)
-        result[~mask] = 0
+        if np.any(result[~mask] > 0):
+            L.warning("Non-zero density outside of region mask")
+            result[~mask] = 0
     else:
         raise BrainBuilderError("Unexpected density value: '%s'" % value)
     return result
@@ -357,6 +398,153 @@ def create(
         soma_placement=soma_placement,
         assign_layer=assign_layer,
         assign_column=assign_column,
+    )
+
+    L.info("Export to MVD3...")
+    cells.save_mvd3(output)
+
+
+def _check_traits(traits):
+    missing = set(['layer', 'mtype', 'etype']).difference(traits)
+    if missing:
+        raise BrainBuilderError(
+            "Missing properties {} for group {}".format(list(missing), traits)
+        )
+
+
+def _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement):
+    _check_traits(conf['traits'])
+
+    region_mask = atlas.get_region_mask(conf['region'], with_descendants=True, memcache=True)
+    if root_mask is not None:
+        region_mask.raw &= root_mask.raw
+    if not np.any(region_mask.raw):
+        raise BrainBuilderError("Empty region mask for region: '%s'" % conf['region'])
+
+    density = region_mask.with_data(
+        _load_density(conf['density'], region_mask.raw, atlas)
+    )
+
+    pos = create_cell_positions(density, density_factor=density_factor, method=soma_placement)
+    result = pd.DataFrame(pos, columns=['x', 'y', 'z'])
+
+    for prop, value in six.iteritems(conf['traits']):
+        if isinstance(value, Mapping):
+            values, probs = zip(*six.iteritems(value))
+            if not np.allclose(np.sum(probs), 1.0):
+                L.warning("Weights don't sum up to 1.0 for %s; renormalizing them", str(value))
+                probs = probs / np.sum(probs)
+            result[prop] = np.random.choice(values, size=len(pos), p=probs)
+        else:
+            result[prop] = value
+
+    L.info("%s... [%d cells]", conf['traits'], len(result))
+    return result
+
+
+def _assign_mtype_traits(cells, mtype_taxonomy):
+    traits = mtype_taxonomy.loc[cells.properties['mtype']]
+    cells.properties['morph_class'] = traits['mClass'].values
+    cells.properties['synapse_class'] = traits['sClass'].values
+
+
+def _assign_region(cells, atlas):
+    brain_regions = atlas.load_data('brain_regions')
+    region_map = atlas.load_region_map()
+
+    ids, idx = np.unique(brain_regions.lookup(cells.positions), return_inverse=True)
+    names = np.array([region_map.get(_id, attr='acronym') for _id in ids])
+    cells.properties['region'] = names[idx]
+
+
+def _assign_orientations(cells, atlas):
+    orientation_field = atlas.load_data('orientation', cls=OrientationField)
+    cells.orientations = orientation_field.lookup(cells.positions)
+    cells.orientations = apply_random_rotation(
+        cells.orientations, axis='y', distr=('uniform', {'low': -np.pi, 'high': np.pi})
+    )
+
+
+def _create2(
+    composition_path,
+    mtype_taxonomy_path,
+    atlas_url, atlas_cache=None, region=None,
+    soma_placement='basic',
+    density_factor=1.0,
+):
+    """
+    Create CellCollection
+
+    # TODO: fill in the details
+    """
+    atlas = Atlas.open(atlas_url, cache_dir=atlas_cache)
+
+    recipe = load_recipe2(composition_path)
+    mtype_taxonomy = load_mtype_taxonomy(mtype_taxonomy_path)
+
+    # Cache frequently used atlas data
+    atlas.load_data('brain_regions', memcache=True)
+    atlas.load_region_map(memcache=True)
+
+    if region is None:
+        region_mask = None
+    else:
+        region_mask = atlas.get_region_mask(region, with_descendants=True)
+
+    L.info("Creating cell groups...")
+    groups = [
+        _create_cell_group(conf, atlas, region_mask, density_factor, soma_placement)
+        for conf in recipe['neurons']
+    ]
+
+    L.info("Merging into single CellCollection...")
+    merged = pd.concat(groups)
+    merged.index = 1 + np.arange(len(merged))
+    result = CellCollection.from_dataframe(merged)
+
+    L.info("Total cell count: %d", len(result.positions))
+
+    L.info("Assigning 'morph_class' / 'synapse_class'...")
+    _assign_mtype_traits(result, mtype_taxonomy)
+
+    L.info("Assigning 'region'...")
+    _assign_region(result, atlas)
+
+    # TODO: move to 'assign-morphologies' phase
+    # L.info("Assigning cell orientations...")
+    # _assign_orientations(result, atlas)
+
+    L.info("Done!")
+
+    return result
+
+
+@app.command(short_help="Create CellCollection", help=_create.__doc__)
+@click.option("--composition", help="Path to ME-type composition YAML", required=True)
+@click.option("--mtype-taxonomy", help="Path to mtype taxonomy TSV", required=True)
+@click.option("--atlas", help="Atlas URL / path", required=True)
+@click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
+@click.option("--region", help="Region name filter", default=None, show_default=True)
+@click.option("--density-factor", help="Density factor", type=float, default=1.0, show_default=True)
+@click.option("--soma-placement", help="Soma placement method", default='basic', show_default=True)
+@click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
+@click.option("-o", "--output", help="Path to output MVD3", required=True)
+def create2(
+    composition, mtype_taxonomy,
+    atlas, atlas_cache, region,
+    density_factor, soma_placement,
+    seed,
+    output
+):
+    # pylint: disable=missing-docstring,too-many-arguments
+    np.random.seed(seed)
+
+    cells = _create2(
+        composition,
+        mtype_taxonomy,
+        atlas, atlas_cache, region,
+        density_factor=density_factor,
+        soma_placement=soma_placement,
     )
 
     L.info("Export to MVD3...")
