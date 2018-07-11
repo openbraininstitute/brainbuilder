@@ -457,14 +457,6 @@ def _assign_region(cells, atlas):
     cells.properties['region'] = names[idx]
 
 
-def _assign_orientations(cells, atlas):
-    orientation_field = atlas.load_data('orientation', cls=OrientationField)
-    cells.orientations = orientation_field.lookup(cells.positions)
-    cells.orientations = apply_random_rotation(
-        cells.orientations, axis='y', distr=('uniform', {'low': -np.pi, 'high': np.pi})
-    )
-
-
 def _create2(
     composition_path,
     mtype_taxonomy_path,
@@ -509,10 +501,6 @@ def _create2(
 
     L.info("Assigning 'region'...")
     _assign_region(result, atlas)
-
-    # TODO: move to 'assign-morphologies' phase
-    # L.info("Assigning cell orientations...")
-    # _assign_orientations(result, atlas)
 
     L.info("Done!")
 
