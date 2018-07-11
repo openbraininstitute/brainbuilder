@@ -25,7 +25,7 @@ BASE_REQUIRES = [
     'six>=1.0',
     'tqdm',
 ] + [
-    'voxcell>=2.4,<3.0',
+    'voxcell>=2.5,<3.0',
 ]
 
 NGV_REQUIRES = [
