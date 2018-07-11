@@ -532,26 +532,20 @@ def load_metype_composition(filepath, atlas, region_map, relative_distance=None)
 def load_neurondb_v3(neurondb_filename):
     '''load a neurondb v3 file
 
-    If second column is numeric (layer IDs), it is prefixed with 'L' to obtain region name.
-
     Returns:
         A DataFrame where the columns are:
-            morphology, region, mtype, etype, me_combo
+            morphology, layer, mtype, etype, me_combo
     '''
     columns = [
         'morphology',
-        'region',
+        'layer',
         'mtype',
         'etype',
         'me_combo',
     ]
-    result = pd.read_csv(
+    return pd.read_csv(
         neurondb_filename, sep=r'\s+', names=columns, usecols=range(5), na_filter=False
     )
-    if pd.api.types.is_numeric_dtype(result['region']):
-        # Append 'L' to cortex layer number
-        result['region'] = result['region'].apply(lambda x: "L%d" % x)
-    return result
 
 
 def load_neurondb_v4(neurondb_filename):
@@ -1084,13 +1078,13 @@ def assign_emodels(cells, morphdb):
         L.warning("'%s' property would be overwritten", ME_COMBO)
         del df[ME_COMBO]
 
-    JOIN_COLS = ['morphology', 'region', 'mtype', 'etype']
+    JOIN_COLS = ['morphology', 'layer', 'mtype', 'etype']
 
     df = df.join(morphdb.set_index(JOIN_COLS)[ME_COMBO], on=JOIN_COLS)
 
     not_assigned = np.count_nonzero(df[ME_COMBO].isnull())
     if not_assigned > 0:
-        raise BrainBuilderError("Could assign pick emodel for %d cell(s)" % not_assigned)
+        raise BrainBuilderError("Could not pick emodel for %d cell(s)" % not_assigned)
 
     # choose 'me_combo' randomly if several are available
     df = df.sample(frac=1)
