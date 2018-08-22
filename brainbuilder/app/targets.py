@@ -22,7 +22,7 @@ def _synapse_class_name(synclass):
 
 
 def _layer_name(layer):
-    return "Layer%d" % layer
+    return "Layer%s" % layer
 
 
 def _column_name(column):
