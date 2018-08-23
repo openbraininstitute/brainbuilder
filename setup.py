@@ -31,6 +31,7 @@ BASE_REQUIRES = [
 NGV_REQUIRES = [
     'tess>=0.2',
     'numpy-stl>=2.5',
+    'enum34;python_version<"3.4"',  # 'numpy-stl' sometimes fails to bring 'enum34' for some reason
     'tables>=3.4',
 ]
 
