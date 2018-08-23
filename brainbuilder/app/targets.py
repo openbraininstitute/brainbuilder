@@ -3,8 +3,10 @@ Target generation.
 """
 
 import click
+import six
+import yaml
 
-from voxcell import CellCollection
+from bluepy.v2 import Circuit
 from brainbuilder.utils import bbp
 
 
@@ -29,26 +31,63 @@ def _column_name(column):
     return "mc%d_Column" % column
 
 
-def write_start_targets(cells, output):
+def write_default_targets(cells, output):
     """ Write default property-based targets. """
-    df = cells.as_dataframe()
     bbp.write_target(output, 'Mosaic', include_targets=['All'])
-    bbp.write_target(output, 'All', include_targets=sorted(df['mtype'].unique()))
-    bbp.write_property_targets(output, df, 'synapse_class', mapping=_synapse_class_name)
-    bbp.write_property_targets(output, df, 'mtype')
-    bbp.write_property_targets(output, df, 'etype')
-    bbp.write_property_targets(output, df, 'region')
-    if 'layer' in df:
-        bbp.write_property_targets(output, df, 'layer', mapping=_layer_name)
-    if 'hypercolumn' in df:
-        bbp.write_property_targets(output, df, 'hypercolumn', mapping=_column_name)
+    bbp.write_target(output, 'All', include_targets=sorted(cells['mtype'].unique()))
+    bbp.write_property_targets(output, cells, 'synapse_class', mapping=_synapse_class_name)
+    bbp.write_property_targets(output, cells, 'mtype')
+    bbp.write_property_targets(output, cells, 'etype')
+
+
+def write_query_targets(query_based, circuit, output):
+    """ Write targets based on BluePy-like queries. """
+    for name, query in six.iteritems(query_based):
+        bbp.write_target(output, name, gids=circuit.cells.ids(query))
+
+
+def _load_targets(filepath):
+    """
+    Load target definition YAML, e.g.:
+
+    >
+      targets:
+        # BluePy-like queries a.k.a. "smart targets"
+        query_based:
+            mc2_Column: {'region': '@^mc2'}
+            Layer1: {'region': '@1$'}
+
+        # 0/1 masks registered in the atlas
+        atlas_based:
+            cylinder: '{S1HL-cylinder}'
+    """
+    with open(filepath) as f:
+        content = yaml.load(f)['targets']
+    return (
+        content.get('query_based'),
+        content.get('atlas_based'),
+    )
 
 
 @app.command()
 @click.argument("mvd3")
+@click.option("-t", "--targets", help="Path to target definition YAML file", default=None)
 @click.option("-o", "--output", help="Path to output .target file", required=True)
-def from_mvd3(mvd3, output):
-    """ Generate .target file from MVD3 """
-    cells = CellCollection.load_mvd3(mvd3)
+def from_mvd3(mvd3, targets, output):
+    """ Generate .target file from MVD3 (and target definition YAML) """
+    circuit = Circuit({'cells': mvd3})
+    cells = circuit.cells.get()
     with open(output, 'w') as f:
-        write_start_targets(cells, f)
+        write_default_targets(cells, f)
+        if targets is None:
+            bbp.write_property_targets(output, cells, 'region')
+            if 'layer' in cells:
+                bbp.write_property_targets(output, cells, 'layer', mapping=_layer_name)
+            if 'hypercolumn' in cells:
+                bbp.write_property_targets(output, cells, 'hypercolumn', mapping=_column_name)
+        else:
+            query_based, atlas_based = _load_targets(targets)
+            if query_based is not None:
+                write_query_targets(query_based, circuit, f)
+            if atlas_based is not None:
+                raise NotImplementedError("Atlas-based targets are not supported yet")

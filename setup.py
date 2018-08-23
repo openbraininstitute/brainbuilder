@@ -25,6 +25,7 @@ BASE_REQUIRES = [
     'six>=1.0',
     'tqdm',
 ] + [
+    'bluepy>=0.12.5',
     'voxcell>=2.5,<3.0',
 ]
 
