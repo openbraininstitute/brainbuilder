@@ -7,6 +7,7 @@ import six
 import yaml
 
 from bluepy.v2 import Circuit
+from brainbuilder.exceptions import BrainBuilderError
 from brainbuilder.utils import bbp
 
 
@@ -43,7 +44,10 @@ def write_default_targets(cells, output):
 def write_query_targets(query_based, circuit, output):
     """ Write targets based on BluePy-like queries. """
     for name, query in six.iteritems(query_based):
-        bbp.write_target(output, name, gids=circuit.cells.ids(query))
+        gids = circuit.cells.ids(query)
+        if len(gids) < 1:
+            raise BrainBuilderError("Empty target: {} {}".format(name, query))
+        bbp.write_target(output, name, gids=gids)
 
 
 def _load_targets(filepath):
