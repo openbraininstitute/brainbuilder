@@ -84,11 +84,11 @@ def from_mvd3(mvd3, targets, output):
     with open(output, 'w') as f:
         write_default_targets(cells, f)
         if targets is None:
-            bbp.write_property_targets(output, cells, 'region')
+            bbp.write_property_targets(f, cells, 'region')
             if 'layer' in cells:
-                bbp.write_property_targets(output, cells, 'layer', mapping=_layer_name)
+                bbp.write_property_targets(f, cells, 'layer', mapping=_layer_name)
             if 'hypercolumn' in cells:
-                bbp.write_property_targets(output, cells, 'hypercolumn', mapping=_column_name)
+                bbp.write_property_targets(f, cells, 'hypercolumn', mapping=_column_name)
         else:
             query_based, atlas_based = _load_targets(targets)
             if query_based is not None:
