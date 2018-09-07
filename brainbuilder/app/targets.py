@@ -41,11 +41,11 @@ def write_default_targets(cells, output):
     bbp.write_property_targets(output, cells, 'etype')
 
 
-def write_query_targets(query_based, circuit, output):
+def write_query_targets(query_based, circuit, output, allow_empty=False):
     """ Write targets based on BluePy-like queries. """
     for name, query in six.iteritems(query_based):
         gids = circuit.cells.ids(query)
-        if len(gids) < 1:
+        if (len(gids) < 1) and not allow_empty:
             raise BrainBuilderError("Empty target: {} {}".format(name, query))
         bbp.write_target(output, name, gids=gids)
 
@@ -76,8 +76,9 @@ def _load_targets(filepath):
 @app.command()
 @click.argument("mvd3")
 @click.option("-t", "--targets", help="Path to target definition YAML file", default=None)
+@click.option("--allow-empty", is_flag=True, help="Allow empty targets", show_default=True)
 @click.option("-o", "--output", help="Path to output .target file", required=True)
-def from_mvd3(mvd3, targets, output):
+def from_mvd3(mvd3, targets, allow_empty, output):
     """ Generate .target file from MVD3 (and target definition YAML) """
     circuit = Circuit({'cells': mvd3})
     cells = circuit.cells.get()
@@ -92,6 +93,6 @@ def from_mvd3(mvd3, targets, output):
         else:
             query_based, atlas_based = _load_targets(targets)
             if query_based is not None:
-                write_query_targets(query_based, circuit, f)
+                write_query_targets(query_based, circuit, f, allow_empty=allow_empty)
             if atlas_based is not None:
                 raise NotImplementedError("Atlas-based targets are not supported yet")
