@@ -2,6 +2,8 @@
 Target generation.
 """
 
+import logging
+
 import click
 import six
 import yaml
@@ -9,6 +11,9 @@ import yaml
 from bluepy.v2 import Circuit
 from brainbuilder.exceptions import BrainBuilderError
 from brainbuilder.utils import bbp
+
+
+L = logging.getLogger('brainbuilder')
 
 
 @click.group()
@@ -45,8 +50,12 @@ def write_query_targets(query_based, circuit, output, allow_empty=False):
     """ Write targets based on BluePy-like queries. """
     for name, query in six.iteritems(query_based):
         gids = circuit.cells.ids(query)
-        if (len(gids) < 1) and not allow_empty:
-            raise BrainBuilderError("Empty target: {} {}".format(name, query))
+        if len(gids) < 1:
+            msg = "Empty target: {} {}".format(name, query)
+            if allow_empty:
+                L.warning(msg)
+            else:
+                raise BrainBuilderError(msg)
         bbp.write_target(output, name, gids=gids)
 
 
