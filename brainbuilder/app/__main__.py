@@ -5,7 +5,7 @@ Collection of tools for circuit building.
 import logging
 import click
 
-from brainbuilder.app import astrocytes, cells, mvd3, nrn, subcellular, targets
+from brainbuilder.app import astrocytes, cells, mvd3, nrn, subcellular, syn2, targets
 from brainbuilder.version import VERSION
 
 
@@ -18,6 +18,7 @@ def main():
         'mvd3': mvd3.app,
         'nrn': nrn.app,
         'subcellular': subcellular.app,
+        'syn2': syn2.app,
         'targets': targets.app,
     })
     app = click.version_option(VERSION)(app)
