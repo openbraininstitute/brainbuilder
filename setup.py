@@ -23,6 +23,7 @@ BASE_REQUIRES = [
     'pyyaml',
     'scipy>=0.13',
     'six>=1.0',
+    'transforms3d>=0.3',
     'tqdm',
 ] + [
     'bluepy>=0.12.5',
