@@ -14,10 +14,10 @@ from voxcell import CellCollection
 
 def _write_dataframe_by_columns(df, out):
     for name, column in df.iteritems():
-        values = column.values
+        values, dtype = column.values, None
         if values.dtype in (object,):
-            values = values.astype('S')
-        out.create_dataset(name, data=values)
+            dtype = h5py.special_dtype(vlen=unicode)
+        out.create_dataset(name, data=values, dtype=dtype)
 
 
 def _write_node_group(node_group, out):
