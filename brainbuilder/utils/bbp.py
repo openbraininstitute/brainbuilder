@@ -50,6 +50,25 @@ def bind_profile1d_to_atlas(profile1d, relative_distance):
     return relative_distance.with_data(result)
 
 
+def load_neurondb(neurondb_filename, with_emodels=False):
+    '''load a neurondb file
+
+    Returns:
+        A DataFrame where the columns are:
+            morphology, layer, mtype [,etype, me_combo]
+    '''
+    columns = [
+        'morphology',
+        'layer',
+        'mtype',
+    ]
+    if with_emodels:
+        columns.extend(['etype', 'me_combo'])
+    return pd.read_csv(
+        neurondb_filename, sep=r'\s+', names=columns, usecols=range(len(columns)), na_filter=False
+    )
+
+
 def load_neurondb_v3(neurondb_filename):
     '''load a neurondb v3 file
 
@@ -57,16 +76,7 @@ def load_neurondb_v3(neurondb_filename):
         A DataFrame where the columns are:
             morphology, layer, mtype, etype, me_combo
     '''
-    columns = [
-        'morphology',
-        'layer',
-        'mtype',
-        'etype',
-        'me_combo',
-    ]
-    return pd.read_csv(
-        neurondb_filename, sep=r'\s+', names=columns, usecols=range(5), na_filter=False
-    )
+    return load_neurondb(neurondb_filename, with_emodels=True)
 
 
 def parse_mvd2(filepath):

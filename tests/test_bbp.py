@@ -94,6 +94,26 @@ def test_bind_profile1d_to_atlas_raises_2():
 #     )
 
 
+def test_load_neurondb_v2():
+    actual = bbp.load_neurondb(os.path.join(DATA_PATH, 'neuronDBv2.dat'))
+    expected = pd.DataFrame({
+        'morphology': ["morph-a", "morph-b"],
+        'layer': ["L1", "L2"],
+        'mtype': ["L1_DAC", "L23_PC"],
+    })
+    assert_frame_equal(actual, expected, check_like=True)
+
+
+def test_load_neurondb_v3_as_v2():
+    actual = bbp.load_neurondb(os.path.join(DATA_PATH, 'neuronDBv3.dat'))
+    expected = pd.DataFrame({
+        'morphology': ["morph-a", "morph-b"],
+        'layer': ["L1", "L2"],
+        'mtype': ["L1_DAC", "L23_PC"],
+    })
+    assert_frame_equal(actual, expected, check_like=True)
+
+
 def test_load_neurondb_v3():
     actual = bbp.load_neurondb_v3(os.path.join(DATA_PATH, 'neuronDBv3.dat'))
     expected = pd.DataFrame({
