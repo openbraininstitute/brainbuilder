@@ -23,6 +23,7 @@ BASE_REQUIRES = [
     'pyyaml',
     'scipy>=0.13',
     'six>=1.0',
+    'tables>=3.4',
     'transforms3d>=0.3',
     'tqdm',
 ] + [
@@ -34,7 +35,6 @@ NGV_REQUIRES = [
     'tess>=0.2',
     'numpy-stl>=2.5',
     'enum34;python_version<"3.4"',  # 'numpy-stl' sometimes fails to bring 'enum34' for some reason
-    'tables>=3.4',
 ]
 
 setup(
