@@ -56,8 +56,5 @@ setup(
       'console_scripts': [
           'brainbuilder=brainbuilder.app.__main__:main'
       ]
-    },
-    scripts=[
-        'apps/bind2atlas',
-    ]
+    }
 )

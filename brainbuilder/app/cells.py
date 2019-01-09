@@ -37,6 +37,7 @@ import six
 from voxcell import CellCollection, OrientationField, VoxelData
 from voxcell import traits as tt
 from voxcell.nexus.voxelbrain import Atlas
+from voxcell.utils import deprecate
 
 from brainbuilder import BrainBuilderError
 from brainbuilder.cell_positions import create_cell_positions
@@ -78,6 +79,11 @@ def load_recipe(filepath):
             etypes:
               cADpyr: 1.0
     """
+    deprecate.fail("""
+        Cell composition recipes v1.x are deprecated.
+        Please consider migrating to the latest recipe structure:
+        https://bbpteam.epfl.ch/documentation/Circuit%20Building-1.5/bioname.html#cell-composition-yaml
+    """)
     with open(filepath, 'r') as f:
         content = yaml.load(f)
 
@@ -385,6 +391,12 @@ def create(
     output
 ):
     # pylint: disable=missing-docstring,too-many-arguments
+    deprecate.fail("""
+        `brainbuilder cells create` command is deprecated.
+        Please update your cell composition recipe according to:
+          https://bbpteam.epfl.ch/documentation/Circuit%20Building-1.5/bioname.html#cell-composition-yaml
+        and use `brainbuilder cells place` command instead.
+    """)
     if region_ids is not None:
         region_ids = map(int, region_ids.split(","))
 
@@ -457,7 +469,7 @@ def _assign_region(cells, atlas):
     cells.properties['region'] = names[idx]
 
 
-def _create2(
+def _place(
     composition_path,
     mtype_taxonomy_path,
     atlas_url, atlas_cache=None, region=None,
@@ -507,7 +519,7 @@ def _create2(
     return result
 
 
-@app.command(short_help="Create CellCollection", help=_create.__doc__)
+@app.command(short_help="Create CellCollection", help=_place.__doc__)
 @click.option("--composition", help="Path to ME-type composition YAML", required=True)
 @click.option("--mtype-taxonomy", help="Path to mtype taxonomy TSV", required=True)
 @click.option("--atlas", help="Atlas URL / path", required=True)
@@ -525,9 +537,46 @@ def create2(
     output
 ):
     # pylint: disable=missing-docstring,too-many-arguments
+    deprecate.warn("""
+        `brainbuilder cells create2` has been renamed.
+        Please consider using `brainbuilder cells place` command instead;
+        `create2` alias would be removed in future versions of `brainbuilder`.
+    """)
     np.random.seed(seed)
 
-    cells = _create2(
+    cells = _place(
+        composition,
+        mtype_taxonomy,
+        atlas, atlas_cache, region,
+        density_factor=density_factor,
+        soma_placement=soma_placement,
+    )
+
+    L.info("Export to MVD3...")
+    cells.save_mvd3(output)
+
+
+@app.command(short_help="Generate cell positions and me-types", help=_place.__doc__)
+@click.option("--composition", help="Path to ME-type composition YAML", required=True)
+@click.option("--mtype-taxonomy", help="Path to mtype taxonomy TSV", required=True)
+@click.option("--atlas", help="Atlas URL / path", required=True)
+@click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
+@click.option("--region", help="Region name filter", default=None, show_default=True)
+@click.option("--density-factor", help="Density factor", type=float, default=1.0, show_default=True)
+@click.option("--soma-placement", help="Soma placement method", default='basic', show_default=True)
+@click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
+@click.option("-o", "--output", help="Path to output MVD3", required=True)
+def place(
+    composition, mtype_taxonomy,
+    atlas, atlas_cache, region,
+    density_factor, soma_placement,
+    seed,
+    output
+):
+    # pylint: disable=missing-docstring,too-many-arguments
+    np.random.seed(seed)
+
+    cells = _place(
         composition,
         mtype_taxonomy,
         atlas, atlas_cache, region,

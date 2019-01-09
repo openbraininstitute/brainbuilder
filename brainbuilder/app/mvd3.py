@@ -64,16 +64,6 @@ def set_seeds(mvd3, seeds, output):
 
 @app.command()
 @click.argument("mvd3")
-@click.option("--morph-dir", help="Path to morphology folder", required=True)
-@click.option("-o", "--output", help="Path to output MVD2", required=True)
-def to_mvd2(mvd3, morph_dir, output):
-    """ Convert to MVD2 """
-    cells = CellCollection.load_mvd3(mvd3)
-    bbp.save_mvd2(output, morph_dir, cells)
-
-
-@app.command()
-@click.argument("mvd3")
 @click.option("--mecombo-info", help="Path to TSV file with ME-combo table", default=None)
 @click.option("--population", help="Population name", default="default", show_default=True)
 @click.option("-o", "--output", help="Path to output HDF5", required=True)

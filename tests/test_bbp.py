@@ -24,27 +24,6 @@ from brainbuilder.utils import bbp
 DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
 
 
-def test_bind_profile1d_to_atlas():
-    dist = VoxelData(np.array([[0.019, np.nan], [0.0, 1.0]]), voxel_dimensions=(10, 10))
-    actual = bbp.bind_profile1d_to_atlas(np.arange(100), dist)
-    assert_almost_equal(
-        actual.raw,
-        [[1, np.nan], [0, 99]]
-    )
-
-
-@raises(BrainBuilderError)
-def test_bind_profile1d_to_atlas_raises_1():
-    dist = VoxelData(np.array([0.5]), voxel_dimensions=(10,))
-    bbp.bind_profile1d_to_atlas(np.arange(5), dist)
-
-
-@raises(BrainBuilderError)
-def test_bind_profile1d_to_atlas_raises_2():
-    dist = VoxelData(np.array([1.1]), voxel_dimensions=(10,))
-    bbp.bind_profile1d_to_atlas(np.arange(100), dist)
-
-
 # @patch('voxcell.VoxelData.load_nrrd')
 # @patch('numpy.loadtxt')
 # def test_load_metype_composition(mock_loadtxt, mock_load_nrrd):
