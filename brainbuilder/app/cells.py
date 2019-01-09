@@ -469,10 +469,16 @@ def _assign_region(cells, atlas):
     cells.properties['region'] = names[idx]
 
 
+def _as_bool_mask(dset):
+    if dset.raw.dtype not in (np.bool, np.uint8, np.int8):
+        raise BrainBuilderError("Unexpected datatype for 0/1 mask: %s" % dset.raw.dtype)
+    return dset.with_data(dset.raw.astype(bool))
+
+
 def _place(
     composition_path,
     mtype_taxonomy_path,
-    atlas_url, atlas_cache=None, region=None,
+    atlas_url, atlas_cache=None, region=None, mask_dset=None,
     soma_placement='basic',
     density_factor=1.0,
 ):
@@ -481,6 +487,7 @@ def _place(
 
     # TODO: fill in the details
     """
+    # pylint: disable=too-many-locals
     atlas = Atlas.open(atlas_url, cache_dir=atlas_cache)
 
     recipe = load_recipe2(composition_path)
@@ -490,14 +497,21 @@ def _place(
     atlas.load_data('brain_regions', memcache=True)
     atlas.load_region_map(memcache=True)
 
-    if region is None:
-        region_mask = None
+    if mask_dset is None:
+        root_mask = None
     else:
+        root_mask = _as_bool_mask(atlas.load_data(mask_dset))
+
+    if region is not None:
         region_mask = atlas.get_region_mask(region, with_descendants=True)
+        if root_mask is None:
+            root_mask = region_mask
+        else:
+            root_mask.raw &= region_mask.raw
 
     L.info("Creating cell groups...")
     groups = [
-        _create_cell_group(conf, atlas, region_mask, density_factor, soma_placement)
+        _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement)
         for conf in recipe['neurons']
     ]
 
@@ -547,7 +561,8 @@ def create2(
     cells = _place(
         composition,
         mtype_taxonomy,
-        atlas, atlas_cache, region,
+        atlas, atlas_cache,
+        region=region, mask_dset=None,
         density_factor=density_factor,
         soma_placement=soma_placement,
     )
@@ -562,13 +577,14 @@ def create2(
 @click.option("--atlas", help="Atlas URL / path", required=True)
 @click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
 @click.option("--region", help="Region name filter", default=None, show_default=True)
+@click.option("--mask", help="Dataset with volumetric mask filter", default=None, show_default=True)
 @click.option("--density-factor", help="Density factor", type=float, default=1.0, show_default=True)
 @click.option("--soma-placement", help="Soma placement method", default='basic', show_default=True)
 @click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
 def place(
     composition, mtype_taxonomy,
-    atlas, atlas_cache, region,
+    atlas, atlas_cache, region, mask,
     density_factor, soma_placement,
     seed,
     output
@@ -579,7 +595,8 @@ def place(
     cells = _place(
         composition,
         mtype_taxonomy,
-        atlas, atlas_cache, region,
+        atlas, atlas_cache,
+        region=region, mask_dset=mask,
         density_factor=density_factor,
         soma_placement=soma_placement,
     )
