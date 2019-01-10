@@ -14,7 +14,7 @@ if sys.version_info < (2, 7):
 VERSION = imp.load_source("brainbuilder.version", "brainbuilder/version.py").VERSION
 
 BASE_REQUIRES = [
-    'click>=6.0',
+    'click>=7.0,<8.0',
     'future>=0.16',
     'h5py>=2.6',
     'lxml>=3.3',
