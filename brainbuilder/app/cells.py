@@ -37,12 +37,11 @@ import six
 from voxcell import CellCollection, OrientationField, VoxelData
 from voxcell import traits as tt
 from voxcell.nexus.voxelbrain import Atlas
-from voxcell.utils import deprecate
 
 from brainbuilder import BrainBuilderError
 from brainbuilder.cell_positions import create_cell_positions
 from brainbuilder.cell_orientations import apply_random_rotation
-from brainbuilder.utils import bbp
+from brainbuilder.utils import bbp, deprecate
 
 
 L = logging.getLogger('brainbuilder')

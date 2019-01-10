@@ -2,6 +2,14 @@
 import numpy as np
 from voxcell import build
 
+from brainbuilder.utils import deprecate
+
+
+deprecate.fail("""
+    This module is deprecated in brainbuilder==0.9.
+    Please contact NSE if you still need it.
+""")
+
 
 def select_region(annotation_raw, density, hierarchy, region_name, inverse=False):
     '''Trim a density voxel dataset to keep only those that belong to a desired region
