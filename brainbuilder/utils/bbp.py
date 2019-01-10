@@ -122,7 +122,6 @@ def _get_recipe_mtypes(recipe_path):
 def reorder_mtypes(mvd3_path, recipe_path):
     """ Re-order /library/mtypes to align with builder recipe. """
     recipe_mtypes = _get_recipe_mtypes(recipe_path)
-
     with h5py.File(mvd3_path, 'a') as h5f:
         mvd3_mtypes = h5f.pop('/library/mtype')[:]
         mapping = np.zeros(len(mvd3_mtypes), dtype=np.uint8)
@@ -132,4 +131,6 @@ def reorder_mtypes(mvd3_path, recipe_path):
         mvd3_mtype_index = h5f.pop('/cells/properties/mtype')[:]
         dt = h5py.special_dtype(vlen=text_type)
         h5f['/cells/properties/mtype'] = mapping[mvd3_mtype_index]
-        h5f.create_dataset('/library/mtype', data=recipe_mtypes, dtype=dt)
+        h5f.create_dataset(
+            '/library/mtype', data=np.asarray(recipe_mtypes).astype(object), dtype=dt
+        )
