@@ -352,7 +352,7 @@ def _create(
         for region, region_group in six.iteritems(rotation):
             for mtype, mtype_group in six.iteritems(region_group):
                 L.info("Applying random rotation for (%s, %s) cells", region, mtype)
-                mask = np.logical_and(
+                mask = np.logical_and(  # pylint: disable=assignment-from-no-return
                     cells.properties['region'] == region,
                     cells.properties['mtype'] == mtype
                 )

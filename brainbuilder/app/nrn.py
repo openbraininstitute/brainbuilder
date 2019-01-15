@@ -67,11 +67,10 @@ def count_subfiles(filename):
 
 def get_all_dataset(filename, file_number, dset):
     n_filename = "%s.%d"%(filename, file_number)
-    f = h5py.File(n_filename, "r")
-    all_keys = f.keys();
-    dset[file_number] = filter(lambda key: key[0] == 'a', all_keys)
-    f.close()
-    return len(all_keys)
+    with h5py.File(n_filename, 'r') as f:
+        all_keys = f.keys()
+        dset[file_number] = list(filter(lambda key: key[0] == 'a', all_keys))
+        return len(all_keys)
 
 def finalize_metadata(fdesc, total_files):
     fdesc["/info"] = 0
@@ -88,7 +87,7 @@ def create_merged_file(filename, link=False):
     n = 0
     t1 = time.time()
     progress_print(">>")
-    for i in xrange(0, total_files):
+    for i in range(0, total_files):
         n += get_all_dataset(filename, i, dset)
         progress_print(">> got all keys for file %s.%d"%(filename, i))
     progress_finalize()
@@ -97,7 +96,7 @@ def create_merged_file(filename, link=False):
     t1 = time.time()
     progress_print(">>")
     with h5py.File(filename, 'w') as merged:
-        for i in xrange(0, total_files):
+        for i in range(0, total_files):
             chunk_filename = "%s.%d" % (filename, i)
             if link:
                 progress_print(">> create external references file %s" % chunk_filename)

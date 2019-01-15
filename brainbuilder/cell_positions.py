@@ -115,6 +115,7 @@ def _create_cell_positions_poisson_disc(density, density_factor):
             upper limit of nb_points is the total cell count as extracted from
             the density volumetric data.
     '''
+    # pylint: disable=assignment-from-no-return
     cell_count_per_voxel, cell_count = _get_cell_count(density, density_factor)
 
     _assert_cubic_voxels(density)

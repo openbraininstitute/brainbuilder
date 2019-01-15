@@ -66,7 +66,7 @@ def overlap(tesselation, overlap_distr):
     if np.any(factors < 0):
         raise BrainBuilderError("Negative overlap factor sampled")
 
-    scales = np.cbrt(1.0 + factors)
+    scales = np.cbrt(1.0 + factors)  # pylint: disable=assignment-from-no-return
     scaled_regions = [
         region.scale(scale)
         for region, scale in zip(regions, scales)

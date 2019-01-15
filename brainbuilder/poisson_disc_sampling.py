@@ -41,6 +41,7 @@ class Grid(object):
         '''Returns the indices of the samples that lie within a rectangular
         neighbourhood of cells. The size of the rectangle is based on an input
         distance.'''
+        # pylint: disable=assignment-from-no-return
         point_coords = np.array(self.get_grid_coords(point))
 
         # define neighbourhood
