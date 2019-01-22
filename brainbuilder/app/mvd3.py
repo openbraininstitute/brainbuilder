@@ -63,22 +63,6 @@ def set_seeds(mvd3, seeds, output):
 
 
 @app.command()
-@click.argument("mvd3")
-@click.option("--mecombo-info", help="Path to TSV file with ME-combo table", default=None)
-@click.option("--population", help="Population name", default="default", show_default=True)
-@click.option("-o", "--output", help="Path to output HDF5", required=True)
-def to_sonata(mvd3, mecombo_info, population, output):
-    """ Convert to SONATA """
-    from brainbuilder.utils.sonata import write_nodes_from_mvd3
-    write_nodes_from_mvd3(
-        mvd3_path=mvd3,
-        mecombo_info_path=mecombo_info,
-        out_h5_path=output,
-        population=population
-    )
-
-
-@app.command()
 @click.argument("mvd3", nargs=-1)
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
 def merge(mvd3, output):

@@ -4,11 +4,16 @@ Temporary SONATA converters.
 https://github.com/AllenInstitute/sonata/blob/master/docs/SONATA_DEVELOPER_GUIDE.md
 """
 
+import json
 import logging
+import os.path
+
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
 import h5py
+import six
 import transforms3d
 
 from voxcell import CellCollection
@@ -21,7 +26,7 @@ def _write_dataframe_by_columns(df, out):
     for name, column in df.iteritems():
         values, dtype = column.values, None
         if values.dtype in (object,):
-            dtype = h5py.special_dtype(vlen=unicode)
+            dtype = h5py.special_dtype(vlen=six.text_type)
         out.create_dataset(name, data=values, dtype=dtype)
 
 
@@ -127,11 +132,11 @@ def _write_edge_population(population, source, target, out):
 
     L.info("'source_node_id'...")
     properties.copy('connected_neurons_pre', out, name='source_node_id')
-    out['source_node_id'].attrs['node_population'] = unicode(source)
+    out['source_node_id'].attrs['node_population'] = six.text_type(source)
 
     L.info("'target_node_id'...")
     properties.copy('connected_neurons_post', out, name='target_node_id')
-    out['target_node_id'].attrs['node_population'] = unicode(target)
+    out['target_node_id'].attrs['node_population'] = six.text_type(target)
 
     L.info("Writing group-level datasets...")
     _write_edge_group(properties, out.create_group('0'))
@@ -153,8 +158,50 @@ def write_edges_from_syn2(syn2_path, source, target, out_h5_path):
     """ Export SYN2 to SONATA edge collection. """
     with h5py.File(syn2_path, 'r') as syn2:
         with h5py.File(out_h5_path, 'w') as h5f:
-            for name, population in syn2['/synapses'].iteritems():
+            for name, population in six.iteritems(syn2['/synapses']):
                 _write_edge_population(
                     population, source, target,
                     h5f.create_group('/edges/%s' % name)
                 )
+
+
+def _normalize_path(base_dir, alias):
+    base_dir = os.path.realpath(base_dir)
+
+    def _func(path):
+        result = os.path.realpath(path)
+        if result.startswith(base_dir):
+            result = result.replace(base_dir, alias, 1)
+        return result
+
+    return _func
+
+
+def _populations(filepaths, prefix, normalize_path):
+    h5_key = '%ss_file' % prefix
+    csv_key = '%s_types_file' % prefix
+    return [
+        OrderedDict([
+            (h5_key, normalize_path(path)),
+            (csv_key, None),
+        ])
+        for path in filepaths
+    ]
+
+
+def write_network_config(base_dir, morph_dir, node_files, edge_files, output_path):
+    """ Write SONATA network config """
+    content = OrderedDict()
+    content['manifest'] = {
+        '$BASE_DIR': os.path.realpath(base_dir)
+    }
+    normalize_path = _normalize_path(base_dir, '$BASE_DIR')
+    content['components'] = {
+        'morphologies_dir': normalize_path(morph_dir)
+    }
+    content['network'] = OrderedDict([
+        ('nodes', _populations(node_files, 'node', normalize_path)),
+        ('edges', _populations(edge_files, 'edge', normalize_path)),
+    ])
+    with open(output_path, 'w') as f:
+        json.dump(content, f, indent=2)
