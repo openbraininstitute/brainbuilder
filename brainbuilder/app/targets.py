@@ -2,6 +2,8 @@
 Target generation.
 """
 
+import json
+import collections
 import logging
 
 import click
@@ -105,3 +107,49 @@ def from_mvd3(mvd3, targets, allow_empty, output):
                 write_query_targets(query_based, circuit, f, allow_empty=allow_empty)
             if atlas_based is not None:
                 raise NotImplementedError("Atlas-based targets are not supported yet")
+
+
+@app.command()
+@click.argument("mvd3")
+@click.option("-t", "--targets", help="Path to target definition YAML file", default=None)
+@click.option("--allow-empty", is_flag=True, help="Allow empty targets", show_default=True)
+@click.option("-o", "--output", help="Path to output JSON file", required=True)
+def node_set(mvd3, targets, allow_empty, output):
+    """Generate JSON node set from MVD3 (and target definition YAML)"""
+
+    result = collections.OrderedDict()
+
+    def _add_node_sets(node_sets):
+        for name, query in sorted(node_sets.items()):
+            if name in result:
+                raise BrainBuilderError("Duplicate node set: '%s'" % name)
+            count = cells.count(query)
+            if count > 0:
+                L.info("Target '%s': %d cell(s)", name, count)
+            else:
+                msg = "Empty target: {} {}".format(name, query)
+                if allow_empty:
+                    L.warning(msg)
+                else:
+                    raise BrainBuilderError(msg)
+            result[name] = query
+
+    cells = Circuit({'cells': mvd3}).cells
+
+    _add_node_sets({
+        'All': {},
+        'Excitatory': {'synapse_class': 'EXC'},
+        'Inhibitory': {'synapse_class': 'INH'},
+    })
+
+    for prop in ['mtype', 'etype']:
+        _add_node_sets({
+            val: {prop: val} for val in cells.get(properties=prop).unique()
+        })
+
+    if targets is not None:
+        query_based, _ = _load_targets(targets)
+        _add_node_sets(query_based)
+
+    with open(output, 'w') as f:
+        json.dump(result, f, indent=2)
