@@ -199,7 +199,7 @@ def write_network_config(base_dir, morph_dir, node_files, edge_files, output_pat
     content['components'] = {
         'morphologies_dir': normalize_path(morph_dir)
     }
-    content['network'] = OrderedDict([
+    content['networks'] = OrderedDict([
         ('nodes', _populations(node_files, 'node', normalize_path)),
         ('edges', _populations(edge_files, 'edge', normalize_path)),
     ])
