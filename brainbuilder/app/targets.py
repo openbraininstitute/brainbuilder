@@ -86,11 +86,14 @@ def _load_targets(filepath):
 
 @app.command()
 @click.argument("mvd3")
+@click.option("--atlas", help="Atlas URL / path", default=None, show_default=True)
+@click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
 @click.option("-t", "--targets", help="Path to target definition YAML file", default=None)
 @click.option("--allow-empty", is_flag=True, help="Allow empty targets", show_default=True)
 @click.option("-o", "--output", help="Path to output .target file", required=True)
-def from_mvd3(mvd3, targets, allow_empty, output):
+def from_mvd3(mvd3, atlas, atlas_cache, targets, allow_empty, output):
     """ Generate .target file from MVD3 (and target definition YAML) """
+    # pylint: disable=too-many-locals
     circuit = Circuit({'cells': mvd3})
     cells = circuit.cells.get()
     with open(output, 'w') as f:
@@ -106,7 +109,14 @@ def from_mvd3(mvd3, targets, allow_empty, output):
             if query_based is not None:
                 write_query_targets(query_based, circuit, f, allow_empty=allow_empty)
             if atlas_based is not None:
-                raise NotImplementedError("Atlas-based targets are not supported yet")
+                from voxcell.nexus.voxelbrain import Atlas
+                if atlas is None:
+                    raise BrainBuilderError("Atlas not provided")
+                atlas = Atlas.open(atlas, cache_dir=atlas_cache)
+                xyz = cells[['x', 'y', 'z']].values
+                for name, dset in six.iteritems(atlas_based):
+                    mask = atlas.load_data(dset).lookup(xyz).astype(bool)
+                    bbp.write_target(f, name, cells.index[mask])
 
 
 @app.command()
