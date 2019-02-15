@@ -50,7 +50,6 @@ L = logging.getLogger('brainbuilder')
 @click.group()
 def app():
     """ Building CellCollection """
-    pass
 
 
 def load_recipe(filepath):

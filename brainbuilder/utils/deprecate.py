@@ -7,12 +7,10 @@ from brainbuilder.exceptions import BrainBuilderError
 
 class BrainBuilderDeprecationWarning(UserWarning):
     """ brainbuilder deprecation warning. """
-    pass
 
 
 class BrainBuilderDeprecationError(BrainBuilderError):
     """ brainbuilder deprecation error. """
-    pass
 
 
 def fail(msg=None):

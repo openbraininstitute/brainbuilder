@@ -15,7 +15,6 @@ from brainbuilder.utils import bbp
 @click.group()
 def app():
     """ Tools for working with MVD3 """
-    pass
 
 
 @app.command()

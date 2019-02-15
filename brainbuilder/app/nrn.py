@@ -22,7 +22,6 @@ import h5py
 @click.group()
 def app():
     """ Tools for working with NRN files """
-    pass
 
 
 def progress_print(pstr):

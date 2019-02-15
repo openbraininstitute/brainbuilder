@@ -154,15 +154,16 @@ def _write_edge_population(population, source, target, out):
     )
 
 
-def write_edges_from_syn2(syn2_path, source, target, out_h5_path):
+def write_edges_from_syn2(syn2_path, population, source, target, out_h5_path):
     """ Export SYN2 to SONATA edge collection. """
     with h5py.File(syn2_path, 'r') as syn2:
         with h5py.File(out_h5_path, 'w') as h5f:
-            for name, population in six.iteritems(syn2['/synapses']):
-                _write_edge_population(
-                    population, source, target,
-                    h5f.create_group('/edges/%s' % name)
-                )
+            assert len(syn2['/synapses']) == 1
+            syn2_population = next(iter(syn2['/synapses'].values()))
+            _write_edge_population(
+                syn2_population, source, target,
+                h5f.create_group('/edges/%s' % population)
+            )
 
 
 def _normalize_path(base_dir, alias):

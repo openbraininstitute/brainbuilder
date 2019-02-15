@@ -21,7 +21,6 @@ L = logging.getLogger('brainbuilder')
 @click.group()
 def app():
     """ Tools for working with .target files """
-    pass
 
 
 def _synapse_class_name(synclass):

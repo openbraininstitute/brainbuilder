@@ -21,7 +21,6 @@ L = logging.getLogger('brainbuilder')
 @click.group()
 def app():
     """ Genes / proteins assignment """
-    pass
 
 
 class CellInfo(tables.IsDescription):

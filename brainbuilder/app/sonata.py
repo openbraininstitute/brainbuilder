@@ -6,7 +6,6 @@ import click
 @click.group()
 def app():
     """ Tools for working with SONATA """
-    pass
 
 
 @app.command()
@@ -27,14 +26,16 @@ def from_mvd3(mvd3, mecombo_info, population, output):
 
 @app.command()
 @click.argument("syn2")
+@click.option("--population", help="Population name", default="default", show_default=True)
 @click.option("--source", help="Source node population name", default="default", show_default=True)
 @click.option("--target", help="Target node population name", default="default", show_default=True)
 @click.option("-o", "--output", help="Path to output HDF5", required=True)
-def from_syn2(syn2, source, target, output):
+def from_syn2(syn2, population, source, target, output):
     """Convert SYN2 to SONATA edges"""
     from brainbuilder.utils.sonata import write_edges_from_syn2
     write_edges_from_syn2(
         syn2_path=syn2,
+        population=population,
         source=source,
         target=target,
         out_h5_path=output

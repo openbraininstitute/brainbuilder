@@ -3,4 +3,3 @@
 
 class BrainBuilderError(Exception):
     """ Base class for brainbuilder exceptions. """
-    pass

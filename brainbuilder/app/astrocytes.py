@@ -21,7 +21,6 @@ L = logging.getLogger('brainbuilder')
 @click.group()
 def app():
     """ Building astrocytes """
-    pass
 
 
 def _place(density, soma_radii_distr):
@@ -80,7 +79,6 @@ def place(
 @app.group(name='domains')
 def _domains():
     """ Generate astrocyte domains """
-    pass
 
 
 @_domains.command()
