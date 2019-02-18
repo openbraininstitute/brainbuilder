@@ -452,30 +452,33 @@ def _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement):
     return result
 
 
-def _assign_mtype_traits(cells, mtype_taxonomy):
-    traits = mtype_taxonomy.loc[cells.properties['mtype']]
-    cells.properties['morph_class'] = traits['mClass'].values
-    cells.properties['synapse_class'] = traits['sClass'].values
-
-
-def _assign_property(cells, prop, atlas, dset):
-    if prop in cells.properties:
+def _assign_property(cells, prop, values):
+    if prop in cells:
         raise BrainBuilderError("Duplicate property: '%s'" % prop)
+    cells[prop] = values
 
+
+def _assign_mtype_traits(cells, mtype_taxonomy):
+    traits = mtype_taxonomy.loc[cells['mtype']]
+    _assign_property(cells, 'morph_class', traits['mClass'].values)
+    _assign_property(cells, 'synapse_class', traits['sClass'].values)
+
+
+def _assign_atlas_property(cells, prop, atlas, dset):
     if dset.startswith('~'):
         dset = dset[1:]
         resolve_ids = True
     else:
         resolve_ids = False
 
-    values = atlas.load_data(dset).lookup(cells.positions)
+    values = atlas.load_data(dset).lookup(cells[['x', 'y', 'z']].values)
     if resolve_ids:
         ids, idx = np.unique(values, return_inverse=True)
         rmap = atlas.load_region_map()
         resolved = np.array([rmap.get(_id, attr='acronym') for _id in ids])
         values = resolved[idx]
 
-    cells.properties[prop] = values
+    _assign_property(cells, prop, values)
 
 
 def _place(
@@ -484,7 +487,8 @@ def _place(
     atlas_url, atlas_cache=None, region=None, mask_dset=None,
     soma_placement='basic',
     density_factor=1.0,
-    atlas_properties=None
+    atlas_properties=None,
+    sort_by=None
 ):
     """
     Create CellCollection
@@ -520,22 +524,25 @@ def _place(
     ]
 
     L.info("Merging into single CellCollection...")
-    merged = pd.concat(groups)
-    merged.index = 1 + np.arange(len(merged))
-    result = CellCollection.from_dataframe(merged)
+    result = pd.concat(groups)
 
-    L.info("Total cell count: %d", len(result.positions))
+    L.info("Total cell count: %d", len(result))
 
     L.info("Assigning 'morph_class' / 'synapse_class'...")
     _assign_mtype_traits(result, mtype_taxonomy)
 
     for prop, dset in (atlas_properties or []):
         L.info("Assigning '%s'...", prop)
-        _assign_property(result, prop, atlas, dset)
+        _assign_atlas_property(result, prop, atlas, dset)
+
+    if sort_by:
+        L.info("Sorting CellCollection...")
+        result.sort_values(sort_by, inplace=True)
 
     L.info("Done!")
 
-    return result
+    result.index = 1 + np.arange(len(result))
+    return CellCollection.from_dataframe(result)
 
 
 @app.command(short_help="Create CellCollection", help=_place.__doc__)
@@ -587,18 +594,22 @@ def create2(
 @click.option("--soma-placement", help="Soma placement method", default='basic', show_default=True)
 @click.option(
     "--atlas-property", type=(str, str), multiple=True, help="Property based on atlas dataset")
+@click.option("--sort-by", help="Sort by properties (comma-separated)", default=None)
 @click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
 def place(
     composition, mtype_taxonomy,
     atlas, atlas_cache, region, mask,
     density_factor, soma_placement,
-    atlas_property,
+    atlas_property, sort_by,
     seed,
     output
 ):
     # pylint: disable=missing-docstring,too-many-arguments
     np.random.seed(seed)
+
+    if sort_by is not None:
+        sort_by = sort_by.split(",")
 
     cells = _place(
         composition,
@@ -607,7 +618,8 @@ def place(
         region=region, mask_dset=mask,
         density_factor=density_factor,
         soma_placement=soma_placement,
-        atlas_properties=atlas_property
+        atlas_properties=atlas_property,
+        sort_by=sort_by
     )
 
     L.info("Export to MVD3...")
