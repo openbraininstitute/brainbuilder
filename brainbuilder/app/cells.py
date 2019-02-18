@@ -458,13 +458,24 @@ def _assign_mtype_traits(cells, mtype_taxonomy):
     cells.properties['synapse_class'] = traits['sClass'].values
 
 
-def _assign_region(cells, atlas):
-    brain_regions = atlas.load_data('brain_regions')
-    region_map = atlas.load_region_map()
+def _assign_property(cells, prop, atlas, dset):
+    if prop in cells.properties:
+        raise BrainBuilderError("Duplicate property: '%s'" % prop)
 
-    ids, idx = np.unique(brain_regions.lookup(cells.positions), return_inverse=True)
-    names = np.array([region_map.get(_id, attr='acronym') for _id in ids])
-    cells.properties['region'] = names[idx]
+    if dset.startswith('~'):
+        dset = dset[1:]
+        resolve_ids = True
+    else:
+        resolve_ids = False
+
+    values = atlas.load_data(dset).lookup(cells.positions)
+    if resolve_ids:
+        ids, idx = np.unique(values, return_inverse=True)
+        rmap = atlas.load_region_map()
+        resolved = np.array([rmap.get(_id, attr='acronym') for _id in ids])
+        values = resolved[idx]
+
+    cells.properties[prop] = values
 
 
 def _as_bool_mask(dset):
@@ -479,13 +490,14 @@ def _place(
     atlas_url, atlas_cache=None, region=None, mask_dset=None,
     soma_placement='basic',
     density_factor=1.0,
+    atlas_properties=None
 ):
     """
     Create CellCollection
 
     # TODO: fill in the details
     """
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-arguments, too-many-locals
     atlas = Atlas.open(atlas_url, cache_dir=atlas_cache)
 
     recipe = load_recipe2(composition_path)
@@ -523,8 +535,9 @@ def _place(
     L.info("Assigning 'morph_class' / 'synapse_class'...")
     _assign_mtype_traits(result, mtype_taxonomy)
 
-    L.info("Assigning 'region'...")
-    _assign_region(result, atlas)
+    for prop, dset in (atlas_properties or []):
+        L.info("Assigning '%s'...", prop)
+        _assign_property(result, prop, atlas, dset)
 
     L.info("Done!")
 
@@ -578,12 +591,15 @@ def create2(
 @click.option("--mask", help="Dataset with volumetric mask filter", default=None, show_default=True)
 @click.option("--density-factor", help="Density factor", type=float, default=1.0, show_default=True)
 @click.option("--soma-placement", help="Soma placement method", default='basic', show_default=True)
+@click.option(
+    "--atlas-property", type=(str, str), multiple=True, help="Property based on atlas dataset")
 @click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
 def place(
     composition, mtype_taxonomy,
     atlas, atlas_cache, region, mask,
     density_factor, soma_placement,
+    atlas_property,
     seed,
     output
 ):
@@ -597,6 +613,7 @@ def place(
         region=region, mask_dset=mask,
         density_factor=density_factor,
         soma_placement=soma_placement,
+        atlas_properties=atlas_property
     )
 
     L.info("Export to MVD3...")
