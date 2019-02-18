@@ -45,6 +45,7 @@ def write_default_targets(cells, output):
     bbp.write_property_targets(output, cells, 'synapse_class', mapping=_synapse_class_name)
     bbp.write_property_targets(output, cells, 'mtype')
     bbp.write_property_targets(output, cells, 'etype')
+    bbp.write_property_targets(output, cells, 'region')
 
 
 def write_query_targets(query_based, circuit, output, allow_empty=False):
@@ -151,7 +152,7 @@ def node_set(mvd3, targets, allow_empty, output):
         'Inhibitory': {'synapse_class': 'INH'},
     })
 
-    for prop in ['mtype', 'etype']:
+    for prop in ['mtype', 'etype', 'region']:
         _add_node_sets({
             val: {prop: val} for val in cells.get(properties=prop).unique()
         })
