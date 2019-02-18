@@ -34,7 +34,7 @@ import pandas as pd
 import yaml
 import six
 
-from voxcell import CellCollection, OrientationField, VoxelData
+from voxcell import CellCollection, OrientationField, ROIMask, VoxelData
 from voxcell import traits as tt
 from voxcell.nexus.voxelbrain import Atlas
 
@@ -478,12 +478,6 @@ def _assign_property(cells, prop, atlas, dset):
     cells.properties[prop] = values
 
 
-def _as_bool_mask(dset):
-    if dset.raw.dtype not in (np.bool, np.uint8, np.int8):
-        raise BrainBuilderError("Unexpected datatype for 0/1 mask: %s" % dset.raw.dtype)
-    return dset.with_data(dset.raw.astype(bool))
-
-
 def _place(
     composition_path,
     mtype_taxonomy_path,
@@ -510,7 +504,7 @@ def _place(
     if mask_dset is None:
         root_mask = None
     else:
-        root_mask = _as_bool_mask(atlas.load_data(mask_dset))
+        root_mask = atlas.load_data(mask_dset, cls=ROIMask)
 
     if region is not None:
         region_mask = atlas.get_region_mask(region, with_descendants=True)

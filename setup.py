@@ -27,8 +27,8 @@ BASE_REQUIRES = [
     'transforms3d>=0.3',
     'tqdm',
 ] + [
-    'bluepy>=0.12.5',
-    'voxcell>=2.5,<3.0',
+    'bluepy>=0.13.0',
+    'voxcell>=2.5.6,<3.0',
 ]
 
 NGV_REQUIRES = [

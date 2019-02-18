@@ -11,9 +11,10 @@ import six
 import yaml
 
 from bluepy.v2 import Circuit
+from voxcell import ROIMask
+
 from brainbuilder.exceptions import BrainBuilderError
 from brainbuilder.utils import bbp
-
 
 L = logging.getLogger('brainbuilder')
 
@@ -115,7 +116,7 @@ def from_mvd3(mvd3, atlas, atlas_cache, targets, allow_empty, output):
                 atlas = Atlas.open(atlas, cache_dir=atlas_cache)
                 xyz = cells[['x', 'y', 'z']].values
                 for name, dset in six.iteritems(atlas_based):
-                    mask = atlas.load_data(dset).lookup(xyz).astype(bool)
+                    mask = atlas.load_data(dset, cls=ROIMask).lookup(xyz)
                     bbp.write_target(f, name, cells.index[mask])
 
 
