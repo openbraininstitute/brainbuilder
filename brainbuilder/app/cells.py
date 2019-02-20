@@ -169,12 +169,18 @@ def _assign_atlas_property(cells, prop, atlas, dset):
     else:
         resolve_ids = False
 
-    values = atlas.load_data(dset).lookup(cells[['x', 'y', 'z']].values)
-    if resolve_ids:
-        ids, idx = np.unique(values, return_inverse=True)
-        rmap = atlas.load_region_map()
-        resolved = np.array([rmap.get(_id, attr='acronym') for _id in ids])
-        values = resolved[idx]
+    xyz = cells[['x', 'y', 'z']].values
+    if dset == 'FAST-HEMISPHERE':
+        # TODO: remove as soon as "slow" way of assigning hemisphere
+        # (with a volumetric dataset) is available
+        values = np.where(xyz[:, 2] < 5700, u'left', u'right')
+    else:
+        values = atlas.load_data(dset).lookup(xyz)
+        if resolve_ids:
+            ids, idx = np.unique(values, return_inverse=True)
+            rmap = atlas.load_region_map()
+            resolved = np.array([rmap.get(_id, attr='acronym') for _id in ids])
+            values = resolved[idx]
 
     _assign_property(cells, prop, values)
 
@@ -186,7 +192,8 @@ def _place(
     soma_placement='basic',
     density_factor=1.0,
     atlas_properties=None,
-    sort_by=None
+    sort_by=None,
+    append_hemisphere=False
 ):
     # pylint: disable=too-many-arguments, too-many-locals
     atlas = Atlas.open(atlas_url, cache_dir=atlas_cache)
@@ -228,6 +235,9 @@ def _place(
         L.info("Assigning '%s'...", prop)
         _assign_atlas_property(result, prop, atlas, dset)
 
+    if append_hemisphere:
+        result['region'] = result['region'] + '@' + result['hemisphere']
+
     if sort_by:
         L.info("Sorting CellCollection...")
         result.sort_values(sort_by, inplace=True)
@@ -250,13 +260,15 @@ def _place(
 @click.option(
     "--atlas-property", type=(str, str), multiple=True, help="Property based on atlas dataset")
 @click.option("--sort-by", help="Sort by properties (comma-separated)", default=None)
+@click.option(
+    "--append-hemisphere", is_flag=True, help="Append hemisphere to region name", default=False)
 @click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
 def place(
     composition, mtype_taxonomy,
     atlas, atlas_cache, region, mask,
     density_factor, soma_placement,
-    atlas_property, sort_by,
+    atlas_property, sort_by, append_hemisphere,
     seed,
     output
 ):
@@ -280,7 +292,8 @@ def place(
         density_factor=density_factor,
         soma_placement=soma_placement,
         atlas_properties=atlas_property,
-        sort_by=sort_by
+        sort_by=sort_by,
+        append_hemisphere=append_hemisphere
     )
 
     L.info("Export to MVD3...")
