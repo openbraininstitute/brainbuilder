@@ -314,3 +314,58 @@ def assign_emodels(mvd3, morphdb, seed, output):
 
     result = bbp.assign_emodels(mvd3, morphdb)
     result.save_mvd3(output)
+
+
+def _parse_emodel_mapping(filepath):
+    import json
+    with open(filepath) as f:
+        content = json.load(f)
+    result = {}
+    for emodel, mapping in content.items():
+        assert isinstance(mapping['etype'], six.string_types)
+        assert isinstance(mapping['layer'], list)
+        etype = mapping['etype']
+        for layer in mapping['layer']:
+            assert isinstance(layer, six.string_types)
+            key = (layer, etype)
+            assert key not in result
+            result[key] = {'emodel': emodel}
+    result = pd.DataFrame(result).transpose()
+    result.index.names = ['layer', 'etype']
+    return result
+
+
+@app.command()
+@click.argument("mvd3")
+@click.option("--emodels", help="Path to emodel -> etype mapping", required=True)
+@click.option("--out-mvd3", help="Path to output MVD3", required=True)
+@click.option("--out-tsv", help="Path to output mecombo TSV", required=True)
+def assign_emodels2(mvd3, emodels, out_mvd3, out_tsv):
+    """ Assign 'me_combo' property; write me_combo.tsv """
+    import os.path
+    mvd3 = CellCollection.load_mvd3(mvd3)
+    emodels = _parse_emodel_mapping(emodels)
+    cells = mvd3.as_dataframe()
+    cells['me_combo'] = cells.apply(lambda row: "{etype}_{layer}_{morph}".format(
+        etype=row.etype,
+        layer=row.layer,
+        morph=os.path.basename(row.morphology)
+    ), axis=1)
+    me_combos = cells[
+        ['morphology', 'layer', 'mtype', 'etype', 'me_combo']
+    ].rename(columns={
+        'morphology': 'morph_name',
+        'mtype': 'fullmtype',
+        'me_combo': 'combo_name',
+    })
+    me_combos['layer'] = me_combos['layer'].astype(six.text_type)
+    me_combos = me_combos.join(emodels, on=('layer', 'etype'))
+    if me_combos['emodel'].isna().any():
+        mismatch = me_combos[me_combos['emodel'].isna()][['layer', 'etype']]
+        raise BrainBuilderError("Can not assign emodels for: %s" % mismatch)
+    me_combos[
+        ['morph_name', 'layer', 'fullmtype', 'etype', 'emodel', 'combo_name']
+    ].to_csv(out_tsv, sep='\t', index=False)
+    result = CellCollection.from_dataframe(cells)
+    result.seeds = mvd3.seeds
+    result.save_mvd3(out_mvd3)
