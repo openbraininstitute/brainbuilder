@@ -41,7 +41,7 @@ class Grid(object):
         '''Returns the indices of the samples that lie within a rectangular
         neighbourhood of cells. The size of the rectangle is based on an input
         distance.'''
-        # pylint: disable=assignment-from-no-return
+        # pylint: disable=assignment-from-no-return,unsubscriptable-object
         point_coords = np.array(self.get_grid_coords(point))
 
         # define neighbourhood
@@ -202,7 +202,7 @@ def generate_points(bbox, nb_points, min_distance, seed=None,
 
     while active_list and (len(sample_points) < nb_points):
         idx = np.random.choice(active_list)
-        point = sample_points[idx]
+        point = sample_points[idx]  # pylint: disable=invalid-sequence-index
         active_list.remove(idx)
         _try_generate_point(active_list, nb_trials, point, min_distance, grid,
                             sample_points, nb_points, progress_bar)
