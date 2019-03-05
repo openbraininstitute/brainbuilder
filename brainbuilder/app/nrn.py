@@ -4,10 +4,9 @@
     (See accompanying file LICENSE_1_0.txt or copy at
           http://www.boost.org/LICENSE_1_0.txt)
 '''
-# pylint: skip-file
+# pylint: disable=missing-docstring
 
 import sys
-import argparse
 import os
 import time
 
@@ -16,7 +15,9 @@ from contextlib import contextmanager
 #import mpi4py
 import click
 import h5py
+import numpy as np
 
+from tqdm import tqdm
 
 
 @click.group()
@@ -143,3 +144,48 @@ def merge(nrn_dir, only, link):
         # chdir to NRN folder to make NRN links relative
         for filename in get_nrnfiles('.', only):
             create_merged_file(filename, link=link)
+
+
+@app.command()
+@click.argument("syn2")
+@click.option("-o", "--output", help="Path to output NRN folder", required=True)
+def from_syn2(syn2, output):
+    """Convert SYN2 file to partial nrn.h5"""
+    with h5py.File(syn2, 'r') as h5f:
+        assert len(h5f['synapses']) == 1
+        src = next(iter(h5f['synapses'].values()))
+        prop = src['properties']
+        index1 = src['indexes/connected_neurons_post/neuron_id_to_range']
+        index2 = src['indexes/connected_neurons_post/range_to_synapse_id']
+        with h5py.File(os.path.join(output, 'nrn.h5'), 'w') as dst:
+            dst['info'] = []
+            dst['info'].attrs['version'] = [5]
+            for gid, rng1 in tqdm(enumerate(index1), total=len(index1)):
+                r1_0, r1_1 = rng1.astype(int)
+                if r1_0 >= r1_1:
+                    continue
+                for r1 in range(r1_0, r1_1 - 1):
+                    assert index2[r1][1] == index2[r1 + 1][0]  # assert postsynaptic sorting
+                rng2 = range(index2[r1_0][0], index2[r1_1 - 1][1])
+                NA = np.full(len(rng2), -1)
+                dst['a%d' % (1 + gid)] = np.stack([
+                    1 + prop['connected_neurons_pre'][rng2],  # 0
+                    prop['delay'][rng2],                      # 1
+                    prop['morpho_section_id_post'][rng2],     # 2
+                    prop['morpho_segment_id_post'][rng2],     # 3
+                    prop['morpho_offset_segment_post'][rng2], # 4
+                    prop['morpho_section_id_pre'][rng2],      # 5
+                    prop['morpho_segment_id_pre'][rng2],      # 6
+                    prop['morpho_offset_segment_pre'][rng2],  # 7
+                    prop['conductance'][rng2],                # 8
+                    prop['u_syn'][rng2],                      # 9
+                    prop['depression_time'][rng2],            # 10
+                    prop['facilitation_time'][rng2],          # 11
+                    prop['decay_time'][rng2],                 # 12
+                    prop['syn_type_id'][rng2],                # 13
+                    NA, # morphology type of the pre neuron   # 14
+                    NA, # dendrite branch order               # 15
+                    NA, # axon branch order                   # 16
+                    prop['n_rrp_vesicles'][rng2],             # 17
+                    NA, # postsynaptic branch type            # 18
+            ]).transpose().astype(np.float32)
