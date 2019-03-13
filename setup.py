@@ -37,6 +37,10 @@ NGV_REQUIRES = [
     'enum34;python_version<"3.4"',  # 'numpy-stl' sometimes fails to bring 'enum34' for some reason
 ]
 
+SUBCELLULAR_REQUIRES = [
+    'subcellular_querier>=0.0.2',
+    ]
+
 setup(
     name='brainbuilder',
     author='NSE Team',
@@ -48,8 +52,9 @@ setup(
     license='BBP-internal-confidential',
     install_requires=BASE_REQUIRES,
     extras_require={
-        'all': NGV_REQUIRES,
+        'all': NGV_REQUIRES + SUBCELLULAR_REQUIRES,
         'ngv': NGV_REQUIRES,
+        'subcellular': SUBCELLULAR_REQUIRES,
     },
     packages=find_packages(),
     entry_points={
