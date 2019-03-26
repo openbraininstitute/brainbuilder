@@ -23,9 +23,8 @@ BASE_REQUIRES = [
     'pyyaml',
     'scipy>=0.13',
     'six>=1.0',
-    'tables>=3.4',
     'transforms3d>=0.3',
-    'tqdm',
+    'tqdm>=4.0',
 ] + [
     'bluepy>=0.13.0',
     'voxcell>=2.5.6,<3.0',
@@ -38,8 +37,11 @@ NGV_REQUIRES = [
 ]
 
 SUBCELLULAR_REQUIRES = [
-    'subcellular_querier>=0.0.2',
-    ]
+    'entity-management>=0.1.11',
+    'subcellular-querier>=0.0.2',
+    'tables>=3.4',
+]
+
 
 setup(
     name='brainbuilder',
