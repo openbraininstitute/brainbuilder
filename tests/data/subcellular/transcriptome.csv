@@ -1,0 +1,16 @@
+,tissue,sscortex,sscortex,sscortex
+,group #,1,1,1
+,total mRNA mol,21580,21748,31642
+,well,11,95,33
+,sex,1,-1,-1
+,age,21,20,20
+,diameter,0,9.56,11.1
+(none),cell_id,1772071015_C02,1772071017_G12,1772071017_A05
+(none),level1class,interneurons,interneurons,interneurons
+(none),level2class,S1PyrL23,Int4,Int6
+,,,,
+Tspan12,1,0,0,0
+Tshz1,1,3,1,0
+Fnbp1l,1,3,1,6
+Adamts15,1,0,0,0
+Cldn12,1,1,1,1

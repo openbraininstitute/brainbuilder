@@ -1,0 +1,3 @@
+gene names Linerson	PSD excitatory, #/um^2	PSD inhibitory, #/um^2	Presynaptic terminals, nM	MGIGene_MarkerID	Symbol	Name	FeatureType	Chr	Strand	Start	End	EnsemblID	EntrezGeneID	UniprotID
+Camk2a	24570	0	71950	MGI:88256	Camk2a	calcium/calmodulin-dependent protein kinase II alpha	protein coding gene	18	+	60925618	60988152	ENSMUSG00000024617	12322	P11798, D3Z7K9, F6WHR9, F8WHB5, F8WIS9, Q80TN1
+Camk2b	5730	0	17150	MGI:88257	Camk2b	calcium/calmodulin-dependent protein kinase II, beta	protein coding gene	11	-	5969644	6066362	ENSMUSG00000057897	12323	P28652, Q3TY93, Q5SVI0, Q5SVI1, Q5SVI2, Q5SVI3, Q5SVI9, Q5SVJ0, Q5SVJ1, Q68EG2, Q8BL41, Q9WVJ1

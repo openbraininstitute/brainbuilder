@@ -6,12 +6,13 @@ import logging
 import warnings
 
 from collections import defaultdict
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import tables
 import six
+
+from pathlib2 import Path
 
 from subcellular_querier import (EntityGetter, create_gene_expressions,
                                  create_cell_proteins, create_synapse_proteins)
@@ -40,10 +41,10 @@ def _create_all(transcriptome, mtype_taxonomy, cell_tsv, synapse_tsv, dir_output
     create_synapse_proteins(synapse_tsv, gene_expressions, synapse_proteins)
 
     library = {
-        'gene_expressions': gene_expressions,
-        'gene_mapping': gene_mapping,
-        'cell_proteins': cell_proteins,
-        'synapse_proteins': synapse_proteins,
+        'gene_expressions': str(gene_expressions),
+        'gene_mapping': str(gene_mapping),
+        'cell_proteins': str(cell_proteins),
+        'synapse_proteins': str(synapse_proteins),
     }
 
     return library
@@ -91,17 +92,17 @@ def assign(cells, subcellular_dir, transcriptome, mtype_taxonomy, cell_proteins,
 
     L.info("Start retrieving data from nexus ...")
     eg = EntityGetter()
-    transcriptome_path = eg.get_entity_attachment(TranscriptomeExperiment, transcriptome,
-                                                  subcellular_path)
+    transcriptome_path = str(eg.get_entity_attachment(TranscriptomeExperiment, transcriptome,
+                                                      subcellular_path))
 
-    mtype_taxonomy_path = eg.get_entity_attachment(MtypeTaxonomy, mtype_taxonomy,
-                                                   subcellular_path)
+    mtype_taxonomy_path = str(eg.get_entity_attachment(MtypeTaxonomy, mtype_taxonomy,
+                                                       subcellular_path))
 
-    cell_proteins_path = eg.get_entity_attachment(CellProteinConcExperiment, cell_proteins,
-                                                  subcellular_path)
+    cell_proteins_path = str(eg.get_entity_attachment(CellProteinConcExperiment, cell_proteins,
+                                                      subcellular_path))
 
-    synapse_proteins_path = eg.get_entity_attachment(SynapticProteinConcExperiment,
-                                                     synapse_proteins, subcellular_path)
+    synapse_proteins_path = str(eg.get_entity_attachment(SynapticProteinConcExperiment,
+                                                         synapse_proteins, subcellular_path))
 
     L.info("Start creating subcellular h5 file ...")
     library = _create_all(transcriptome_path, mtype_taxonomy_path, cell_proteins_path,
@@ -117,7 +118,7 @@ def assign(cells, subcellular_dir, transcriptome, mtype_taxonomy, cell_proteins,
             _assign_cell_proteins(cells, library['cell_proteins']),
             _assign_synapse_proteins(cells, library['synapse_proteins']),
         )))
-        out_lib = out.create_group('/', 'library')
+        out_lib = out.create_group('/', 'library', 'Library information')
         for title, src_file in six.iteritems(library):
             node = "/" + title
             L.info("Copying %s to /library...", title)
