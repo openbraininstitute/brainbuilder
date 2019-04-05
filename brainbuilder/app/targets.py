@@ -125,13 +125,13 @@ def from_mvd3(mvd3, atlas, atlas_cache, targets, allow_empty, output):
 @click.option("-t", "--targets", help="Path to target definition YAML file", default=None)
 @click.option("--allow-empty", is_flag=True, help="Allow empty targets", show_default=True)
 @click.option("-o", "--output", help="Path to output JSON file", required=True)
-def node_set(mvd3, targets, allow_empty, output):
-    """Generate JSON node set from MVD3 (and target definition YAML)"""
+def node_sets(mvd3, targets, allow_empty, output):
+    """Generate JSON node sets from MVD3 (and target definition YAML)"""
 
     result = collections.OrderedDict()
 
-    def _add_node_sets(node_sets):
-        for name, query in sorted(node_sets.items()):
+    def _add_node_sets(to_add):
+        for name, query in sorted(to_add.items()):
             if name in result:
                 raise BrainBuilderError("Duplicate node set: '%s'" % name)
             count = cells.count(query)

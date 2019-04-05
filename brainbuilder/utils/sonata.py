@@ -166,43 +166,43 @@ def write_edges_from_syn2(syn2_path, population, source, target, out_h5_path):
             )
 
 
-def _normalize_path(base_dir, alias):
-    base_dir = os.path.realpath(base_dir)
-
-    def _func(path):
-        result = os.path.realpath(path)
-        if result.startswith(base_dir):
-            result = result.replace(base_dir, alias, 1)
-        return result
-
-    return _func
-
-
-def _populations(filepaths, prefix, normalize_path):
-    h5_key = '%ss_file' % prefix
-    csv_key = '%s_types_file' % prefix
+def _node_populations(nodes_dir, nodes):
     return [
         OrderedDict([
-            (h5_key, normalize_path(path)),
-            (csv_key, None),
+            ('nodes_file', os.path.join(nodes_dir, population, 'nodes.h5')),
+            ('node_types_file', None),
+            ('node_sets_file', os.path.join(nodes_dir, population, 'node_sets.json')),
         ])
-        for path in filepaths
+        for population in nodes
     ]
 
 
-def write_network_config(base_dir, morph_dir, node_files, edge_files, output_path):
+def _edge_populations(edges_dir, edges_suffix, edges):
+    return [
+        OrderedDict([
+            ('edges_file', os.path.join(edges_dir, population, 'edges%s.h5' % edges_suffix)),
+            ('edge_types_file', None),
+        ])
+        for population in edges
+    ]
+
+
+def write_network_config(
+    base_dir, morph_dir, nodes_dir, nodes, edges_dir, edges_suffix, edges, output_path
+):
     """ Write SONATA network config """
     content = OrderedDict()
     content['manifest'] = {
-        '$BASE_DIR': os.path.realpath(base_dir)
+        '$BASE_DIR': base_dir,
+        '$NETWORK_NODES_DIR': os.path.join('$BASE_DIR', nodes_dir),
+        '$NETWORK_EDGES_DIR': os.path.join('$BASE_DIR', edges_dir),
     }
-    normalize_path = _normalize_path(base_dir, '$BASE_DIR')
     content['components'] = {
-        'morphologies_dir': normalize_path(morph_dir)
+        'morphologies_dir': os.path.join('$BASE_DIR', morph_dir),
     }
     content['networks'] = OrderedDict([
-        ('nodes', _populations(node_files, 'node', normalize_path)),
-        ('edges', _populations(edge_files, 'edge', normalize_path)),
+        ('nodes', _node_populations('$NETWORK_NODES_DIR', nodes)),
+        ('edges', _edge_populations('$NETWORK_EDGES_DIR', edges_suffix, edges)),
     ])
     with open(output_path, 'w') as f:
         json.dump(content, f, indent=2)

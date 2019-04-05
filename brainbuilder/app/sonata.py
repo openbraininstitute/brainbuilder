@@ -43,18 +43,24 @@ def from_syn2(syn2, population, source, target, output):
 
 
 @app.command()
-@click.option("--base-dir", help="Base directory", required=True)
-@click.option("--morph-dir", help="Morphologies directory", required=True)
-@click.option("--nodes", help="Nodes H5 filepath(s)", required=True, multiple=True)
-@click.option("--edges", help="Edges H5 filepath(s)", required=True, multiple=True)
+@click.option("--base-dir", help="Path to base directory", required=True)
+@click.option("--morph-dir", help="Morphologies directory (relative to BASE_DIR)", required=True)
+@click.option("--nodes-dir", help="Node files directory (relative to BASE_DIR)", required=True)
+@click.option("--nodes", help="Node population(s) (';'-separated)", required=True)
+@click.option("--edges-dir", help="Edge files directory (relative to BASE_DIR)", required=True)
+@click.option("--edges-suffix", help="Edge file suffix", default="")
+@click.option("--edges", help="Edge population(s) (';'-separated)", required=True)
 @click.option("-o", "--output", help="Path to output file (JSON)", required=True)
-def network_config(base_dir, morph_dir, nodes, edges, output):
+def network_config(base_dir, morph_dir, nodes_dir, nodes, edges_dir, edges_suffix, edges, output):
     """Write SONATA network config"""
     from brainbuilder.utils.sonata import write_network_config
     write_network_config(
         base_dir=base_dir,
         morph_dir=morph_dir,
-        node_files=nodes,
-        edge_files=edges,
+        nodes_dir=nodes_dir,
+        nodes=nodes.split(";"),
+        edges_dir=edges_dir,
+        edges_suffix=edges_suffix,
+        edges=edges.split(";"),
         output_path=output
     )
