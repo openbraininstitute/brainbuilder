@@ -100,7 +100,6 @@ def from_mvd3(mvd3, atlas, atlas_cache, targets, allow_empty, output):
     with open(output, 'w') as f:
         write_default_targets(cells, f)
         if targets is None:
-            bbp.write_property_targets(f, cells, 'region')
             if 'layer' in cells:
                 bbp.write_property_targets(f, cells, 'layer', mapping=_layer_name)
             if 'hypercolumn' in cells:
