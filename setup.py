@@ -30,12 +30,6 @@ BASE_REQUIRES = [
     'voxcell>=2.5.6,<3.0',
 ]
 
-NGV_REQUIRES = [
-    'tess>=0.2',
-    'numpy-stl>=2.5',
-    'enum34;python_version<"3.4"',  # 'numpy-stl' sometimes fails to bring 'enum34' for some reason
-]
-
 SUBCELLULAR_REQUIRES = [
     'entity-management>=0.1.11',
     'subcellular-querier>=0.0.3',
@@ -55,8 +49,7 @@ setup(
     license='BBP-internal-confidential',
     install_requires=BASE_REQUIRES,
     extras_require={
-        'all': NGV_REQUIRES + SUBCELLULAR_REQUIRES,
-        'ngv': NGV_REQUIRES,
+        'all': SUBCELLULAR_REQUIRES,
         'subcellular': SUBCELLULAR_REQUIRES,
     },
     packages=find_packages(),
