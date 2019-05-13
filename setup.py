@@ -23,11 +23,10 @@ BASE_REQUIRES = [
     'pyyaml',
     'scipy>=0.13',
     'six>=1.0',
-    'transforms3d>=0.3',
     'tqdm>=4.0',
 ] + [
     'bluepy>=0.13.0',
-    'voxcell>=2.5.6,<3.0',
+    'voxcell[sonata]>=2.6,<3.0',
 ]
 
 SUBCELLULAR_REQUIRES = [
