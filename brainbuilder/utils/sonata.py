@@ -159,9 +159,10 @@ def _edge_populations(edges_dir, edges_suffix, edges):
 
 
 def write_network_config(
-    base_dir, morph_dir, nodes_dir, nodes, edges_dir, edges_suffix, edges, output_path
+    base_dir, morph_dir, emodel_dir, nodes_dir, nodes, edges_dir, edges_suffix, edges, output_path
 ):
     """ Write SONATA network config """
+    # pylint: disable=too-many-arguments
     content = OrderedDict()
     content['manifest'] = {
         '$BASE_DIR': base_dir,
@@ -170,6 +171,7 @@ def write_network_config(
     }
     content['components'] = {
         'morphologies_dir': os.path.join('$BASE_DIR', morph_dir),
+        'biophysical_neuron_models_dir': os.path.join('$BASE_DIR', emodel_dir),
     }
     content['networks'] = OrderedDict([
         ('nodes', _node_populations('$NETWORK_NODES_DIR', nodes)),
