@@ -338,9 +338,13 @@ def _parse_emodel_mapping(filepath):
 @app.command()
 @click.argument("mvd3")
 @click.option("--emodels", help="Path to emodel -> etype mapping", required=True)
+@click.option(
+    "--threshold-current", type=float, help="Threshold current to use for all cells", default=None)
+@click.option(
+    "--holding-current", type=float, help="Holding current to use for all cells", default=None)
 @click.option("--out-mvd3", help="Path to output MVD3", required=True)
 @click.option("--out-tsv", help="Path to output mecombo TSV", required=True)
-def assign_emodels2(mvd3, emodels, out_mvd3, out_tsv):
+def assign_emodels2(mvd3, emodels, threshold_current, holding_current, out_mvd3, out_tsv):
     """ Assign 'me_combo' property; write me_combo.tsv """
     import os.path
     mvd3 = CellCollection.load_mvd3(mvd3)
@@ -363,9 +367,14 @@ def assign_emodels2(mvd3, emodels, out_mvd3, out_tsv):
     if me_combos['emodel'].isna().any():
         mismatch = me_combos[me_combos['emodel'].isna()][['layer', 'etype']]
         raise BrainBuilderError("Can not assign emodels for: %s" % mismatch)
-    me_combos[
-        ['morph_name', 'layer', 'fullmtype', 'etype', 'emodel', 'combo_name']
-    ].to_csv(out_tsv, sep='\t', index=False)
+    COLUMNS = ['morph_name', 'layer', 'fullmtype', 'etype', 'emodel', 'combo_name']
+    if threshold_current is not None:
+        me_combos['threshold_current'] = threshold_current
+        COLUMNS.append('threshold_current')
+    if holding_current is not None:
+        me_combos['holding_current'] = holding_current
+        COLUMNS.append('holding_current')
+    me_combos[COLUMNS].to_csv(out_tsv, sep='\t', index=False)
     result = CellCollection.from_dataframe(cells)
     result.seeds = mvd3.seeds
     result.save_mvd3(out_mvd3)
