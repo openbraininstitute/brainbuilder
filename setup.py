@@ -30,7 +30,7 @@ BASE_REQUIRES = [
 ]
 
 SUBCELLULAR_REQUIRES = [
-    'entity-management>=0.1.11',
+    'entity-management>=0.1.11,<1.0',
     'subcellular-querier>=0.0.3',
     'tables>=3.4',
     'pathlib2>=2.3.3'
