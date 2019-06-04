@@ -80,11 +80,26 @@ def _write_edge_group(group, out):
     # conductance -> syn_weight
     # morpho_section_id_pre -> afferent_section_id
     # ...
+    MAPPING = {
+        'position_center_post_x': 'afferent_center_x',
+        'position_center_post_y': 'afferent_center_y',
+        'position_center_post_z': 'afferent_center_z',
+        'position_center_pre_x': 'efferent_center_x',
+        'position_center_pre_y': 'efferent_center_y',
+        'position_center_pre_z': 'efferent_center_z',
+        'position_contour_post_x': 'afferent_surface_x',
+        'position_contour_post_y': 'afferent_surface_y',
+        'position_contour_post_z': 'afferent_surface_z',
+        'position_contour_pre_x': 'efferent_surface_x',
+        'position_contour_pre_y': 'efferent_surface_y',
+        'position_contour_pre_z': 'efferent_surface_z',
+    }
     for prop in group:
         if prop in ('connected_neurons_post', 'connected_neurons_pre'):
             continue
-        L.info("'%s'...", prop)
-        group.copy(prop, out)
+        name = MAPPING.get(prop, prop)
+        L.info("'%s' -> '%s'...", prop, name)
+        group.copy(prop, out, name=name)
 
 
 def _write_edge_index(index, out):
