@@ -98,17 +98,18 @@ def _load_density(value, mask, atlas):
         dataset = value[1:-1]
         L.info("Loading 3D density profile from '%s' atlas dataset...", dataset)
         result = atlas.load_data(dataset, cls=VoxelData).raw.astype(np.float32)
-        if np.any(result[~mask] > 0):
-            L.warning("Non-zero density outside of region mask")
-            result[~mask] = 0
     elif value.endswith(".nrrd"):
         L.info("Loading 3D density profile from '%s'...", value)
         result = VoxelData.load_nrrd(value).raw.astype(np.float32)
-        if np.any(result[~mask] > 0):
-            L.warning("Non-zero density outside of region mask")
-            result[~mask] = 0
     else:
         raise BrainBuilderError("Unexpected density value: '%s'" % value)
+
+    # Mask away density values outside region mask (NaNs are fine there)
+    result[~mask] = 0
+
+    if np.any(np.isnan(result)):
+        raise BrainBuilderError("NaN density values within region mask")
+
     return result
 
 
