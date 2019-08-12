@@ -74,6 +74,13 @@ def load_mtype_taxonomy(filepath):
     return pd.read_csv(filepath, sep=r'\s+', index_col='mtype')
 
 
+def load_mini_frequencies(filepath):
+    """
+    Load mini frequencies from a TSV file.
+    """
+    return pd.read_csv(filepath, sep=r'\s+', index_col="layer")
+
+
 def _load_density(value, mask, atlas):
     """ Load density as 3D numpy array.
 
@@ -163,6 +170,15 @@ def _assign_mtype_traits(cells, mtype_taxonomy):
     _assign_property(cells, 'synapse_class', traits['sClass'].values)
 
 
+def _assign_mini_frequencies(cells, mini_frequencies):
+    """
+    Add the mini_frequency column to `cells`.
+    """
+    mfreqs_cells = mini_frequencies.loc[cells.layer.values]
+    _assign_property(cells, "exc_mini_frequency", mfreqs_cells.exc_mini_frequency.values)
+    _assign_property(cells, "inh_mini_frequency", mfreqs_cells.inh_mini_frequency.values)
+
+
 def _assign_atlas_property(cells, prop, atlas, dset):
     if dset.startswith('~'):
         dset = dset[1:]
@@ -189,7 +205,10 @@ def _assign_atlas_property(cells, prop, atlas, dset):
 def _place(
     composition_path,
     mtype_taxonomy_path,
-    atlas_url, atlas_cache=None, region=None, mask_dset=None,
+    atlas_url,
+    mini_frequencies_path=None,
+    atlas_cache=None,
+    region=None, mask_dset=None,
     soma_placement='basic',
     density_factor=1.0,
     atlas_properties=None,
@@ -232,7 +251,12 @@ def _place(
     L.info("Assigning 'morph_class' / 'synapse_class'...")
     _assign_mtype_traits(result, mtype_taxonomy)
 
-    for prop, dset in (atlas_properties or []):
+    if mini_frequencies_path is not None:
+        mini_frequencies = load_mini_frequencies(mini_frequencies_path)
+        L.info("Assigning mini-frequencies")
+        _assign_mini_frequencies(result, mini_frequencies)
+
+    for prop, dset in atlas_properties or []:
         L.info("Assigning '%s'...", prop)
         _assign_atlas_property(result, prop, atlas, dset)
 
@@ -253,6 +277,8 @@ def _place(
 @click.option("--composition", help="Path to ME-type composition YAML", required=True)
 @click.option("--mtype-taxonomy", help="Path to mtype taxonomy TSV", required=True)
 @click.option("--atlas", help="Atlas URL / path", required=True)
+@click.option(
+    "--mini-frequencies", help="Path to the mini frequencies TSV", default=None, show_default=True)
 @click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
 @click.option("--region", help="Region name filter", default=None, show_default=True)
 @click.option("--mask", help="Dataset with volumetric mask filter", default=None, show_default=True)
@@ -266,8 +292,11 @@ def _place(
 @click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
 def place(
-    composition, mtype_taxonomy,
-    atlas, atlas_cache, region, mask,
+    composition,
+    mtype_taxonomy,
+    atlas,
+    mini_frequencies,
+    atlas_cache, region, mask,
     density_factor, soma_placement,
     atlas_property, sort_by, append_hemisphere,
     seed,
@@ -288,7 +317,9 @@ def place(
     cells = _place(
         composition,
         mtype_taxonomy,
-        atlas, atlas_cache,
+        atlas,
+        mini_frequencies_path=mini_frequencies,
+        atlas_cache=atlas_cache,
         region=region, mask_dset=mask,
         density_factor=density_factor,
         soma_placement=soma_placement,
