@@ -49,19 +49,6 @@ def add_property(mvd3, prop, voxel_data, output):
 
 
 @app.command()
-@click.argument("mvd3")
-@click.option("--seeds", help="Comma-separated circuit seeds (4 floats)", required=True)
-@click.option("-o", "--output", help="Path to output MVD3", required=True)
-def set_seeds(mvd3, seeds, output):
-    """ Set /circuit/seeds """
-    seeds = [float(x) for x in seeds.split(",")]
-    assert len(seeds) == 4
-    mvd3 = CellCollection.load_mvd3(mvd3)
-    mvd3.seeds = np.array(seeds, dtype=np.float64)
-    mvd3.save_mvd3(output)
-
-
-@app.command()
 @click.argument("mvd3", nargs=-1)
 @click.option("-o", "--output", help="Path to output MVD3", required=True)
 def merge(mvd3, output):

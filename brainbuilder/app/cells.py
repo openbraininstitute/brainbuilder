@@ -408,5 +408,4 @@ def assign_emodels2(mvd3, emodels, threshold_current, holding_current, out_mvd3,
         COLUMNS.append('holding_current')
     me_combos[COLUMNS].to_csv(out_tsv, sep='\t', index=False)
     result = CellCollection.from_dataframe(cells)
-    result.seeds = mvd3.seeds
     result.save_mvd3(out_mvd3)

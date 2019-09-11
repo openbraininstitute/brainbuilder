@@ -97,7 +97,6 @@ def assign_emodels(cells, morphdb):
     df = df.sort_index()
 
     result = CellCollection.from_dataframe(df)
-    result.seeds = cells.seeds
 
     return result
 

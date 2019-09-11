@@ -205,7 +205,7 @@ def test_assign_emodels_multiple_choice():
     ], columns=['morphology', 'layer', 'mtype', 'etype', 'me_combo'])
     actual = bbp.assign_emodels(cells, morphdb).properties
     expected = pd.DataFrame([
-        ('morph-A', 1, 'mtype-A', 'etype-A', 'prop-A', 'me_combo-A1'),
+        ('morph-A', 1, 'mtype-A', 'etype-A', 'prop-A', 'me_combo-A2'),
     ], columns=['morphology', 'layer', 'mtype', 'etype', 'prop', 'me_combo'])
     assert_frame_equal(actual, expected, check_like=True)
 
