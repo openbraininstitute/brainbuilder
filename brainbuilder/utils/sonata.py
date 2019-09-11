@@ -68,11 +68,15 @@ def _mvd3_to_nodes(cells, name, mecombo_info_path=None):
     return result
 
 
-def write_nodes_from_mvd3(mvd3_path, mecombo_info_path, out_h5_path, population):
+def write_nodes_from_mvd3(mvd3_path,
+                          mecombo_info_path,
+                          out_h5_path,
+                          population,
+                          library_properties):
     """ Export MVD3 + MEComboInfoFile to SONATA node collection. """
     cells = CellCollection.load_mvd3(mvd3_path)
     nodes = _mvd3_to_nodes(cells, population, mecombo_info_path)
-    nodes.save(out_h5_path)
+    nodes.save(out_h5_path, library_properties)
 
 
 def _write_edge_group(group, out):
@@ -173,9 +177,12 @@ def _edge_populations(edges_dir, edges_suffix, edges):
     ]
 
 
-def write_network_config(
-    base_dir, morph_dir, emodel_dir, nodes_dir, nodes, edges_dir, edges_suffix, edges, output_path
-):
+def write_network_config(base_dir,
+                         morph_dir,
+                         emodel_dir,
+                         nodes_dir, nodes,
+                         edges_dir, edges_suffix, edges,
+                         output_path):
     """ Write SONATA network config """
     # pylint: disable=too-many-arguments
     content = OrderedDict()
