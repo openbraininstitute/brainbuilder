@@ -12,7 +12,6 @@ import time
 
 from contextlib import contextmanager
 
-#import mpi4py
 import click
 import h5py
 import numpy as np
