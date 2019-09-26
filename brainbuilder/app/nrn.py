@@ -5,9 +5,11 @@
           http://www.boost.org/LICENSE_1_0.txt)
 '''
 # pylint: disable=missing-docstring
+from __future__ import print_function
 
-import sys
+import logging
 import os
+import sys
 import time
 
 from contextlib import contextmanager
@@ -17,6 +19,9 @@ import h5py
 import numpy as np
 
 from tqdm import tqdm
+from brainbuilder.app._utils import REQUIRED_PATH
+
+L = logging.getLogger(__name__)
 
 
 @click.group()
@@ -31,20 +36,25 @@ def progress_print(pstr):
         sys.stdout.write(pstr + "\n")
     sys.stdout.flush()
 
+
 def progress_finalize():
     if os.sys.stdout.isatty():
         sys.stdout.write("\n")
     sys.stdout.flush()
 
+
 def check_individual_file(nrn_file):
-    first_file = "%s.0"%(nrn_file)
+    first_file = "%s.0" % nrn_file
     if not os.path.exists(first_file):
-        print((">WARNING %s ... does not exist ... SKIP"%(first_file)))
+        print((">WARNING %s ... does not exist ... SKIP" % first_file))
         return False
+
     if os.path.exists(nrn_file):
-        print((">WARNING %s ... already exist ... SKIP"%(nrn_file)))
+        print((">WARNING %s ... already exist ... SKIP" % nrn_file))
         return False
+
     return True
+
 
 def list_nrnfiles(nrn_dir):
     name_files = ["nrn_positions.h5", "nrn_positions_efferent.h5",
@@ -53,23 +63,27 @@ def list_nrnfiles(nrn_dir):
     list_files = [''.join([nrn_dir, os.sep, f]) for f in name_files]
     return filter(check_individual_file, list_files)
 
+
 def get_nrnfiles(nrn_dir, only):
     if only != "":
         return [''.join([nrn_dir, os.sep, only])]
     return list_nrnfiles(nrn_dir)
 
+
 def count_subfiles(filename):
     count = 1
-    while os.path.exists("%s.%d"%(filename, count)):
+    while os.path.exists("%s.%d" % (filename, count)):
         count += 1
     return count
 
+
 def get_all_dataset(filename, file_number, dset):
-    n_filename = "%s.%d"%(filename, file_number)
+    n_filename = "%s.%d" % (filename, file_number)
     with h5py.File(n_filename, 'r') as f:
         all_keys = f.keys()
         dset[file_number] = list(filter(lambda key: key[0] == 'a', all_keys))
         return len(all_keys)
+
 
 def finalize_metadata(fdesc, total_files):
     fdesc["/info"] = 0
@@ -77,21 +91,22 @@ def finalize_metadata(fdesc, total_files):
     attrs.create("numberOfFiles", total_files)
     attrs.create("version", 5)
 
+
 def create_merged_file(filename, link=False):
     print(">")
-    print(">> start merge for %s"%filename)
+    print(">> start merge for %s" % filename)
     total_files = count_subfiles(filename)
-    print(">> %d files to merge"%(total_files))
+    print(">> %d files to merge" % total_files)
     dset = {}
     n = 0
     t1 = time.time()
     progress_print(">>")
     for i in range(0, total_files):
         n += get_all_dataset(filename, i, dset)
-        progress_print(">> got all keys for file %s.%d"%(filename, i))
+        progress_print(">> got all keys for file %s.%d" % (filename, i))
     progress_finalize()
-    print(">> complete listing done in %fs"%(time.time() - t1))
-    print(">> total of %d datasets to merge"%(n))
+    print(">> complete listing done in %fs" % (time.time() - t1))
+    print(">> total of %d datasets to merge" % n)
     t1 = time.time()
     progress_print(">>")
     with h5py.File(filename, 'w') as merged:
@@ -100,17 +115,17 @@ def create_merged_file(filename, link=False):
             if link:
                 progress_print(">> create external references file %s" % chunk_filename)
                 for k in dset[i]:
-                    d_name = "/%s"%(k)
+                    d_name = "/%s" % (k)
                     merged[d_name] = h5py.ExternalLink(chunk_filename, d_name)
             else:
                 progress_print(">> copy over data from %s" % chunk_filename)
                 with h5py.File(chunk_filename, 'r') as chunk:
                     for k in dset[i]:
-                        d_name = "/%s"%(k)
+                        d_name = "/%s" % (k)
                         merged[d_name] = chunk[d_name][:]
         finalize_metadata(merged, (total_files if link else 1))
     progress_finalize()
-    print(">> complete merging done in %fs"%(time.time() - t1))
+    print(">> complete merging done in %fs" % (time.time() - t1))
 
 
 @contextmanager
@@ -145,46 +160,123 @@ def merge(nrn_dir, only, link):
             create_merged_file(filename, link=link)
 
 
+SYN2_NAME_2_NRN_COLUMN_MAP = {
+    'delay': 1,
+    'morpho_section_id_post': 2,
+    'morpho_segment_id_post': 3,
+    'morpho_offset_segment_post': 4,
+    'morpho_section_id_pre': 5,
+    'morpho_segment_id_pre': 6,
+    'morpho_offset_segment_pre': 7,
+    'conductance': 8,
+    'u_syn': 9,
+    'depression_time': 10,
+    'facilitation_time': 11,
+    'decay_time': 12,
+    'syn_type_id': 13,
+    'n_rrp_vesicles': 17,
+}
+
+# unfortunately, we have SONATA files that have syn2 naming, so we
+# re-use the syn2 naming, and add other potential mappings.  If two
+# data sets exist in the same file, they better contain the same data...
+SONATA_NAME_2_NRN_COLUMN_MAP = SYN2_NAME_2_NRN_COLUMN_MAP.copy()
+SONATA_NAME_2_NRN_COLUMN_MAP.update(
+    {'afferent_section_id': 2,
+     'afferent_segment_id': 3,
+     #  'afferent_section_type':
+     #  'afferent_section_pos':
+     'afferent_segment_offset': 4,
+
+     'efferent_section_id': 5,
+     # 'efferent_section_pos':
+     # 'efferent_section_type':
+     'efferent_segment_id': 6,
+     'efferent_segment_offset': 7,
+     })
+
+
+def _make_nrn_h5_properties(mapping, properties, range_):
+    '''create the 19 column dataset expected in the nrn.h5 file
+    '''
+    dst = np.full((len(range_), 19), fill_value=-1, dtype=np.float64)
+
+    for prop in properties.keys():
+        if prop in mapping:
+            dst[:, mapping[prop]] = properties[prop][range_]
+    return dst
+
+
+def _write_nrn(output, index1, index2, mapping, properties, pre_synaptic_ids):
+    '''write nrn.h5 to `output` directory
+
+    Args:
+        output(str): output directory
+        index1(np.array-like): afferent neuron_to_id_range
+        index2(np.array-like): afferent range_to_synapse_id
+        mapping(dict): mapping of property names to column numbers
+        properties(h5group): where the property names are stored
+        pre_synaptic_ids(np.array-like): the presynaptic ids
+    '''
+    missing = set(mapping) - set(properties)
+    if missing:
+        L.warning('Properties %s are missing in h5', missing)
+
+    missing = set(properties) - set(mapping)
+    if missing:
+        L.warning('Extra unknown properties %s in h5', missing)
+
+    with h5py.File(os.path.join(output, 'nrn.h5'), 'w') as dst:
+        dst['info'] = []
+        dst['info'].attrs['version'] = [5]
+        for gid, range1 in tqdm(enumerate(index1), total=len(index1)):
+            r1_start, r1_end = range1.astype(int)
+
+            if r1_start == r1_end:   # empty range
+                continue
+
+            if r1_start > r1_end:
+                raise Exception('Start index (%d) > than end index (%d)' % (r1_start, r1_end))
+
+            assert r1_start == r1_end - 1, 'With postsynaptic sorting, should only have 1 row'
+
+            range2 = range(index2[r1_start][0], index2[r1_end - 1][1])
+
+            columns = _make_nrn_h5_properties(mapping, properties, range2)
+
+            # NRN is 1 based for pre and post gids
+            columns[:, 0] = pre_synaptic_ids[range2] + 1
+            assert np.all(columns[:-1, 0] <= columns[1:, 0]), 'Must be postsynaptically sorted'
+            dst['a%d' % (gid + 1)] = columns
+
+
 @app.command()
-@click.argument("syn2")
+@click.argument("syn2", type=REQUIRED_PATH)
 @click.option("-o", "--output", help="Path to output NRN folder", required=True)
 def from_syn2(syn2, output):
     """Convert SYN2 file to partial nrn.h5"""
     with h5py.File(syn2, 'r') as h5f:
         assert len(h5f['synapses']) == 1
         src = next(iter(h5f['synapses'].values()))
-        prop = src['properties']
+        properties = src['properties']
         index1 = src['indexes/connected_neurons_post/neuron_id_to_range']
         index2 = src['indexes/connected_neurons_post/range_to_synapse_id']
-        with h5py.File(os.path.join(output, 'nrn.h5'), 'w') as dst:
-            dst['info'] = []
-            dst['info'].attrs['version'] = [5]
-            for gid, rng1 in tqdm(enumerate(index1), total=len(index1)):
-                r1_0, r1_1 = rng1.astype(int)
-                if r1_0 >= r1_1:
-                    continue
-                for r1 in range(r1_0, r1_1 - 1):
-                    assert index2[r1][1] == index2[r1 + 1][0]  # assert postsynaptic sorting
-                rng2 = range(index2[r1_0][0], index2[r1_1 - 1][1])
-                NA = np.full(len(rng2), -1)
-                dst['a%d' % (1 + gid)] = np.stack([
-                    1 + prop['connected_neurons_pre'][rng2],  # 0
-                    prop['delay'][rng2],                      # 1
-                    prop['morpho_section_id_post'][rng2],     # 2
-                    prop['morpho_segment_id_post'][rng2],     # 3
-                    prop['morpho_offset_segment_post'][rng2], # 4
-                    prop['morpho_section_id_pre'][rng2],      # 5
-                    prop['morpho_segment_id_pre'][rng2],      # 6
-                    prop['morpho_offset_segment_pre'][rng2],  # 7
-                    prop['conductance'][rng2],                # 8
-                    prop['u_syn'][rng2],                      # 9
-                    prop['depression_time'][rng2],            # 10
-                    prop['facilitation_time'][rng2],          # 11
-                    prop['decay_time'][rng2],                 # 12
-                    prop['syn_type_id'][rng2],                # 13
-                    NA, # morphology type of the pre neuron   # 14
-                    NA, # dendrite branch order               # 15
-                    NA, # axon branch order                   # 16
-                    prop['n_rrp_vesicles'][rng2],             # 17
-                    NA, # postsynaptic branch type            # 18
-            ]).transpose().astype(np.float32)
+        pre_synaptic_ids = properties['connected_neurons_pre']
+        _write_nrn(
+            output, index1, index2, SYN2_NAME_2_NRN_COLUMN_MAP, properties, pre_synaptic_ids)
+
+
+@app.command()
+@click.argument("sonata", type=REQUIRED_PATH)
+@click.option("-o", "--output", help="Path to output NRN folder", required=True)
+def from_sonata(sonata, output):
+    """Convert SONATA file to partial nrn.h5"""
+    with h5py.File(sonata, 'r') as h5f:
+        assert len(h5f['edges']) == 1
+        src = next(iter(h5f['edges'].values()))
+        properties = src['0']
+        index1 = src['indices/target_to_source/node_id_to_ranges']
+        index2 = src['indices/target_to_source/range_to_edge_id']
+        pre_synaptic_ids = src['source_node_id']
+        _write_nrn(
+            output, index1, index2, SONATA_NAME_2_NRN_COLUMN_MAP, properties, pre_synaptic_ids)

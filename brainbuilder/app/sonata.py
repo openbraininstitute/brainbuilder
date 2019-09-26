@@ -12,13 +12,16 @@ def app():
 @click.argument("mvd3")
 @click.option("--mecombo-info", help="Path to TSV file with ME-combo table", default=None)
 @click.option("--population", help="Population name", default="default", show_default=True)
-@click.option("--library-properties", required=False, default="",
+@click.option("--library-properties", required=False, default=None,
               help="Comma-separated properties names that should become library enumerations")
 @click.option("-o", "--output", help="Path to output HDF5", required=True)
 def from_mvd3(mvd3, mecombo_info, population, library_properties, output):
     """Convert MVD3 to SONATA nodes"""
     from brainbuilder.utils.sonata import write_nodes_from_mvd3
-    library_properties = [p.strip() for p in library_properties.split(',')]
+
+    if library_properties is not None:
+        library_properties = [p.strip() for p in library_properties.split(',')]
+
     write_nodes_from_mvd3(
         mvd3_path=mvd3,
         mecombo_info_path=mecombo_info,

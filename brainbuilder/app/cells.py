@@ -23,7 +23,9 @@ MVD3 is expected to have the following properties already assigned:
 """
 
 import logging
+import json
 import numbers
+import os
 
 from collections import Mapping
 
@@ -349,7 +351,6 @@ def assign_emodels(mvd3, morphdb, seed, output):
 
 
 def _parse_emodel_mapping(filepath):
-    import json
     with open(filepath) as f:
         content = json.load(f)
     result = {}
@@ -378,7 +379,6 @@ def _parse_emodel_mapping(filepath):
 @click.option("--out-tsv", help="Path to output mecombo TSV", required=True)
 def assign_emodels2(mvd3, emodels, threshold_current, holding_current, out_mvd3, out_tsv):
     """ Assign 'me_combo' property; write me_combo.tsv """
-    import os.path
     mvd3 = CellCollection.load_mvd3(mvd3)
     emodels = _parse_emodel_mapping(emodels)
     cells = mvd3.as_dataframe()
