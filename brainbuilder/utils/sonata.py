@@ -7,6 +7,7 @@ https://github.com/AllenInstitute/sonata/blob/master/docs/SONATA_DEVELOPER_GUIDE
 import json
 import logging
 import os.path
+import glob
 
 from collections import OrderedDict
 
@@ -17,6 +18,7 @@ import six
 
 from voxcell import CellCollection
 from voxcell.sonata import NodePopulation
+from bluepy.v2.impl.target import TargetContext
 
 from brainbuilder.exceptions import BrainBuilderError
 
@@ -201,3 +203,27 @@ def write_network_config(base_dir,
     ])
     with open(output_path, 'w') as f:
         json.dump(content, f, indent=2)
+
+
+def write_node_set_from_targets(input_dir, output_file):
+    """Write SONATA node_set from all target files in a directory.
+
+    This function allows to directly convert a set of target files created from a mvd3 file
+    into the corresponding node_set.json file. This is useful if user does not have the yaml target
+    rules anymore.
+
+    The 'brainbuilder targets node-sets' should be preferred if possible.
+    """
+    target = TargetContext.load(glob.glob(input_dir + '/*.target'))
+    if not os.path.basename(output_file) == 'node_sets.json':
+        basename = os.path.basename(output_file)
+        L.warning('basename "%s" is not "node_sets.json" change your config file accordingly.',
+                  basename)
+    output_dict = {}
+    for target_name in target.names:
+        # targets are built from a mvd3 file so indexing starts from 1 compare to 0 in SONATA
+        node_ids = target.resolve(target_name) - 1
+        output_dict[target_name] = {"node_id": node_ids.tolist()}
+
+    with open(output_file, "w") as fd:
+        json.dump(output_dict, fd, indent=2)
