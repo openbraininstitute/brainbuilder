@@ -84,9 +84,23 @@ def write_nodes_from_mvd3(mvd3_path,
 def _write_edge_group(group, out):
     # TODO: pick only those used, remap to those mentioned in "spec"
     # conductance -> syn_weight
-    # morpho_section_id_pre -> afferent_section_id
     # ...
     MAPPING = {
+        'morpho_section_id_post': 'afferent_section_id',
+        'morpho_segment_id_post': 'afferent_segment_id',
+        'morpho_offset_segment_post': 'afferent_segment_offset',
+        'morpho_section_fraction_post': 'afferent_section_pos',
+        'morpho_section_type_post': 'afferent_section_type',
+
+        'morpho_section_id_pre': 'efferent_section_id',
+        'morpho_segment_id_pre': 'efferent_segment_id',
+        'morpho_offset_segment_pre': 'efferent_segment_offset',
+        'morpho_section_fraction_pre': 'efferent_section_pos',
+        'morpho_section_type_pre': 'efferent_section_type',
+
+        'morpho_spine_length': 'spine_length',
+        'morpho_type_id_pre': 'efferent_morphology_id',
+
         'position_center_post_x': 'afferent_center_x',
         'position_center_post_y': 'afferent_center_y',
         'position_center_post_z': 'afferent_center_z',
