@@ -26,7 +26,7 @@ BASE_REQUIRES = [
     'tqdm>=4.0',
 ] + [
     'bluepy>=0.13.0',
-    'voxcell[sonata]>=2.6.1,<3.0',
+    'voxcell[sonata]>=2.6.2,<3.0',
 ]
 
 SUBCELLULAR_REQUIRES = [

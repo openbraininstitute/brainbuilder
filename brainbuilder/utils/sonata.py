@@ -12,7 +12,6 @@ import glob
 from collections import OrderedDict
 
 import numpy as np
-import pandas as pd
 import h5py
 import six
 
@@ -20,54 +19,8 @@ from voxcell import CellCollection
 from voxcell.sonata import NodePopulation
 from bluepy.v2.impl.target import TargetContext
 
-from brainbuilder.exceptions import BrainBuilderError
-
 
 L = logging.getLogger('brainbuilder')
-
-
-def _load_mecombo_info(filepath):
-    COLUMN_FILTER = lambda name: name not in ('morph_name', 'layer', 'fullmtype', 'etype')
-    return pd.read_csv(filepath, sep=r'\s+', usecols=COLUMN_FILTER, index_col='combo_name')
-
-
-def _mvd3_to_nodes(cells, name, mecombo_info_path=None):
-    """ Convert CellCollection to SONATA NodePopulation. """
-    if 'me_combo' in cells.properties:
-        if mecombo_info_path is None:
-            raise BrainBuilderError("""
-                Please specify 'mecombo_info_path' in order to resolve 'me_combo' property
-            """)
-        mecombo_info = _load_mecombo_info(mecombo_info_path)
-        L.info(
-            "'me_combo' property would be resolved to 'model_template' and dynamics parameters %s",
-            ", ".join("'%s'" % s for s in mecombo_info.columns if s != 'emodel')
-        )
-
-    result = NodePopulation(name, size=len(cells.properties))
-
-    if cells.positions is not None:
-        result.positions = cells.positions
-
-    if cells.orientations is not None:
-        result.orientations = cells.orientations
-
-    for prop, column in cells.properties.iteritems():
-        if prop == 'me_combo':
-            continue
-        result.attributes[prop] = column.values
-
-    if 'me_combo' in cells.properties:
-        mecombo_params = mecombo_info.loc[cells.properties['me_combo']]
-        for prop, column in mecombo_params.iteritems():
-            values = column.values
-            if prop == 'emodel':
-                values = [('hoc:' + v) for v in values]
-                result.attributes['model_template'] = values
-            else:
-                result.dynamics_attributes[prop] = values
-
-    return result
 
 
 def write_nodes_from_mvd3(mvd3_path,
@@ -77,7 +30,7 @@ def write_nodes_from_mvd3(mvd3_path,
                           library_properties):
     """ Export MVD3 + MEComboInfoFile to SONATA node collection. """
     cells = CellCollection.load_mvd3(mvd3_path)
-    nodes = _mvd3_to_nodes(cells, population, mecombo_info_path)
+    nodes = NodePopulation.from_cell_collection(cells, population, mecombo_info_path)
     nodes.save(out_h5_path, library_properties)
 
 
