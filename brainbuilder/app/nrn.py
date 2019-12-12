@@ -81,7 +81,7 @@ def get_all_dataset(filename, file_number, dset):
     n_filename = "%s.%d" % (filename, file_number)
     with h5py.File(n_filename, 'r') as f:
         all_keys = f.keys()
-        dset[file_number] = list(filter(lambda key: key[0] == 'a', all_keys))
+        dset[file_number] = [key for key in all_keys if key[0] == "a"]
         return len(all_keys)
 
 
@@ -232,7 +232,7 @@ def _write_nrn(output, index1, index2, mapping, properties, pre_synaptic_ids):
         for gid, range1 in tqdm(enumerate(index1), total=len(index1)):
             r1_start, r1_end = range1.astype(int)
 
-            if r1_start == r1_end:   # empty range
+            if r1_start == r1_end:  # empty range
                 continue
 
             if r1_start > r1_end:
