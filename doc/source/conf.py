@@ -36,6 +36,7 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
+    'sphinx.ext.autosectionlabel',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -54,7 +55,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'BrainBuilder'
-author = u'Luis Riquelme'
+author = u'NSE Team'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

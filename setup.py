@@ -27,6 +27,7 @@ BASE_REQUIRES = [
 ] + [
     'bluepy>=0.13.0',
     'voxcell[sonata]>=2.6.2,<3.0',
+    'morph-tool>=0.2.3',
 ]
 
 SUBCELLULAR_REQUIRES = [

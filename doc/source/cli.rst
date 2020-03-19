@@ -35,8 +35,6 @@ The following subcommands can be used with: ``brainbuilder mvd3``
 Tools for working with NRN files
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The following subcommands can be used with: ``brainbuilder nrn``
-
 * ``from-sonata``  Convert SONATA file to partial nrn.h5
 * ``from-syn2``    Convert SYN2 file to partial nrn.h5
 * ``merge``        Merge utility tool for nrn.h5 Blue Brain synapse file format.
@@ -50,6 +48,11 @@ The following subcommands can be used with: ``brainbuilder sonata``
 * ``from-mvd3``                   Convert MVD3 to SONATA nodes
 * ``from-syn2``                   Convert SYN2 to SONATA edges
 * ``network-config``              Write SONATA network config
+* ``update-morphologies``         Update h5 morphologies to not include single child parents
+* ``update-edge-population``      Given h5_updates from removing single child parents
+* ``update-edge-pos``             Using section_id, segment_id and offset, create `SONATA` position
+
+For the update-* commands, read more in :ref:`SONATA: Single Child Reindex`
 
 
 Genes / proteins assignment
@@ -65,8 +68,8 @@ Tools for working with SYN2
 
 The following subcommands can be used with: ``brainbuilder syn2``
 
-* ``check``   check syn2 invariants
-* ``concat``  concatenate multiple syn2 files
+* ``check``   check SYN2 invariants
+* ``concat``  concatenate multiple SYN2 files
 
 
 Tools for working with .target files

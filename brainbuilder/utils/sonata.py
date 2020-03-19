@@ -4,10 +4,10 @@ Temporary SONATA converters.
 https://github.com/AllenInstitute/sonata/blob/master/docs/SONATA_DEVELOPER_GUIDE.md
 """
 
+import glob
 import json
 import logging
-import os.path
-import glob
+import os
 
 from collections import OrderedDict
 

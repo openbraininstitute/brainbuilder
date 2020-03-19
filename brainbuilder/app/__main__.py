@@ -11,7 +11,7 @@ from brainbuilder.version import VERSION
 
 def main():
     """ Collection of tools for circuit building """
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     app = click.Group('brainbuilder', {
         'cells': cells.app,
         'mvd3': mvd3.app,

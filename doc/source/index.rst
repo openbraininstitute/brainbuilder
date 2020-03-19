@@ -14,3 +14,4 @@ BrainBuilder is a tool to define the cells that will compose a circuit.
 
    Home <self>
    cli
+   reindex_sonata
