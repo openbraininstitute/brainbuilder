@@ -78,7 +78,7 @@ def _load_targets(filepath):
             cylinder: '{S1HL-cylinder}'
     """
     with open(filepath) as f:
-        content = yaml.load(f)['targets']
+        content = yaml.load(f, Loader=yaml.FullLoader)['targets']
     return (
         content.get('query_based'),
         content.get('atlas_based'),
@@ -159,7 +159,8 @@ def node_sets(mvd3, targets, allow_empty, output):
 
     if targets is not None:
         query_based, _ = _load_targets(targets)
-        _add_node_sets(query_based)
+        if query_based is not None:
+            _add_node_sets(query_based)
 
     with open(output, 'w') as f:
         json.dump(result, f, indent=2)
