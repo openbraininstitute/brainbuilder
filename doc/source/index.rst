@@ -9,19 +9,8 @@ Welcome to BrainBuilder's documentation!
 BrainBuilder is a tool to define the cells that will compose a circuit.
 
 
-Contents
---------
-
 .. toctree::
-   :maxdepth: 2
+   :hidden:
 
-   api
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
+   Home <self>
+   cli
