@@ -1,0 +1,25 @@
+## 0.11.9
+
+ * added reindex for only children, need to convert connectivity to swc
+ * updated & fixed documentation
+ * Fix empty query_based crash [NSETM-1003]
+
+## 0.11.8
+
+ * atlases creation cli
+
+## 0.11.7
+
+ * Use NodePopulation.from_cell_collection
+ * BBPBGLIB-557: use SONATA naming, not syn2
+ * Add target to node_set direct converter
+
+## 0.11.6
+
+ * add sonata2nrn converter, so we can build spatial indices
+
+## 0.11.5
+
+ * add syn2 concat and check support
+ * BBPP82-94: Add @library enums to mvd3 -> sonata node converter
+ * remove seed handling: NSETM-215
