@@ -60,12 +60,14 @@ def from_syn2(syn2, population, source, target, output):
     "--emodel-dir", help="Cell electrical models directory (relative to BASE_DIR)", required=True)
 @click.option("--nodes-dir", help="Node files directory (relative to BASE_DIR)", required=True)
 @click.option("--nodes", help="Node population(s) (';'-separated)", required=True)
+@click.option("--node-sets", help="Node sets file (JSON)", required=True)
 @click.option("--edges-dir", help="Edge files directory (relative to BASE_DIR)", required=True)
 @click.option("--edges-suffix", help="Edge file suffix", default="")
 @click.option("--edges", help="Edge population(s) (';'-separated)", required=True)
 @click.option("-o", "--output", help="Path to output file (JSON)", required=True)
 def network_config(
-        base_dir, morph_dir, emodel_dir, nodes_dir, nodes, edges_dir, edges_suffix, edges, output
+    base_dir, morph_dir, emodel_dir, nodes_dir, nodes,
+    node_sets, edges_dir, edges_suffix, edges, output
 ):
     """Write SONATA network config"""
     # pylint: disable=too-many-arguments
@@ -76,6 +78,7 @@ def network_config(
         emodel_dir=emodel_dir,
         nodes_dir=nodes_dir,
         nodes=nodes.split(";"),
+        node_sets=node_sets,
         edges_dir=edges_dir,
         edges_suffix=edges_suffix,
         edges=edges.split(";"),

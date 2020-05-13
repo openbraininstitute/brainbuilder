@@ -149,7 +149,7 @@ def _edge_populations(edges_dir, edges_suffix, edges):
 def write_network_config(base_dir,
                          morph_dir,
                          emodel_dir,
-                         nodes_dir, nodes,
+                         nodes_dir, nodes, node_sets,
                          edges_dir, edges_suffix, edges,
                          output_path):
     """ Write SONATA network config """
@@ -164,6 +164,7 @@ def write_network_config(base_dir,
         'morphologies_dir': os.path.join('$BASE_DIR', morph_dir),
         'biophysical_neuron_models_dir': os.path.join('$BASE_DIR', emodel_dir),
     }
+    content['node_sets_file'] = os.path.join('$BASE_DIR', node_sets)
     content['networks'] = OrderedDict([
         ('nodes', _node_populations('$NETWORK_NODES_DIR', nodes)),
         ('edges', _edge_populations('$NETWORK_EDGES_DIR', edges_suffix, edges)),

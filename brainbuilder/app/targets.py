@@ -79,6 +79,7 @@ def _load_targets(filepath):
     """
     with open(filepath) as f:
         content = yaml.load(f, Loader=yaml.FullLoader)['targets']
+
     return (
         content.get('query_based'),
         content.get('atlas_based'),
@@ -102,8 +103,6 @@ def from_mvd3(mvd3, atlas, atlas_cache, targets, allow_empty, output):
         if targets is None:
             if 'layer' in cells:
                 bbp.write_property_targets(f, cells, 'layer', mapping=_layer_name)
-            if 'hypercolumn' in cells:
-                bbp.write_property_targets(f, cells, 'hypercolumn', mapping=_column_name)
         else:
             query_based, atlas_based = _load_targets(targets)
             if query_based is not None:
@@ -121,15 +120,20 @@ def from_mvd3(mvd3, atlas, atlas_cache, targets, allow_empty, output):
 
 @app.command()
 @click.argument("mvd3")
+@click.option("--atlas", help="Atlas URL / path", default=None, show_default=True)
+@click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
 @click.option("-t", "--targets", help="Path to target definition YAML file", default=None)
 @click.option("--allow-empty", is_flag=True, help="Allow empty targets", show_default=True)
+@click.option("--population", help="Population name", default="default", show_default=True)
 @click.option("-o", "--output", help="Path to output JSON file", required=True)
-def node_sets(mvd3, targets, allow_empty, output):
+def node_sets(mvd3, atlas, atlas_cache, targets, allow_empty, population, output):
     """Generate JSON node sets from MVD3 (and target definition YAML)"""
+    # pylint: disable=too-many-locals
 
     result = collections.OrderedDict()
 
     def _add_node_sets(to_add):
+
         for name, query in sorted(to_add.items()):
             if name in result:
                 raise BrainBuilderError("Duplicate node set: '%s'" % name)
@@ -146,8 +150,8 @@ def node_sets(mvd3, targets, allow_empty, output):
 
     cells = Circuit({'cells': mvd3}).cells
 
+    result['All'] = {"population": population}
     _add_node_sets({
-        'All': {},
         'Excitatory': {'synapse_class': 'EXC'},
         'Inhibitory': {'synapse_class': 'INH'},
     })
@@ -158,9 +162,19 @@ def node_sets(mvd3, targets, allow_empty, output):
         })
 
     if targets is not None:
-        query_based, _ = _load_targets(targets)
+        query_based, atlas_based = _load_targets(targets)
         if query_based is not None:
             _add_node_sets(query_based)
+        if atlas_based is not None:
+            from voxcell.nexus.voxelbrain import Atlas
+            if atlas is None:
+                raise BrainBuilderError("Atlas not provided")
+            atlas = Atlas.open(atlas, cache_dir=atlas_cache)
+            xyz = cells.get(properties=['x', 'y', 'z'])
+            for name, dset in six.iteritems(atlas_based):
+                mask = atlas.load_data(dset, cls=ROIMask).lookup(xyz.values)
+                ids = xyz.index[mask] - 1
+                result[name] = {"population": population, "node_id": ids.tolist()}
 
     with open(output, 'w') as f:
         json.dump(result, f, indent=2)
