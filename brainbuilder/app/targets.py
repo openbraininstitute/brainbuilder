@@ -87,16 +87,16 @@ def _load_targets(filepath):
 
 
 @app.command()
-@click.argument("mvd3")
+@click.argument("cells-path")
 @click.option("--atlas", help="Atlas URL / path", default=None, show_default=True)
 @click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
 @click.option("-t", "--targets", help="Path to target definition YAML file", default=None)
 @click.option("--allow-empty", is_flag=True, help="Allow empty targets", show_default=True)
 @click.option("-o", "--output", help="Path to output .target file", required=True)
-def from_mvd3(mvd3, atlas, atlas_cache, targets, allow_empty, output):
-    """ Generate .target file from MVD3 (and target definition YAML) """
+def from_input(cells_path, atlas, atlas_cache, targets, allow_empty, output):
+    """ Generate .target file from MVD3 or SONATA (and target definition YAML) """
     # pylint: disable=too-many-locals
-    circuit = Circuit({'cells': mvd3})
+    circuit = Circuit({'cells': cells_path})
     cells = circuit.cells.get()
     with open(output, 'w') as f:
         write_default_targets(cells, f)
@@ -119,15 +119,15 @@ def from_mvd3(mvd3, atlas, atlas_cache, targets, allow_empty, output):
 
 
 @app.command()
-@click.argument("mvd3")
+@click.argument("cells-path")
 @click.option("--atlas", help="Atlas URL / path", default=None, show_default=True)
 @click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
 @click.option("-t", "--targets", help="Path to target definition YAML file", default=None)
 @click.option("--allow-empty", is_flag=True, help="Allow empty targets", show_default=True)
 @click.option("--population", help="Population name", default="default", show_default=True)
 @click.option("-o", "--output", help="Path to output JSON file", required=True)
-def node_sets(mvd3, atlas, atlas_cache, targets, allow_empty, population, output):
-    """Generate JSON node sets from MVD3 (and target definition YAML)"""
+def node_sets(cells_path, atlas, atlas_cache, targets, allow_empty, population, output):
+    """Generate JSON node sets from MVD3 or SONATA (and target definition YAML)"""
     # pylint: disable=too-many-locals
 
     result = collections.OrderedDict()
@@ -148,7 +148,7 @@ def node_sets(mvd3, atlas, atlas_cache, targets, allow_empty, population, output
                     raise BrainBuilderError(msg)
             result[name] = query
 
-    cells = Circuit({'cells': mvd3}).cells
+    cells = Circuit({'cells': cells_path}).cells
 
     result['All'] = {"population": population}
     _add_node_sets({

@@ -14,7 +14,7 @@ def app():
 
 
 @app.command()
-@click.argument("mvd3", type=click.Path(exists=True, file_okay=True))
+@click.argument("cells-path", type=click.Path(exists=True, file_okay=True))
 @click.option("--subcellular-dir", help="The directory to store the subcellular data")
 @click.option("--transcriptome", help="Name of nexus transcriptome entity", required=True)
 @click.option("--mtype-taxonomy", help="Name of nexus taxonomy entity", required=True)
@@ -24,12 +24,12 @@ def app():
               required=True)
 @click.option("--seed", type=int, help="Pseudo-random generator seed", default=0, show_default=True)
 @click.option("--output", type=str, required=True)
-def assign(mvd3, subcellular_dir, transcriptome, mtype_taxonomy, cell_proteins,
+def assign(cells_path, subcellular_dir, transcriptome, mtype_taxonomy, cell_proteins,
            synapse_proteins, seed, output):
     """ Assign subcellular data """
     from brainbuilder.subcellular import assign as _assign
 
-    cells = CellCollection.load_mvd3(mvd3)
+    cells = CellCollection.load(cells_path)
 
     np.random.seed(seed)
 
