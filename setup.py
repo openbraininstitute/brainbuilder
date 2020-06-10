@@ -26,7 +26,7 @@ BASE_REQUIRES = [
     'tqdm>=4.0',
 ] + [
     'bluepy>=0.13.0',
-    'voxcell[sonata]>=2.6.2,<3.0',
+    'voxcell[sonata]>=2.7.0,<3.0',
     'morph-tool>=0.2.3',
 ]
 
