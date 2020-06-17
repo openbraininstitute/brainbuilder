@@ -437,4 +437,6 @@ def assign_emodels2(cells_path, emodels, threshold_current, holding_current,
     if out_mvd3 is not None:
         result.save_mvd3(out_mvd3)
     else:
+        # must be biophysical here as a emodel/me_combo is provided
+        result.properties['model_type'] = "biophysical"
         result.save(out_cells_path)

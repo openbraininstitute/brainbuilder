@@ -12,26 +12,46 @@ import os
 from collections import OrderedDict
 
 import numpy as np
+import pandas as pd
 import h5py
 import six
 
 from voxcell import CellCollection
-from voxcell.sonata import NodePopulation
 from bluepy.v2.impl.target import TargetContext
 
 
 L = logging.getLogger('brainbuilder')
 
 
+def _add_me_info(cells, mecombo_path):
+
+    def usecols(name):
+        """Pick the needed columns."""
+        return name not in ('morph_name', 'layer', 'fullmtype', 'etype')
+
+    mecombo_info = pd.read_csv(mecombo_path, sep=r'\s+', usecols=usecols, index_col='combo_name')
+    if 'me_combo' in cells.properties:
+        mecombo_params = mecombo_info.loc[cells.properties['me_combo']]
+        for prop, column in mecombo_params.iteritems():
+            values = column.values
+            if prop == 'emodel':
+                values = [('hoc:' + v) for v in values]
+                cells.properties['model_template'] = values
+            else:
+                cells.properties[cells.SONATA_DYNAMIC_PROPERTY + prop] = values
+
+
 def write_nodes_from_mvd3(mvd3_path,
                           mecombo_info_path,
                           out_h5_path,
                           population,
-                          library_properties):
+                          model_type='biophysical'):
     """ Export MVD3 + MEComboInfoFile to SONATA node collection. """
     cells = CellCollection.load_mvd3(mvd3_path)
-    nodes = NodePopulation.from_cell_collection(cells, population, mecombo_info_path)
-    nodes.save(out_h5_path, library_properties)
+    cells.population_name = population
+    _add_me_info(cells, mecombo_info_path)
+    cells.properties['model_type'] = model_type
+    cells.save_sonata(out_h5_path)
 
 
 def _write_edge_group(group, out):
@@ -129,8 +149,7 @@ def _node_populations(nodes_dir, nodes):
     return [
         OrderedDict([
             ('nodes_file', os.path.join(nodes_dir, population, 'nodes.h5')),
-            ('node_types_file', None),
-            ('node_sets_file', os.path.join(nodes_dir, population, 'node_sets.json')),
+            ('node_types_file', None)
         ])
         for population in nodes
     ]
