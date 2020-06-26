@@ -20,10 +20,10 @@ def app():
 @click.option("-o", "--output", help="Path to output SONATA nodes", required=True)
 def from_mvd3(mvd3, mecombo_info, population, model_type, output):
     """Convert MVD3 to SONATA nodes"""
-    from brainbuilder.utils import sonata
+    from brainbuilder.utils.sonata import convert
 
     assert mvd3.endswith('.mvd3'), mvd3 + ' must end with ".mvd3" suffix'
-    sonata.provide_me_info(mvd3, mecombo_info, output, population, model_type)
+    convert.provide_me_info(mvd3, mecombo_info, output, population, model_type)
 
 
 @app.command()
@@ -33,9 +33,9 @@ def from_mvd3(mvd3, mecombo_info, population, model_type, output):
 @click.option("-o", "--output", help="Path to output SONATA nodes", required=True)
 def provide_me_info(cells_path, mecombo_info, model_type, output):
     """Provide SONATA nodes with MorphoElectrical info"""
-    from brainbuilder.utils import sonata
+    from brainbuilder.utils.sonata import convert
 
-    sonata.provide_me_info(cells_path, mecombo_info, output, model_type=model_type)
+    convert.provide_me_info(cells_path, mecombo_info, output, model_type=model_type)
 
 
 @app.command()
@@ -46,7 +46,7 @@ def provide_me_info(cells_path, mecombo_info, model_type, output):
 @click.option("-o", "--output", help="Path to output HDF5", required=True)
 def from_syn2(syn2, population, source, target, output):
     """Convert SYN2 to SONATA edges"""
-    from brainbuilder.utils.sonata import write_edges_from_syn2
+    from brainbuilder.utils.sonata.convert import write_edges_from_syn2
     write_edges_from_syn2(
         syn2_path=syn2,
         population=population,
@@ -74,7 +74,7 @@ def network_config(
 ):
     """Write SONATA network config"""
     # pylint: disable=too-many-arguments
-    from brainbuilder.utils.sonata import write_network_config
+    from brainbuilder.utils.sonata.convert import write_network_config
     write_network_config(
         base_dir=base_dir,
         morph_dir=morph_dir,
@@ -98,7 +98,7 @@ def node_set_from_targets(input_dir, output):
 
     Please check 'brainbuilder targets node-sets' also.
     """
-    from brainbuilder.utils.sonata import write_node_set_from_targets
+    from brainbuilder.utils.sonata.convert import write_node_set_from_targets
     write_node_set_from_targets(input_dir, output)
 
 
@@ -109,12 +109,12 @@ def node_set_from_targets(input_dir, output):
               help="Path to output directory for HDF5 morphologies")
 def update_morphologies(h5_morphs, output):
     """Update h5 morphologies"""
-    from brainbuilder.utils import sonata_reindex
+    from brainbuilder.utils.sonata import reindex
     assert not os.path.exists(output), 'output directory must not already exist'
 
-    h5_updates = sonata_reindex.generate_h5_updates(h5_morphs)
+    h5_updates = reindex.generate_h5_updates(h5_morphs)
 
-    sonata_reindex.write_new_h5_morphs(h5_updates, h5_morphs, output)
+    reindex.write_new_h5_morphs(h5_updates, h5_morphs, output)
 
     h5_updates_path = os.path.join(output, 'h5_updates.json')
     with open(h5_updates_path, 'w') as fd:
@@ -133,7 +133,7 @@ def update_morphologies(h5_morphs, output):
 @click.argument("edges", nargs=-1, required=True)
 def update_edge_population(h5_updates, nodes, population, edges):
     '''Given h5_updates from removing single children, update synapses'''
-    from brainbuilder.utils import sonata_reindex
+    from brainbuilder.utils.sonata import reindex
     from voxcell.sonata import NodePopulation
 
     with open(h5_updates, 'r') as fd:
@@ -145,7 +145,7 @@ def update_edge_population(h5_updates, nodes, population, edges):
 
     morphologies = NodePopulation.load(nodes).to_dataframe()['morphology']
     for edge in edges:
-        sonata_reindex.apply_edge_updates(morphologies, edge, h5_updates, population)
+        reindex.apply_edge_updates(morphologies, edge, h5_updates, population)
 
 
 @app.command()
@@ -158,8 +158,8 @@ def update_edge_population(h5_updates, nodes, population, edges):
 @click.argument("edges", nargs=-1, required=True)
 def update_edge_pos(morph_path, population, nodes, edges):
     '''Using: section_id, segment_id and offset, create the sonata *_section_pos'''
-    from brainbuilder.utils import sonata_reindex
+    from brainbuilder.utils.sonata import reindex
     from voxcell.sonata import NodePopulation
 
     morphologies = NodePopulation.load(nodes).to_dataframe()['morphology']
-    sonata_reindex.write_sonata_pos(morph_path, morphologies, population, edges)
+    reindex.write_sonata_pos(morph_path, morphologies, population, edges)

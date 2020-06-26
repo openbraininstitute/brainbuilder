@@ -1,3 +1,7 @@
+## 0.14.0
+  * Add a new package `utils.sonata`. Move all SONATA related utils there.
+  * Add a new module `utils.sonata.curate` to curate/fix existing SONATA circuits.
+
 ## 0.13.2
   * Catch duplicate me-combos
 
