@@ -1,3 +1,26 @@
+## 0.12.1
+  * Fixes to sonata functions
+  * "assign_emodels2" function now adds the missing biophysical field
+  * "sonata.from_mvd3" remove the library argument (handled by voxcell now)
+  * "sonata.from_mvd3" add a model type
+
+## 0.12.0
+
+  * Allows cli with mvd3 inputs/outputs to use sonata files instead. The format detection is done
+    using the file extension : '.mvd3' will save/read a 'mvd3' file. For any other file extension,
+    sonata is used.
+  * "place" cli can output seamlessly sonata or mvd3 files
+  * "assign_emodels/assign_emodels2" can use sonata or mvd3 files as input
+  * "assign" cli can use sonata or mvd3 files as input
+  * rename of "target.from_mvd3" to "target.from_input" and can use both formats as input
+  * "target.node_sets" can use both formats as input
+
+## 0.11.10
+
+ * Add atlas based node set with sonata files [NSETM-1010]
+ * Change the node_set location inside the sonata config file. Now attached to the circuit not
+   the node files
+
 ## 0.11.9
 
  * added reindex for only children, need to convert connectivity to swc
