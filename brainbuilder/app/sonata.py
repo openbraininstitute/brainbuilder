@@ -17,18 +17,25 @@ def app():
 @click.option("--mecombo-info", help="Path to TSV file with ME-combo table", default=None)
 @click.option("--population", help="Population name", default="default", show_default=True)
 @click.option("--model-type", help="Type of neurons", required=True)
-@click.option("-o", "--output", help="Path to output HDF5", required=True)
+@click.option("-o", "--output", help="Path to output SONATA nodes", required=True)
 def from_mvd3(mvd3, mecombo_info, population, model_type, output):
     """Convert MVD3 to SONATA nodes"""
-    from brainbuilder.utils.sonata import write_nodes_from_mvd3
+    from brainbuilder.utils import sonata
 
-    write_nodes_from_mvd3(
-        mvd3_path=mvd3,
-        mecombo_info_path=mecombo_info,
-        out_h5_path=output,
-        population=population,
-        model_type=model_type
-    )
+    assert mvd3.endswith('.mvd3'), mvd3 + ' must end with ".mvd3" suffix'
+    sonata.provide_me_info(mvd3, mecombo_info, output, population, model_type)
+
+
+@app.command()
+@click.argument("cells-path")
+@click.option("--mecombo-info", help="Path to TSV file with ME-combo table", default=None)
+@click.option("--model-type", help="Type of neurons", required=True)
+@click.option("-o", "--output", help="Path to output SONATA nodes", required=True)
+def provide_me_info(cells_path, mecombo_info, model_type, output):
+    """Provide SONATA nodes with MorphoElectrical info"""
+    from brainbuilder.utils import sonata
+
+    sonata.provide_me_info(cells_path, mecombo_info, output, model_type=model_type)
 
 
 @app.command()

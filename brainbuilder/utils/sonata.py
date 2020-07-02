@@ -41,17 +41,18 @@ def _add_me_info(cells, mecombo_path):
                 cells.properties[cells.SONATA_DYNAMIC_PROPERTY + prop] = values
 
 
-def write_nodes_from_mvd3(mvd3_path,
-                          mecombo_info_path,
-                          out_h5_path,
-                          population,
-                          model_type='biophysical'):
-    """ Export MVD3 + MEComboInfoFile to SONATA node collection. """
-    cells = CellCollection.load_mvd3(mvd3_path)
-    cells.population_name = population
+def provide_me_info(cells_path,
+                    mecombo_info_path,
+                    out_cells_path,
+                    population=None,
+                    model_type='biophysical'):
+    """ Provides cells collection with ME info. """
+    cells = CellCollection.load(cells_path)
+    if population is not None:
+        cells.population_name = population
     _add_me_info(cells, mecombo_info_path)
     cells.properties['model_type'] = model_type
-    cells.save_sonata(out_h5_path)
+    cells.save(out_cells_path)
 
 
 def _write_edge_group(group, out):

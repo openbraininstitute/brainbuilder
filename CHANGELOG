@@ -1,3 +1,7 @@
+## 0.13.0
+  * Create "sonata.provide_me_info". This action provisions SONATA nodes with ME info.
+  * "sonata.from_mvd3" reuses "sonata.provide_me_info" under the hood.
+
 ## 0.12.1
   * Fixes to sonata functions
   * "assign_emodels2" function now adds the missing biophysical field
