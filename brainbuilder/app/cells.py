@@ -204,6 +204,7 @@ def _assign_atlas_property(cells, prop, atlas, dset):
 
 
 def _place(
+    input_path,
     composition_path,
     mtype_taxonomy_path,
     atlas_url,
@@ -271,7 +272,12 @@ def _place(
     L.info("Done!")
 
     result.index = 1 + np.arange(len(result))
-    return CellCollection.from_dataframe(result)
+    if input_path is None:
+        return CellCollection.from_dataframe(result)
+    input_cells = CellCollection.load(input_path)
+    out_cells = CellCollection.from_dataframe(pd.concat([input_cells.as_dataframe(), result]))
+    out_cells.population_name = input_cells.population_name
+    return out_cells
 
 
 @app.command(short_help="Generate cell positions and me-types")
@@ -293,6 +299,8 @@ def _place(
 @click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
 @click.option("-o", "--output", help="Path to output MVD3 or SONATA. Use .mvd3 file extension for"
                                      " MVD3, otherwise SONATA is used", required=True)
+@click.option("--input", "input_path", default=None, help="Existing cells which are extended with"
+                                                          "the new positioned cells")
 def place(
     composition,
     mtype_taxonomy,
@@ -302,21 +310,19 @@ def place(
     density_factor, soma_placement,
     atlas_property, sort_by, append_hemisphere,
     seed,
-    output
+    output,
+    input_path
 ):
-    """
-    Create CellCollection
+    """Places new cells into an existing cells or creates new cells if no existing were provided."""
 
-    # TODO: fill in the details
-    """
-
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments, too-many-locals
     np.random.seed(seed)
 
     if sort_by is not None:
         sort_by = sort_by.split(",")
 
     cells = _place(
+        input_path,
         composition,
         mtype_taxonomy,
         atlas,

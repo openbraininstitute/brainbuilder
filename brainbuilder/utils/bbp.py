@@ -97,6 +97,7 @@ def assign_emodels(cells, morphdb):
     df = df.sort_index()
 
     result = CellCollection.from_dataframe(df)
+    result.population_name = cells.population_name
 
     return result
 
