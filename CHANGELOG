@@ -1,3 +1,6 @@
+## 0.13.2
+  * Catch duplicate me-combos
+
 ## 0.13.1
   * Add "--input" option to "cells.place"
   * Fix losing of SONATA population name at "cells.assign_emodels"

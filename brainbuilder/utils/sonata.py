@@ -16,20 +16,19 @@ import pandas as pd
 import h5py
 import six
 
-from voxcell import CellCollection
 from bluepy.v2.impl.target import TargetContext
+from voxcell import CellCollection
 
 
 L = logging.getLogger('brainbuilder')
 
 
-def _add_me_info(cells, mecombo_path):
+def _add_me_info(cells, mecombo_info):
+    assert not mecombo_info.duplicated('combo_name').any(), \
+        'Duplicate me-combos, strange ModelMangement run?'
 
-    def usecols(name):
-        """Pick the needed columns."""
-        return name not in ('morph_name', 'layer', 'fullmtype', 'etype')
+    mecombo_info = mecombo_info.set_index('combo_name')
 
-    mecombo_info = pd.read_csv(mecombo_path, sep=r'\s+', usecols=usecols, index_col='combo_name')
     if 'me_combo' in cells.properties:
         mecombo_params = mecombo_info.loc[cells.properties['me_combo']]
         for prop, column in mecombo_params.iteritems():
@@ -50,7 +49,14 @@ def provide_me_info(cells_path,
     cells = CellCollection.load(cells_path)
     if population is not None:
         cells.population_name = population
-    _add_me_info(cells, mecombo_info_path)
+
+    def usecols(name):
+        """Pick the needed columns."""
+        return name not in ('morph_name', 'layer', 'fullmtype', 'etype')
+
+    mecombo_info = pd.read_csv(mecombo_info_path, sep=r'\s+', usecols=usecols)
+    _add_me_info(cells, mecombo_info)
+
     cells.properties['model_type'] = model_type
     cells.save(out_cells_path)
 
