@@ -1,17 +1,17 @@
-import os
+from pathlib import Path
 import shutil
 import tempfile
 import h5py
 
 from morph_tool import diff
 
-from nose.tools import eq_, ok_
+from nose.tools import ok_
 from numpy.testing import assert_allclose, assert_array_equal
 
-# from brainbuilder.utils.reindex_alternative import update_morphologies
+from .. utils import TEST_DATA_PATH
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), 'data', 'reindex')
-MORPHS_PATH = os.path.join(DATA_PATH, 'morphs')
+DATA_PATH = TEST_DATA_PATH / 'sonata' / 'reindex'
+MORPHS_PATH = DATA_PATH / 'morphs'
 
 
 def update_morphologies(h5_morphs, nodes, population, output, edges):
@@ -21,7 +21,7 @@ def update_morphologies(h5_morphs, nodes, population, output, edges):
         check=True, timeout=5 * 60)
     subprocess.run(
         ['brainbuilder', 'sonata', 'update-edge-population',
-         '--h5-updates', output + '/h5_updates.json', '--nodes', nodes, '--', edges[0]],
+         '--h5-updates', output / 'h5_updates.json', '--nodes', nodes, '--', edges[0]],
         check=True, timeout=5 * 60)
     subprocess.run(
         ['brainbuilder', 'sonata', 'update-edge-pos',
@@ -31,32 +31,33 @@ def update_morphologies(h5_morphs, nodes, population, output, edges):
 
 def test__update_morphologies():
     temp_dir = tempfile.mkdtemp()
-    output_dir = os.path.join(temp_dir, 'output')
-    temp_morph_dir = os.path.join(temp_dir, 'morph')
-    os.mkdir(temp_morph_dir)
+    temp_dir = Path(temp_dir)
+    output_dir = temp_dir / 'output'
+    temp_morph_dir = temp_dir / 'morph'
+    temp_morph_dir.mkdir()
     try:
-        shutil.copy(os.path.join(DATA_PATH, 'edges.h5'), temp_dir)
-        shutil.copy(os.path.join(MORPHS_PATH, 'three_child_unmerged.h5'), temp_morph_dir)
-        shutil.copy(os.path.join(MORPHS_PATH, 'two_child_unmerged.h5'), temp_morph_dir)
-        # shutil.copy(os.path.join(MORPHS_PATH, 'three_child_unmerged.asc'), temp_dir)
-        # shutil.copy(os.path.join(MORPHS_PATH, 'two_child_unmerged.asc'), temp_dir)
-        edges_copy = os.path.join(temp_dir, 'edges.h5')
+        shutil.copy(str(DATA_PATH / 'edges.h5'), temp_dir)
+        shutil.copy(str(MORPHS_PATH / 'three_child_unmerged.h5'), str(temp_morph_dir))
+        shutil.copy(str(MORPHS_PATH / 'two_child_unmerged.h5'), str(temp_morph_dir))
+        # shutil.copy(str(MORPHS_PATH / 'three_child_unmerged.asc'), temp_dir)
+        # shutil.copy(str(MORPHS_PATH / 'two_child_unmerged.asc'), temp_dir)
+        edges_copy = temp_dir / 'edges.h5'
         update_morphologies(
             temp_morph_dir,
-            os.path.join(DATA_PATH, 'nodes.h5'),
+            DATA_PATH / 'nodes.h5',
             'default',
             output_dir,
             [edges_copy],
         )
-        three_child_expected = os.path.join(MORPHS_PATH, 'three_child_merged.h5')
-        three_child_updated = os.path.join(output_dir, 'three_child_unmerged.h5')
+        three_child_expected = MORPHS_PATH / 'three_child_merged.h5'
+        three_child_updated = output_dir / 'three_child_unmerged.h5'
         with h5py.File(three_child_expected) as exp, h5py.File(three_child_updated) as act:
             assert_array_equal(exp['structure'][:], act['structure'][:])
             assert_allclose(exp['points'][:], act['points'][:])
         ok_(not diff(three_child_expected, three_child_updated))
 
-        two_child_expected = os.path.join(MORPHS_PATH, 'two_child_merged.h5')
-        two_child_updated = os.path.join(output_dir, 'two_child_unmerged.h5')
+        two_child_expected = MORPHS_PATH / 'two_child_merged.h5'
+        two_child_updated = output_dir / 'two_child_unmerged.h5'
         with h5py.File(two_child_expected) as exp, h5py.File(two_child_updated) as act:
             assert_array_equal(exp['structure'][:], act['structure'][:])
             assert_allclose(exp['points'][:], act['points'][:])

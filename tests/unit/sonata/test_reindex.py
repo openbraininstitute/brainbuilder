@@ -1,24 +1,23 @@
 import os
 import shutil
 import tempfile
-
 from contextlib import contextmanager
 from copy import deepcopy
 
 import h5py
 import numpy as np
 import pandas as pd
+
 from numpy.testing import assert_allclose
-
 from nose.tools import eq_, ok_
-from brainbuilder.utils import sonata_reindex
-from brainbuilder.utils.sonata_reindex import FIRST_POINT_ID, PARENT_GROUP_ID
+
+from brainbuilder.utils.sonata import reindex
+from brainbuilder.utils.sonata.reindex import FIRST_POINT_ID, PARENT_GROUP_ID
+
+from .. utils import TEST_DATA_PATH
 
 
-BASEDIR = os.path.dirname(os.path.abspath(__file__))
-DATA = os.path.join(BASEDIR, 'data/reindex')
-
-
+DATA_PATH = TEST_DATA_PATH / 'sonata' / 'reindex'
 STRUCTURE_SOMA_SINGLE_CHILD = np.array([[0, 1, -1],
                                         [3, 2, 0],
                                         [5, 2, 0],
@@ -62,7 +61,7 @@ STRUCTURE_LEAF_SINGLE_CHILDREN = np.array([[0, 1, -1],
                                            [17, 2, 7], # *
                                            ])
 
-# this is the same as DATA/morphs/two_child_unmerged.h5
+# this is the same as DATA_PATH/morphs/two_child_unmerged.h5
 # copied here so it can be annotated w/ single parents
 STRUCTURE_TWO_CHILD_UNMERGED = np.array([[0, 1, -1],   # 0
                                          [1, 3, 0],    # 1 *
@@ -74,7 +73,7 @@ STRUCTURE_TWO_CHILD_UNMERGED = np.array([[0, 1, -1],   # 0
                                          [16, 3, 6],   # 7 *
                                          [18, 3, 7]])  # 8 *
 
-# this is the same as DATA/morphs/three_child_unmerged.h5
+# this is the same as DATA_PATH/morphs/three_child_unmerged.h5
 STRUCTURE_THREE_CHILD_UNMERGED = np.array([[0, 1, -1],  # 0
                                            [1, 3, 0],   # 1
                                            [3, 3, 1],   # 2 *
@@ -99,51 +98,51 @@ def tempdir(prefix):
 
 
 def test__get_only_children():
-    ret = sonata_reindex._get_only_children(STRUCTURE_SOMA_SINGLE_CHILD[:, PARENT_GROUP_ID])
+    ret = reindex._get_only_children(STRUCTURE_SOMA_SINGLE_CHILD[:, PARENT_GROUP_ID])
     ok_(not len(ret))  # first section is not collapsed
 
-    ret = sonata_reindex._get_only_children(STRUCTURE_SOMA_SINGLE_CHILDREN[:, PARENT_GROUP_ID])
+    ret = reindex._get_only_children(STRUCTURE_SOMA_SINGLE_CHILDREN[:, PARENT_GROUP_ID])
     assert_allclose(ret, [2, 3, ])
 
-    ret = sonata_reindex._get_only_children(STRUCTURE_MID_SINGLE_CHILDREN[:, PARENT_GROUP_ID])
+    ret = reindex._get_only_children(STRUCTURE_MID_SINGLE_CHILDREN[:, PARENT_GROUP_ID])
     assert_allclose(ret, [6, 7, 8, 10, 12])
 
-    ret = sonata_reindex._get_only_children(STRUCTURE_LEAF_SINGLE_CHILDREN[:, PARENT_GROUP_ID])
+    ret = reindex._get_only_children(STRUCTURE_LEAF_SINGLE_CHILDREN[:, PARENT_GROUP_ID])
     assert_allclose(ret, [2, 6, 7, 8])
 
-    ret = sonata_reindex._get_only_children(STRUCTURE_TWO_CHILD_UNMERGED[:, PARENT_GROUP_ID])
+    ret = reindex._get_only_children(STRUCTURE_TWO_CHILD_UNMERGED[:, PARENT_GROUP_ID])
     assert_allclose(ret, [2, 3, 5, 7, 8])
 
-    ret = sonata_reindex._get_only_children(STRUCTURE_THREE_CHILD_UNMERGED[:, PARENT_GROUP_ID])
+    ret = reindex._get_only_children(STRUCTURE_THREE_CHILD_UNMERGED[:, PARENT_GROUP_ID])
     assert_allclose(ret, [2, 4, 6, 9, 11])
 
 
 def test__only_child_removal():
-    new_parents, new_segment_offset = sonata_reindex._only_child_removal(
+    new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_SOMA_SINGLE_CHILDREN[:, PARENT_GROUP_ID],
         STRUCTURE_SOMA_SINGLE_CHILDREN[:, FIRST_POINT_ID])
     eq_(new_parents, [2, 3, ])
     eq_(new_segment_offset, {2: 1, 3: 2})
 
-    new_parents, new_segment_offset = sonata_reindex._only_child_removal(
+    new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_MID_SINGLE_CHILDREN[:, PARENT_GROUP_ID],
         STRUCTURE_MID_SINGLE_CHILDREN[:, FIRST_POINT_ID])
     eq_(new_parents, [6, 7, 8, 10, 12, ])
     eq_(new_segment_offset, {6: 1, 7: 2, 8: 3, 10: 1, 12: 1, })
 
-    new_parents, new_segment_offset = sonata_reindex._only_child_removal(
+    new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_LEAF_SINGLE_CHILDREN[:, PARENT_GROUP_ID],
         STRUCTURE_LEAF_SINGLE_CHILDREN[:, FIRST_POINT_ID])
     eq_(new_parents, [2, 6, 7, 8, ])
     eq_(new_segment_offset, {2: 1, 6: 1, 7: 2, 8: 3, })
 
-    new_parents, new_segment_offset = sonata_reindex._only_child_removal(
+    new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_TWO_CHILD_UNMERGED[:, PARENT_GROUP_ID],
         STRUCTURE_TWO_CHILD_UNMERGED[:, FIRST_POINT_ID])
     eq_(new_parents, [2, 3, 5, 7, 8, ])
     eq_(new_segment_offset, {2: (5 - 1 - 1), 3: 3 + 2, 5: 1, 7: 1, 8: 1 + 1})
 
-    new_parents, new_segment_offset = sonata_reindex._only_child_removal(
+    new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_THREE_CHILD_UNMERGED[:, PARENT_GROUP_ID],
         STRUCTURE_THREE_CHILD_UNMERGED[:, FIRST_POINT_ID])
     eq_(new_parents, [2, 4, 6, 9, 11])
@@ -154,7 +153,7 @@ def test__only_child_removal():
 def test__update_structure_and_points():
     def test(structure, new_parents):
         points = np.vstack([np.arange(structure[-1, 0] + 5)] * 3).T
-        new_structure, new_points = sonata_reindex._update_structure_and_points(
+        new_structure, new_points = reindex._update_structure_and_points(
             structure, points, new_parents)
         eq_(len(new_parents), len(structure) - len(new_structure))
         eq_(len(new_parents), len(points) - len(new_points))
@@ -166,7 +165,7 @@ def test__update_structure_and_points():
 def test__update_section_ids():
     section_id = np.array([], dtype=np.int)
     segment_id = np.array([], dtype=np.int)
-    new_section_id, new_segment_id = sonata_reindex._update_section_and_segment_ids(
+    new_section_id, new_segment_id = reindex._update_section_and_segment_ids(
         section_id, segment_id, {'new_parents': {}, 'new_segment_offset': {}, })
     eq_(len(section_id), 0)
     eq_(len(segment_id), 0)
@@ -176,7 +175,7 @@ def test__update_section_ids():
     updates = {'new_parents': [2, 3, ],
                'new_segment_offset': {2: 2, 3: 4},
                }
-    new_section_id, new_segment_id = sonata_reindex._update_section_and_segment_ids(
+    new_section_id, new_segment_id = reindex._update_section_and_segment_ids(
         section_id, segment_id, updates)
     eq_(list(new_section_id), [0, 1, 1, 1, 2, ])
     eq_(list(new_segment_id), [9, 10, 11 + 2, 12 + 4, 13])
@@ -194,13 +193,13 @@ def test__apply_to_edges():
     edges_orig = deepcopy(edges)
 
     #run w/ no changes ids
-    sonata_reindex._apply_to_edges(np.array([], np.int), updates, edges)
+    reindex._apply_to_edges(np.array([], np.int), updates, edges)
 
     for name in names:
         assert_allclose(edges_orig['0'][name], edges['0'][name])
 
     #run w/ missing ids, nothing will match, so no changes
-    sonata_reindex._apply_to_edges(np.array([1], np.int), updates, edges)
+    reindex._apply_to_edges(np.array([1], np.int), updates, edges)
 
     for name in names:
         assert_allclose(edges_orig['0'][name], edges['0'][name])
@@ -218,7 +217,7 @@ def test__apply_to_edges():
     edges_orig = deepcopy(edges)
 
     updates = {'new_parents': {}, 'new_segment_offset': {}, }
-    sonata_reindex._apply_to_edges(np.array([1], np.int), updates, edges)
+    reindex._apply_to_edges(np.array([1], np.int), updates, edges)
 
     #no changes; updates empty
     for name in names:
@@ -228,7 +227,7 @@ def test__apply_to_edges():
 
     updates = {'new_parents': {1: []}, 'new_segment_offset': {1: 10}, }
     ids = np.array([1], np.int)
-    sonata_reindex._apply_to_edges(ids, updates, edges)
+    reindex._apply_to_edges(ids, updates, edges)
 
     # only afferent changes, since ids == 1
     assert_allclose(edges['0']['afferent_section_id'], [0, 0, 0, 0, 1, 2, ])
@@ -241,11 +240,11 @@ def test__apply_to_edges():
     assert_allclose(edges_orig['source_node_id'], edges['source_node_id'])
 
 
-def test_sonata_reindex():
-    with tempdir('test_sonata_reindex') as tmp:
+def test_reindex():
+    with tempdir('test_reindex') as tmp:
         temp_dir = os.path.join(tmp, 'reindex')
-        morphs_path = os.path.join(DATA, 'morphs')
-        h5_updates = sonata_reindex.generate_h5_updates(morphs_path)
+        morphs_path = str(DATA_PATH / 'morphs')
+        h5_updates = reindex.generate_h5_updates(morphs_path)
         eq_(len(h5_updates), 2)
 
         #{'two_child_unmerged.h5':
@@ -254,7 +253,7 @@ def test_sonata_reindex():
         # {'new_parents': [2, 4, 6, 9, 11], 'new_segment_offset': {2: 1, 4: 1, 6: 1, 9: 1, 11: 1}}}
 
         new_morph_path = os.path.join(temp_dir, 'morphs')
-        sonata_reindex.write_new_h5_morphs(h5_updates, morphs_path, new_morph_path)
+        reindex.write_new_h5_morphs(h5_updates, morphs_path, new_morph_path)
         for path in ('three_child_merged.h5',
                      'three_child_unmerged.h5',
                      'two_child_merged.h5',
@@ -265,13 +264,13 @@ def test_sonata_reindex():
         #TODO: h5diff three_child_merged.h5 three_child_unmerged.h5
 
         edge = os.path.join(temp_dir, 'edges.h5')
-        shutil.copy(os.path.join(DATA, 'edges.h5'), edge)
+        shutil.copy(str(DATA_PATH / 'edges.h5'), edge)
         morphologies = pd.Series(['two_child_unmerged', 'two_child_unmerged', 'three_child_unmerged'],
                            #id:         0                   1                     2
                                  name='morphology')
         population = 'default'
 
-        sonata_reindex.apply_edge_updates(morphologies, edge, h5_updates, population)
+        reindex.apply_edge_updates(morphologies, edge, h5_updates, population)
 
         '''
         Looking at results of new_parents:
@@ -307,7 +306,7 @@ def test_sonata_reindex():
             eq_(list(h5['edges/default/0/afferent_segment_id'][[0, 2, 4, 5, 6, 8, 9, 10]]),
                 [2, 1, 1, 1, 0, 5, 1, 1])
 
-        sonata_reindex.write_sonata_pos(new_morph_path, morphologies, population, [edge, ])
+        reindex.write_sonata_pos(new_morph_path, morphologies, population, [edge, ])
 
         '''
         position  id afferent_section_pos afferent_section_pos

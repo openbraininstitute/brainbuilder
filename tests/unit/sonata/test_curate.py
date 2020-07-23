@@ -8,8 +8,9 @@ import numpy as np
 from brainbuilder.utils.sonata import curate
 
 import nose.tools as nt
+from .. utils import TEST_DATA_PATH
 
-DATA_PATH = Path(Path(__file__).parent, 'data/sonata/curate')
+DATA_PATH = TEST_DATA_PATH / 'sonata' / 'curate'
 NODES_FILE = DATA_PATH / 'nodes.h5'
 EDGES_FILE = DATA_PATH / 'edges.h5'
 
