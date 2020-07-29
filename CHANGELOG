@@ -1,4 +1,5 @@
 ## 0.14.0
+  * Add 'functional' tox env for functional tests.
   * Add a new package `utils.sonata`. Move all SONATA related utils there.
   * Add a new module `utils.sonata.curate` to curate/fix existing SONATA circuits.
 
