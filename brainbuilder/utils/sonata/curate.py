@@ -119,6 +119,7 @@ def set_group_attribute(file, root, population, group, attr_name, attr_value, ov
         attr_value (any): attribute default value. If it is of string type then '@library' group
             will be used to store it.
     """
+    # pylint: disable=too-many-locals
     group_path = f'{root}/{population}/{group}'
     L.debug('_set_group_attribute of "%s" %s -> (%s)', group_path, attr_name, attr_value)
     with h5py.File(file, 'r+') as h5f:
@@ -143,7 +144,9 @@ def set_group_attribute(file, root, population, group, attr_name, attr_value, ov
         #  lookup?
         if attr_name in group_h5 and overwrite:
             del group_h5[attr_name]
-        group_h5.create_dataset(attr_name, fillvalue=attr_value, shape=(count,))
+        # to correctly detect dtype otherwise always float array is created
+        dt = np.array([attr_value]).dtype
+        group_h5.create_dataset(attr_name, fillvalue=attr_value, shape=(count,), dtype=dt)
 
 
 def rewire_edge_population(

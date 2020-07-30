@@ -86,6 +86,7 @@ def test_set_nodes_attribute():
         with h5py.File(nodes_copy_file) as h5f:
             assert ['biophysical'] == h5f['nodes/default/0/@library/model_type'][:].tolist()
             model_type = np.asarray(h5f['nodes/default/0/model_type'])
+            assert model_type.dtype == np.int
             assert (model_type == 0).all()
 
 
@@ -95,6 +96,7 @@ def test_set_edges_attribute():
             edges_copy_file, 'edges', 'default', '0', 'syn_weight', 2.2, True)
         with h5py.File(edges_copy_file) as h5f:
             syn_weight = np.asarray(h5f['edges/default/0/syn_weight'])
+            assert syn_weight.dtype == np.float
             assert (syn_weight == 2.2).all()
 
 
