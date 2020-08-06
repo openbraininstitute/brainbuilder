@@ -299,7 +299,9 @@ def _calculate_section_position(section_lengths, section_ids, segment_ids, offse
     section_pos = (df['offset'] + df['cumulative_length']) / df['section_length']
     section_pos[np.isnan(section_pos)] = 0.
 
-    assert 0. <= np.max(section_pos) <= 1.00001, 'pos should be between [0, 1]'
+    max_pos = np.max(section_pos.to_numpy())
+    if not 0. <= max_pos <= 1.00001:
+        L.warning('pos %s should be between [0, 1]', max_pos)
 
     section_pos = np.clip(section_pos, 0., 1.)
 
@@ -374,4 +376,7 @@ def write_sonata_pos(morph_path, morphologies, population, edges):
         with h5py.File(edge, 'r+') as h5:
             for morphology, ids in morphologies.groupby(morphologies):
                 section_lengths = _morph_section_lengths(morph_path, morphology)
-                _update_pos(h5['edges'][population], section_lengths, ids)
+                if ids.empty:
+                    L.debug('No nodes for %s, skipping', morphology)
+                else:
+                    _update_pos(h5['edges'][population], section_lengths, ids)
