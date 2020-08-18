@@ -3,6 +3,7 @@
   * Add a new package `utils.sonata`. Move all SONATA related utils there
   * Add a new module `utils.sonata.curate` to curate/fix existing SONATA circuits
   * Fix updating edge positions during reindex of `utils.sonata.reindex`
+  * Allow None `mecombo_info_path` in `utils.sonata.convert.provide_me_info`
 
 ## 0.13.2
   * Catch duplicate me-combos

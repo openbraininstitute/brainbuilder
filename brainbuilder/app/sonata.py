@@ -14,28 +14,28 @@ def app():
 
 @app.command()
 @click.argument("mvd3")
+@click.option("-o", "--output", help="Path to output SONATA nodes", required=True)
+@click.option("--model-type", help="Type of neurons", required=True)
 @click.option("--mecombo-info", help="Path to TSV file with ME-combo table", default=None)
 @click.option("--population", help="Population name", default="default", show_default=True)
-@click.option("--model-type", help="Type of neurons", required=True)
-@click.option("-o", "--output", help="Path to output SONATA nodes", required=True)
-def from_mvd3(mvd3, mecombo_info, population, model_type, output):
+def from_mvd3(mvd3, output, model_type, mecombo_info, population):
     """Convert MVD3 to SONATA nodes"""
     from brainbuilder.utils.sonata import convert
 
     assert mvd3.endswith('.mvd3'), mvd3 + ' must end with ".mvd3" suffix'
-    convert.provide_me_info(mvd3, mecombo_info, output, population, model_type)
+    convert.provide_me_info(mvd3, output, model_type, mecombo_info, population)
 
 
 @app.command()
 @click.argument("cells-path")
-@click.option("--mecombo-info", help="Path to TSV file with ME-combo table", default=None)
-@click.option("--model-type", help="Type of neurons", required=True)
 @click.option("-o", "--output", help="Path to output SONATA nodes", required=True)
-def provide_me_info(cells_path, mecombo_info, model_type, output):
+@click.option("--model-type", help="Type of neurons", required=True)
+@click.option("--mecombo-info", help="Path to TSV file with ME-combo table", default=None)
+def provide_me_info(cells_path, output, model_type, mecombo_info):
     """Provide SONATA nodes with MorphoElectrical info"""
     from brainbuilder.utils.sonata import convert
 
-    convert.provide_me_info(cells_path, mecombo_info, output, model_type=model_type)
+    convert.provide_me_info(cells_path, output, model_type, mecombo_info)
 
 
 @app.command()

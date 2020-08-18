@@ -41,10 +41,10 @@ def _add_me_info(cells, mecombo_info):
 
 
 def provide_me_info(cells_path,
-                    mecombo_info_path,
                     out_cells_path,
-                    population=None,
-                    model_type='biophysical'):
+                    model_type='biophysical',
+                    mecombo_info_path=None,
+                    population=None):
     """ Provides cells collection with ME info. """
     cells = CellCollection.load(cells_path)
     if population is not None:
@@ -54,8 +54,9 @@ def provide_me_info(cells_path,
         """Pick the needed columns."""
         return name not in ('morph_name', 'layer', 'fullmtype', 'etype')
 
-    mecombo_info = pd.read_csv(mecombo_info_path, sep=r'\s+', usecols=usecols)
-    _add_me_info(cells, mecombo_info)
+    if mecombo_info_path is not None:
+        mecombo_info = pd.read_csv(mecombo_info_path, sep=r'\s+', usecols=usecols)
+        _add_me_info(cells, mecombo_info)
 
     cells.properties['model_type'] = model_type
     cells.save(out_cells_path)
