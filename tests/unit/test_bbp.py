@@ -1,6 +1,4 @@
 import os
-import tempfile
-import shutil
 
 try:
     from cStringIO import StringIO
@@ -8,14 +6,12 @@ except ImportError:
     from io import StringIO
 
 from nose.tools import eq_, raises
-from mock import patch
 
 import numpy as np
 import pandas as pd
-from numpy.testing import assert_equal, assert_almost_equal
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 
-from voxcell import CellCollection, VoxelData
+from voxcell import CellCollection
 
 from brainbuilder.exceptions import BrainBuilderError
 from brainbuilder.utils import bbp

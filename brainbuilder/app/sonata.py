@@ -165,3 +165,14 @@ def update_edge_pos(morph_path, population, nodes, edges):
     morphologies = CellCollection.load(nodes).as_dataframe()['morphology']
     morphologies.index = morphologies.index - 1
     reindex.write_sonata_pos(morph_path, morphologies, population, edges)
+
+
+@app.command()
+@click.option("--attribute", required=True, help="Name of attribute to split on")
+@click.option("--nodes", required=True, type=REQUIRED_PATH, help="Input node file")
+@click.option("--edges", required=True, type=REQUIRED_PATH, help="Input edge file")
+@click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
+def split_population(attribute, nodes, edges, output):
+    '''Split a single Node and Edges file into multiple nodes and edges based on attribute'''
+    from brainbuilder.utils.sonata import split_population as module
+    module.split_population(output, attribute, nodes, edges)

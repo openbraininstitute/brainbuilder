@@ -5,7 +5,7 @@ import logging
 import click
 import h5py
 import numpy as np
-
+from brainbuilder import utils
 
 L = logging.getLogger(__name__)
 
@@ -34,21 +34,6 @@ def app():
     """ Tools for working with SYN2 """
 
 
-def _create_appendable_dataset(h5_root, name, dtype, chunksize=1000):
-    '''create an h5 appendable dataset at `h5_root` w/ `name`'''
-    h5_root.create_dataset(name,
-                           dtype=dtype,
-                           chunks=(chunksize, ),
-                           shape=(0, ),
-                           maxshape=(None, ))
-
-
-def _append_to_dataset(dset, values):
-    '''append `values` to `dset`, which should be an appendable dataset'''
-    dset.resize(dset.shape[0] + len(values), axis=0)
-    dset[-len(values):] = values
-
-
 def _get_property_dtypes(path):
     '''get the dtypes of all the properties in `path`
 
@@ -70,7 +55,7 @@ def _concat_h5(output, sources):
 
         properties = _get_property_dtypes(sources[0])
         for name, dtype in properties.items():
-            _create_appendable_dataset(output_properties, name, dtype)
+            utils.create_appendable_dataset(output_properties, name, dtype)
 
         for source in sources:
             L.debug('Opening source: %s', source)
@@ -78,7 +63,7 @@ def _concat_h5(output, sources):
                 prop = h5[PROPERTIES_PATH]
                 for name in properties:
                     L.debug('Copying property[%s] %s', source, name)
-                    _append_to_dataset(output_properties[name], prop[name])
+                    utils.append_to_dataset(output_properties[name], prop[name])
 
 
 def _check_syn2_invariants(path, population, expected_properties, afferent_index=True):

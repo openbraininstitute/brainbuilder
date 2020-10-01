@@ -27,7 +27,7 @@ import json
 import numbers
 import os
 
-from collections import Mapping
+from collections.abc import Mapping
 
 import click
 import numpy as np

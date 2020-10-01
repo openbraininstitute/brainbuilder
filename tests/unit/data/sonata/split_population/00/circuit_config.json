@@ -1,0 +1,31 @@
+{
+  "manifest": {
+    "$BASE_DIR": "."
+  },
+  "networks": {
+    "nodes": [
+      {
+        "nodes_file": "$BASE_DIR/nodes_L2_X.h5",
+        "node_types_file": null
+      },
+      {
+        "nodes_file": "$BASE_DIR/nodes_L6_Y.h5",
+        "node_types_file": null
+      }
+    ],
+    "edges": [
+      {
+        "edges_file": "$BASE_DIR/edges_L2_X__L6_Y__chemical.h5",
+        "edge_types_file": null
+      },
+      {
+        "edges_file": "$BASE_DIR/edges_L6_Y__L2_X__chemical.h5",
+        "edge_types_file": null
+      },
+      {
+        "edges_file": "$BASE_DIR/edges_L6_Y.h5",
+        "edge_types_file": null
+      }
+    ]
+  }
+}

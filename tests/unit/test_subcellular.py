@@ -14,7 +14,7 @@ import brainbuilder.subcellular as sub
 
 
 def assert_h5_equal(ref, testee):
-    cmd = ['/usr/bin/h5diff', ref, testee]
+    cmd = ['h5diff', ref, testee]
     nt.assert_equal(subprocess.call(cmd), 0)
 
 

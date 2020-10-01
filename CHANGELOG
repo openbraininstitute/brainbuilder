@@ -1,5 +1,6 @@
 ## 0.15.0
   * Drop python 2 support
+  * Add 'split_population' SONATA command to break monolithic node/edge files into smaller version
 
 ## 0.14.1
   * Fix bugs du to voxcell >= 3.0.0

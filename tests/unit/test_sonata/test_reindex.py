@@ -1,7 +1,5 @@
 import os
 import shutil
-import tempfile
-from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 
@@ -14,6 +12,7 @@ from nose.tools import eq_, ok_
 
 from brainbuilder.utils.sonata import reindex
 from brainbuilder.utils.sonata.reindex import FIRST_POINT_ID, PARENT_GROUP_ID
+import utils
 
 
 TEST_DATA_PATH = Path(__file__).parent.parent / 'data'
@@ -87,14 +86,6 @@ STRUCTURE_THREE_CHILD_UNMERGED = np.array([[0, 1, -1],  # 0
                                            [19, 3, 2],  # 10
                                            [21, 3, 10], # 11 *
                                            ])
-
-@contextmanager
-def tempdir(prefix):
-    temp_dir = tempfile.mkdtemp(prefix=prefix)
-    try:
-        yield temp_dir
-    finally:
-        shutil.rmtree(temp_dir)
 
 
 def test__get_only_children():
@@ -241,7 +232,7 @@ def test__apply_to_edges():
 
 
 def test_reindex():
-    with tempdir('test_reindex') as tmp:
+    with utils.tempdir('test_reindex') as tmp:
         temp_dir = os.path.join(tmp, 'reindex')
         morphs_path = str(DATA_PATH / 'morphs')
         h5_updates = reindex.generate_h5_updates(morphs_path)
