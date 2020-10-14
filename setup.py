@@ -31,6 +31,7 @@ BASE_REQUIRES = [
 ]
 
 SUBCELLULAR_REQUIRES = [
+    'attrs<20',   # to use entity-management<1.0, need to use old attrs
     'entity-management>=0.1.11,<1.0',
     'subcellular-querier>=0.0.3',
     'tables>=3.4',

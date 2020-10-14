@@ -8,8 +8,7 @@ from morph_tool import diff
 from nose.tools import ok_
 from numpy.testing import assert_allclose, assert_array_equal
 
-from .. utils import TEST_DATA_PATH
-
+TEST_DATA_PATH = Path(__file__).parent.parent / 'data'
 DATA_PATH = TEST_DATA_PATH / 'sonata' / 'reindex'
 MORPHS_PATH = DATA_PATH / 'morphs'
 

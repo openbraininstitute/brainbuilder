@@ -3,6 +3,7 @@ import shutil
 import tempfile
 from contextlib import contextmanager
 from copy import deepcopy
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -14,9 +15,8 @@ from nose.tools import eq_, ok_
 from brainbuilder.utils.sonata import reindex
 from brainbuilder.utils.sonata.reindex import FIRST_POINT_ID, PARENT_GROUP_ID
 
-from .. utils import TEST_DATA_PATH
 
-
+TEST_DATA_PATH = Path(__file__).parent.parent / 'data'
 DATA_PATH = TEST_DATA_PATH / 'sonata' / 'reindex'
 STRUCTURE_SOMA_SINGLE_CHILD = np.array([[0, 1, -1],
                                         [3, 2, 0],

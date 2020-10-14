@@ -50,4 +50,5 @@ def test_provide_me_info():
             'a': [1, 2],
             'model_type': ['biophysical', 'biophysical']},
             index=output_cells_df.index)
-        assert_frame_equal(output_cells_df, expected_df)
+        assert_frame_equal(output_cells_df, expected_df,
+                           check_like=True)  # ignore column ordering
