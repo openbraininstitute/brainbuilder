@@ -19,7 +19,6 @@ import six
 from bluepy.v2.impl.target import TargetContext
 from voxcell import CellCollection
 
-
 L = logging.getLogger('brainbuilder')
 
 
@@ -179,7 +178,25 @@ def write_network_config(base_dir,
                          nodes_dir, nodes, node_sets,
                          edges_dir, edges_suffix, edges,
                          output_path):
-    """ Write SONATA network config """
+    """Write SONATA network config to ``output_path``.
+
+    if a relative path is used for any filepath argument then it will be prepended with a
+    corresponding SONATA path. For example ``morph_dir`` will be prepended with ``base_dir``. If an
+    absolute path is used then it will be used as is.
+
+    Args:
+        base_dir (str): $BASE_DIR of the written config
+        morph_dir (str): 'morphologies_dir' of the written config
+        emodel_dir (str): 'biophysical_neuron_models_dir' of the written config
+        nodes_dir (str): folder that would contain all nodes of the written config network
+        nodes (list): list of paths to nodes files.
+        node_sets (str): 'node_sets_file' of the written config
+        edges_dir (str): folder that would contain all edges of the written config network
+        edges_suffix (str): suffix to append to edges files
+        edges (list): list of paths to edges files.
+        output_path (str): path to a file where to write the config
+    """
+
     # pylint: disable=too-many-arguments
     content = OrderedDict()
     content['manifest'] = {

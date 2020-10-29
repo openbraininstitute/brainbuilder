@@ -50,19 +50,19 @@ def test__update_morphologies():
         )
         three_child_expected = MORPHS_PATH / 'three_child_merged.h5'
         three_child_updated = output_dir / 'three_child_unmerged.h5'
-        with h5py.File(three_child_expected) as exp, h5py.File(three_child_updated) as act:
+        with h5py.File(three_child_expected, 'r') as exp, h5py.File(three_child_updated, 'r') as act:
             assert_array_equal(exp['structure'][:], act['structure'][:])
             assert_allclose(exp['points'][:], act['points'][:])
         ok_(not diff(three_child_expected, three_child_updated))
 
         two_child_expected = MORPHS_PATH / 'two_child_merged.h5'
         two_child_updated = output_dir / 'two_child_unmerged.h5'
-        with h5py.File(two_child_expected) as exp, h5py.File(two_child_updated) as act:
+        with h5py.File(two_child_expected, 'r') as exp, h5py.File(two_child_updated, 'r') as act:
             assert_array_equal(exp['structure'][:], act['structure'][:])
             assert_allclose(exp['points'][:], act['points'][:])
         ok_(not diff(two_child_expected, two_child_updated))
 
-        with h5py.File(edges_copy) as h5:
+        with h5py.File(edges_copy, 'r') as h5:
             grp = h5['/edges/default/0']
             assert_array_equal(grp['efferent_section_id'][:], [1,3,1,1, 2,3,3,1, 5,1,3,2])
             assert_allclose(grp['efferent_section_pos'][:], [2./3,4./7,0,1./6, .5,5.5/7,0,.25, 1,.4,.25,.75])
