@@ -16,7 +16,7 @@ VERSION = imp.load_source("brainbuilder.version", "brainbuilder/version.py").VER
 BASE_REQUIRES = [
     'click>=7.0,<8.0',
     'future>=0.16',
-    'h5py>=2.6',
+    'h5py>=3.1.0',
     'lxml>=3.3',
     'numpy>=1.9',
     'pandas>=0.17',
@@ -26,7 +26,7 @@ BASE_REQUIRES = [
     'tqdm>=4.0',
 ] + [
     'bluepy>=0.13.0',
-    'voxcell[sonata]>=2.7.1,<3.0',
+    'voxcell>=3.0.0',
     'morph-tool>=0.2.3',
 ]
 

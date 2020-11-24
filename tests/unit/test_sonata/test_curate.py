@@ -84,7 +84,7 @@ def test_set_nodes_attribute():
         curate.set_group_attribute(
             nodes_copy_file, 'nodes', 'default', '0', 'model_type', 'biophysical')
         with h5py.File(nodes_copy_file, 'r') as h5f:
-            assert ['biophysical'] == h5f['nodes/default/0/@library/model_type'][:].tolist()
+            assert [b'biophysical'] == h5f['nodes/default/0/@library/model_type'][:].tolist()
             model_type = np.asarray(h5f['nodes/default/0/model_type'])
             assert model_type.dtype == np.int
             assert (model_type == 0).all()
@@ -122,7 +122,7 @@ def test_create_projection_source_nodes():
         assert source_nodes_file.stem == 'nodes_projections'
         assert ['projections'] == curate.get_population_names(source_nodes_file)
         with h5py.File(source_nodes_file, 'r') as h5f:
-            assert ['virtual', 'virtual'] == h5f['/nodes/projections/0/model_type'][:].tolist()
+            assert [b'virtual', b'virtual'] == h5f['/nodes/projections/0/model_type'][:].tolist()
 
 
 def test_merge_h5_files():

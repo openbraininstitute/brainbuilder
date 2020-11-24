@@ -9,7 +9,9 @@ import click
 import numpy as np
 from six import iteritems
 
-from voxcell import build, math_utils, VoxelData
+from voxcell import math_utils, VoxelData
+
+from brainbuilder.masks import regular_convex_polygon_mask_from_side
 
 L = logging.getLogger('brainbuilder')
 
@@ -33,7 +35,7 @@ def _compact(mask):
 
 def _build_2D_mosaic(width, hex_side, voxel_side):
     """Build 2D matrix representing O<K> mosaic."""
-    hexagon = _compact(build.regular_convex_polygon_mask_from_side(hex_side, 6, voxel_side))
+    hexagon = _compact(regular_convex_polygon_mask_from_side(hex_side, 6, voxel_side))
     w, h = hexagon.shape
 
     hex_center = {

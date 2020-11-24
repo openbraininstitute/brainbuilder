@@ -134,7 +134,7 @@ def update_morphologies(h5_morphs, output):
 def update_edge_population(h5_updates, nodes, population, edges):
     '''Given h5_updates from removing single children, update synapses'''
     from brainbuilder.utils.sonata import reindex
-    from voxcell.sonata import NodePopulation
+    from voxcell import CellCollection
 
     with open(h5_updates, 'r') as fd:
         h5_updates = json.load(fd)
@@ -143,7 +143,8 @@ def update_edge_population(h5_updates, nodes, population, edges):
         v['new_parents'] = [int(k) for k in v['new_parents']]
         v['new_segment_offset'] = {int(k): vv for k, vv in v['new_segment_offset'].items()}
 
-    morphologies = NodePopulation.load(nodes).to_dataframe()['morphology']
+    morphologies = CellCollection.load(nodes).as_dataframe()['morphology']
+    morphologies.index = morphologies.index - 1
     for edge in edges:
         reindex.apply_edge_updates(morphologies, edge, h5_updates, population)
 
@@ -159,7 +160,8 @@ def update_edge_population(h5_updates, nodes, population, edges):
 def update_edge_pos(morph_path, population, nodes, edges):
     '''Using: section_id, segment_id and offset, create the sonata *_section_pos'''
     from brainbuilder.utils.sonata import reindex
-    from voxcell.sonata import NodePopulation
+    from voxcell import CellCollection
 
-    morphologies = NodePopulation.load(nodes).to_dataframe()['morphology']
+    morphologies = CellCollection.load(nodes).as_dataframe()['morphology']
+    morphologies.index = morphologies.index - 1
     reindex.write_sonata_pos(morph_path, morphologies, population, edges)
