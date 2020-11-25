@@ -5,7 +5,6 @@
           http://www.boost.org/LICENSE_1_0.txt)
 '''
 # pylint: disable=missing-docstring
-from __future__ import print_function
 
 import logging
 import os

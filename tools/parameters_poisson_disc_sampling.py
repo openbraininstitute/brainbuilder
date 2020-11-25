@@ -1,7 +1,5 @@
 '''See https://bbpteam.epfl.ch/project/issues/browse/BRBLD-52'''
 
-from __future__ import print_function
-
 import sys
 import csv
 import multiprocessing

@@ -8,26 +8,20 @@ import sys
 from setuptools import setup, find_packages
 
 
-if sys.version_info < (2, 7):
-    sys.exit("Python < 2.7 is no longer supported from version 0.1.0")
-
 VERSION = imp.load_source("brainbuilder.version", "brainbuilder/version.py").VERSION
 
 BASE_REQUIRES = [
     'click>=7.0,<8.0',
-    'future>=0.16',
     'h5py>=3.1.0',
     'lxml>=3.3',
+    'morph-tool>=0.2.3',
     'numpy>=1.9',
-    'pandas>=0.17',
-    'pyyaml',
+    'pandas>=1.0.0',
     'scipy>=0.13',
-    'six>=1.0',
     'tqdm>=4.0',
 ] + [
     'bluepy>=0.13.0',
     'voxcell>=3.0.0',
-    'morph-tool>=0.2.3',
 ]
 
 SUBCELLULAR_REQUIRES = [
@@ -35,7 +29,6 @@ SUBCELLULAR_REQUIRES = [
     'entity-management>=0.1.11,<1.0',
     'subcellular-querier>=0.0.3',
     'tables>=3.4',
-    'pathlib2>=2.3.3'
 ]
 
 
@@ -54,6 +47,7 @@ setup(
         'subcellular': SUBCELLULAR_REQUIRES,
     },
     packages=find_packages(),
+    python_requires='>=3.6',
     entry_points={
       'console_scripts': [
           'brainbuilder=brainbuilder.app.__main__:main'

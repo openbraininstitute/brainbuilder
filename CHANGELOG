@@ -1,3 +1,10 @@
+## 0.15.0
+  * Drop python 2 support
+
+## 0.14.1
+  * Fix bugs du to voxcell >= 3.0.0
+  * Add a test to validate the behaviour of `utils.sonata.convert.write_network_config`
+
 ## 0.14.0
   * Add 'functional' tox env for functional tests
   * Add a new package `utils.sonata`. Move all SONATA related utils there

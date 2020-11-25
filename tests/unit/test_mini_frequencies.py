@@ -4,7 +4,7 @@ Test assignment of mini frequencies to the circuit MVD3.
 
 import sys
 import os
-from pathlib2 import Path
+from pathlib import Path
 import tempfile
 import shutil
 import numpy as np

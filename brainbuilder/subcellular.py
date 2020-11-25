@@ -4,20 +4,19 @@ Genes / proteins assignment.
 
 import logging
 import warnings
-
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import tables
-import six
-
-from pathlib2 import Path
-
-from subcellular_querier import (EntityGetter, create_gene_expressions,
-                                 create_cell_proteins, create_synapse_proteins)
-from entity_management.synprot import (CellProteinConcExperiment, SynapticProteinConcExperiment,
-                                       TranscriptomeExperiment, MtypeTaxonomy)
+from entity_management.synprot import (CellProteinConcExperiment,
+                                       MtypeTaxonomy,
+                                       SynapticProteinConcExperiment,
+                                       TranscriptomeExperiment)
+from subcellular_querier import (EntityGetter, create_cell_proteins,
+                                 create_gene_expressions,
+                                 create_synapse_proteins)
 
 L = logging.getLogger('brainbuilder')
 
@@ -119,7 +118,7 @@ def assign(cells, subcellular_dir, transcriptome, mtype_taxonomy, cell_proteins,
             _assign_synapse_proteins(cells, library['synapse_proteins']),
         )))
         out_lib = out.create_group('/', 'library', 'Library information')
-        for title, src_file in six.iteritems(library):
+        for title, src_file in library.items():
             node = "/" + title
             L.info("Copying %s to /library...", title)
             with tables.open_file(src_file, 'r') as src:

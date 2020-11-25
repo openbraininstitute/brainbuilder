@@ -3,8 +3,6 @@
 import json
 import scipy.stats
 
-import six
-
 
 def _get_value(mapping, keys):
     """ Return the value of the first key from `keys` found in `mapping`. """
@@ -25,7 +23,7 @@ def parse_distr(value):
     See also:
     https://bbpteam.epfl.ch/project/spaces/display/BBPNSE/Defining+distributions+in+config+files
     """
-    if isinstance(value, six.string_types):
+    if isinstance(value, str):
         value = json.loads(value)
     func, params = value
     if func in ('norm', 'normal'):

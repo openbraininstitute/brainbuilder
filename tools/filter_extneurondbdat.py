@@ -5,8 +5,6 @@
     out,
 (4) stores the resulting extneurondb.dat file.
 """
-from __future__ import print_function
-
 import sys
 import argparse
 import pandas

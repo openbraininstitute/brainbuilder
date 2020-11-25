@@ -14,7 +14,6 @@ from collections import OrderedDict
 import numpy as np
 import pandas as pd
 import h5py
-import six
 
 from bluepy.v2.impl.target import TargetContext
 from voxcell import CellCollection
@@ -118,11 +117,11 @@ def _write_edge_population(population, source, target, out):
 
     L.info("'source_node_id'...")
     properties.copy('connected_neurons_pre', out, name='source_node_id')
-    out['source_node_id'].attrs['node_population'] = six.text_type(source)
+    out['source_node_id'].attrs['node_population'] = str(source)
 
     L.info("'target_node_id'...")
     properties.copy('connected_neurons_post', out, name='target_node_id')
-    out['target_node_id'].attrs['node_population'] = six.text_type(target)
+    out['target_node_id'].attrs['node_population'] = str(target)
 
     L.info("Writing group-level datasets...")
     _write_edge_group(properties, out.create_group('0'))

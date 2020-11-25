@@ -8,7 +8,7 @@ import numpy as np
 import nose.tools as nt
 
 from mock import patch, Mock
-from pathlib2 import Path
+from pathlib import Path
 
 import brainbuilder.subcellular as sub
 

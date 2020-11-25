@@ -2,8 +2,6 @@
 
 import logging
 
-from six import iteritems, text_type
-
 import h5py
 import lxml.etree
 import numpy as np
@@ -67,7 +65,7 @@ def write_target(f, name, gids=None, include_targets=None):
 
 def write_property_targets(f, cells, prop, mapping=None):
     """ Append targets based on 'prop' cell property to .target file. """
-    for value, gids in sorted(iteritems(cells.groupby(prop).groups)):
+    for value, gids in sorted(cells.groupby(prop).groups.items()):
         if mapping is not None:
             value = mapping(value)
         write_target(f, value, gids=gids)
@@ -129,7 +127,7 @@ def reorder_mtypes(mvd3_path, recipe_path):
             mapping[k] = recipe_mtypes.index(mtype)
 
         mvd3_mtype_index = h5f.pop('/cells/properties/mtype')[:]
-        dt = h5py.special_dtype(vlen=text_type)
+        dt = h5py.special_dtype(vlen=str)
         h5f['/cells/properties/mtype'] = mapping[mvd3_mtype_index]
         h5f.create_dataset(
             '/library/mtype', data=np.asarray(recipe_mtypes).astype(object), dtype=dt

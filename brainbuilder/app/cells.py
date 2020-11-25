@@ -33,7 +33,6 @@ import click
 import numpy as np
 import pandas as pd
 import yaml
-import six
 
 from voxcell import CellCollection, ROIMask, VoxelData
 from voxcell.nexus.voxelbrain import Atlas
@@ -145,9 +144,9 @@ def _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement):
     pos = create_cell_positions(density, density_factor=density_factor, method=soma_placement)
     result = pd.DataFrame(pos, columns=['x', 'y', 'z'])
 
-    for prop, value in six.iteritems(conf['traits']):
+    for prop, value in conf['traits'].items():
         if isinstance(value, Mapping):
-            values, probs = zip(*six.iteritems(value))
+            values, probs = zip(*value.items())
             if not np.allclose(np.sum(probs), 1.0):
                 L.warning("Weights don't sum up to 1.0 for %s; renormalizing them", str(value))
                 probs = probs / np.sum(probs)
@@ -362,11 +361,11 @@ def _parse_emodel_mapping(filepath):
         content = json.load(f)
     result = {}
     for emodel, mapping in content.items():
-        assert isinstance(mapping['etype'], six.string_types)
+        assert isinstance(mapping['etype'], str)
         assert isinstance(mapping['layer'], list)
         etype = mapping['etype']
         for layer in mapping['layer']:
-            assert isinstance(layer, six.string_types)
+            assert isinstance(layer, str)
             key = (layer, etype)
             assert key not in result
             result[key] = {'emodel': emodel}
@@ -384,13 +383,13 @@ def _write_mecombo_tsv(out_tsv, cells, emodels, **optional_columns):
         'mtype': 'fullmtype',
         'me_combo': 'combo_name',
     })
-    me_combos['layer'] = me_combos['layer'].astype(six.text_type)
+    me_combos['layer'] = me_combos['layer'].astype(str)
     me_combos = me_combos.join(emodels, on=('layer', 'etype'))
     if me_combos['emodel'].isna().any():
         mismatch = me_combos[me_combos['emodel'].isna()][['layer', 'etype']]
         raise BrainBuilderError("Can not assign emodels for: %s" % mismatch)
     COLUMNS = ['morph_name', 'layer', 'fullmtype', 'etype', 'emodel', 'combo_name']
-    for column_name, column_value in six.iteritems(optional_columns):
+    for column_name, column_value in optional_columns.items():
         if column_value is not None:
             me_combos[column_name] = column_value
             COLUMNS.append(column_name)
@@ -425,7 +424,7 @@ def assign_emodels2(cells_path, emodels, threshold_current, holding_current,
     ), axis=1)
 
     if out_mvd3 is None and not out_cells_path.lower().endswith('mvd3'):
-        cells['layer'] = cells['layer'].astype(six.text_type)
+        cells['layer'] = cells['layer'].astype(str)
         cells = cells.join(emodels, on=('layer', 'etype'))
         if cells['emodel'].isna().any():
             mismatch = cells[cells['emodel'].isna()][['layer', 'etype']]

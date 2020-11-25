@@ -7,7 +7,6 @@ from collections import OrderedDict
 
 import click
 import numpy as np
-from six import iteritems
 
 from voxcell import math_utils, VoxelData
 
@@ -76,7 +75,7 @@ def _build_column_brain_regions(width, hex_side, layers, voxel_side):
         ((column_label, None), k) for k, column_label in enumerate(columns, 1)
     )
 
-    for name, thickness in iteritems(layers):
+    for name, thickness in layers.items():
         pattern = np.zeros_like(mosaic_2D, dtype=np.uint16)
         for column_label in columns:
             region_id = max(region_ids.values()) + 1

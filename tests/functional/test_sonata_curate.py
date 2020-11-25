@@ -1,7 +1,7 @@
 """Application of `curate` functionality to existing circuits"""
 import shutil
 import tempfile
-from pathlib2 import Path
+from pathlib import Path
 from bluepysnap.circuit_validation import validate, Error
 from brainbuilder.utils.sonata import curate
 from brainbuilder.utils.sonata.convert import write_network_config

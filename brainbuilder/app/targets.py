@@ -7,7 +7,6 @@ import collections
 import logging
 
 import click
-import six
 import yaml
 
 from bluepy.v2 import Circuit
@@ -51,7 +50,7 @@ def write_default_targets(cells, output):
 
 def write_query_targets(query_based, circuit, output, allow_empty=False):
     """ Write targets based on BluePy-like queries. """
-    for name, query in six.iteritems(query_based):
+    for name, query in query_based.items():
         gids = circuit.cells.ids(query)
         if len(gids) < 1:
             msg = "Empty target: {} {}".format(name, query)
@@ -113,7 +112,7 @@ def from_input(cells_path, atlas, atlas_cache, targets, allow_empty, output):
                     raise BrainBuilderError("Atlas not provided")
                 atlas = Atlas.open(atlas, cache_dir=atlas_cache)
                 xyz = cells[['x', 'y', 'z']].values
-                for name, dset in six.iteritems(atlas_based):
+                for name, dset in atlas_based.items():
                     mask = atlas.load_data(dset, cls=ROIMask).lookup(xyz)
                     bbp.write_target(f, name, cells.index[mask])
 
@@ -171,7 +170,7 @@ def node_sets(cells_path, atlas, atlas_cache, targets, allow_empty, population, 
                 raise BrainBuilderError("Atlas not provided")
             atlas = Atlas.open(atlas, cache_dir=atlas_cache)
             xyz = cells.get(properties=['x', 'y', 'z'])
-            for name, dset in six.iteritems(atlas_based):
+            for name, dset in atlas_based.items():
                 mask = atlas.load_data(dset, cls=ROIMask).lookup(xyz.values)
                 ids = xyz.index[mask] - 1
                 result[name] = {"population": population, "node_id": ids.tolist()}
