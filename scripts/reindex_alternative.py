@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 import h5py
 import numpy as np
-from morphio._morphio import AnnotationType
+from morphio import AnnotationType
 from morphio.mut import Morphology
 from neurom.morphmath import path_distance, path_fraction_id_offset
 
@@ -108,11 +108,12 @@ def _map_merged_section_pos(unmerged_sec_points, unmerged_pos, merged_sec_points
     return merged_pos
 
 
-def update_morphologies(asc_morphs, nodes, population, output, edges):
+def update_morphologies(asc_morphs, nodes, _, output, edges):  # pylint: disable=too-many-locals, too-many-statements
     """Update h5 morphologies"""
-    from voxcell.sonata import NodePopulation
+    from voxcell import CellCollection
 
-    morph_filenames = NodePopulation.load(nodes).to_dataframe()['morphology']
+    morph_filenames = CellCollection.load(nodes).as_dataframe()['morphology']
+    morph_filenames.index = morph_filenames.index - 1
     all_morph_files = glob.glob(os.path.join(asc_morphs, '*.asc'))
     morph_files = [morph_file for morph_file in all_morph_files
                    if _get_filename(morph_file) in morph_filenames.unique()]
