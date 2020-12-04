@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.spatial.distance as distance
 import nose.tools as nt
+import numpy.testing as npt
 
 from voxcell import VoxelData
 
@@ -18,6 +19,15 @@ def test_create_cell_positions_2():
     density = VoxelData(1000 * np.ones((3, 3, 3)), voxel_dimensions=(100, 100, 100))
     result = test_module.create_cell_positions(density, density_factor=0.2)
     nt.assert_equal(np.shape(result), (5, 3))
+
+
+def test_create_cell_positions_reproducible():
+    density = VoxelData(250 * np.ones((3, 3, 3)), voxel_dimensions=(10, 10, 10))
+    density.raw[0:5, 0:5, 0:5] = 100
+    density.raw[0, 0, 0] = 1500
+    result_1 = test_module.create_cell_positions(density, density_factor=200, seed=0)
+    result_2 = test_module.create_cell_positions(density, density_factor=200, seed=0)
+    npt.assert_array_equal(result_1, result_2)
 
 
 def test_create_equidistributed_cell_positions_1():

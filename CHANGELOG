@@ -1,6 +1,9 @@
 ## 0.15.0
   * Drop python 2 support
   * Add 'split_population' SONATA command to break monolithic node/edge files into smaller version
+  * BBPP82-499: Add `cells positions_and_orientations` command to create a sonata file to be used by the web Cell Atlas
+    and by Point neuron whole mouse brain
+  * Allow users to set the seed of the numpy random generator when calling `cell_positions.create_cell_positions`
 
 ## 0.14.1
   * Fix bugs du to voxcell >= 3.0.0

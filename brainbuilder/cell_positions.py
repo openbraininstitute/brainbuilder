@@ -146,7 +146,7 @@ def _create_cell_positions_poisson_disc(density, density_factor):
     return np.array(points)
 
 
-def create_cell_positions(density, density_factor=1.0, method='basic'):
+def create_cell_positions(density, density_factor=1.0, method='basic', seed=None):
     '''Given cell density volumetric data, create cell positions.
 
     Total cell count is calculated based on cell density values.
@@ -161,10 +161,16 @@ def create_cell_positions(density, density_factor=1.0, method='basic'):
                               algorithm where minimum distance between points
                               is modulated based on density values
 
+    seed: (optional) the numpy random seed (int) to be used.
+            Defaults to None, in which case the seed is not set and the outcome
+            cannot be predicted.
+
     Returns:
         positions: numpy.array of shape (cell_count, 3) where each row represents
             a cell and the columns correspond to (x, y, z).
     '''
+    if seed is not None:
+        np.random.seed(seed)  # make the output reproducible
 
     position_generators = {'basic': _create_cell_positions_uniform,
                            'poisson_disc': _create_cell_positions_poisson_disc}
