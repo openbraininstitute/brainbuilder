@@ -1,4 +1,5 @@
 '''test positions_and_orientations'''
+from unittest.mock import patch
 import h5py
 import yaml
 
@@ -141,3 +142,35 @@ def test_positions_and_orientations_invalid_input():
         )
         assert result.exit_code == 1
         assert 'different voxel dimensions' in str(result.exception)
+
+@patch('brainbuilder.app.cells.L.warning')
+def test_positions_and_orientations_negative_density(L_warning_mock):
+    config = create_density_configuration()
+    input_ = create_input()
+    input_['microglia'][0, 0, 1] = -1.0  # negative density value on purpose
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open('config.yaml', 'w') as out:
+            yaml.dump(config, out)
+        for cell_type, path in config['inputDensityVolumePath'].items():
+            # the input densities are expressed in number of cells per voxel
+            VoxelData(input_[cell_type] * (1e9 / 25 ** 3), voxel_dimensions=[25] * 3)\
+                .save_nrrd(path)
+        for input_voxel_data in ['annotation', 'orientation']:
+            VoxelData(input_[input_voxel_data], voxel_dimensions=[25] * 3)\
+                .save_nrrd(input_voxel_data + '.nrrd')
+        result = runner.invoke(
+            tested.positions_and_orientations,
+            [
+                '--annotation-path',
+                'annotation.nrrd',
+                '--orientation-path',
+                'orientation.nrrd',
+                '--config-path',
+                'config.yaml',
+                '--output-path',
+                'positions_and_orientations.h5'
+            ],
+        )
+        assert result.exit_code == 0
+        assert 'Negative density values' in L_warning_mock.call_args[0][0]
