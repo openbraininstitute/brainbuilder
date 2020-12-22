@@ -29,7 +29,7 @@ def create_density_configuration():
 def create_input():
     input_ = {
             'annotation': np.array(
-                [[[512, 512, 1143]], [[512, 512, 1143]], [[477, 56, 485]],]
+                [[[512, 512, 1143]], [[512, 512, 1143]], [[477, 56, 485]],], dtype=np.uint32
             ),
             'orientation': np.array([
                 [[
@@ -105,6 +105,7 @@ def test_positions_and_orientations_valid_input():
             15.30239307, 17.04550748, 17.4407799, 16.76594674, 7.88570877, 10.96503784,
             5.2219189, 6.33229006, 3.97423959, 3.45457378, 20.52483075]
         )
+        assert cell_collections.get('/nodes/astrocyte/0/region_id')[()].dtype == np.uint32
         npt.assert_array_equal(
             cell_collections.get('/nodes/astrocyte/0/region_id')[()],
             [512, 1143, 512, 512, 512, 512, 512, 1143, 56, 512, 1143, 512,

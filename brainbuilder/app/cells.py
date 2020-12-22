@@ -664,8 +664,6 @@ def positions_and_orientations(
             L.info('Retrieving voxel indices ...')
             voxel_indices = annotation.positions_to_indices(positions)
             voxel_indices = tuple(voxel_indices.T)
-            region_ids = annotation.raw[voxel_indices]
-            region_ids = region_ids.reshape(region_ids.shape + (1,))
             L.info(
                 'Creation of the cell collection dataframe.'
                 ' \n Setting positions, orientations and region ids ...'
@@ -674,7 +672,6 @@ def positions_and_orientations(
                 [
                     positions,
                     orientation.raw[voxel_indices],
-                    region_ids,
                 ]
             )
             df = pd.DataFrame(
@@ -688,9 +685,9 @@ def positions_and_orientations(
                     'orientation_x',
                     'orientation_y',
                     'orientation_z',
-                    'region_id',
                 ],
             )
+            df['region_id'] = annotation.raw[voxel_indices]
             df.index = 1 + np.arange(len(df))  # CellCollection has a 1-based index
             L.info('Building a CellCollection for the %s population ...', cell_type)
             cells = CellCollection.from_dataframe(df)
