@@ -46,8 +46,6 @@ import numbers
 import os
 
 from collections.abc import Mapping
-from pathlib import Path
-import tempfile
 import click
 import numpy as np
 import pandas as pd
@@ -58,7 +56,6 @@ from voxcell.nexus.voxelbrain import Atlas
 
 from brainbuilder import BrainBuilderError
 from brainbuilder.cell_positions import create_cell_positions
-from brainbuilder.utils.sonata.curate import merge_h5_files
 from brainbuilder.utils import bbp
 
 from brainbuilder.app._utils import REQUIRED_PATH
@@ -468,8 +465,8 @@ def assign_emodels2(cells_path, emodels, threshold_current, holding_current,
         result.save(out_cells_path)
 
 
-@app.command(short_help='Generate cell positions and save them together with orientations'
-                        ' and region annotations')
+@app.command(short_help='Generate cell positions and save them together with orientations,'
+                        ' region annotations and cell types')
 @click.option(
     '--annotation-path',
     type=REQUIRED_PATH,
@@ -579,33 +576,47 @@ def positions_and_orientations(
     input density files specified in `config_path` are assumed to coincide with the voxel
     dimensions and the offset of the annotated volume.\n
 
-    Layout example for the output file:\n
-        nodes/\n
-        excitatory neuron/ # population name or cell type\n
-            /0/ # group \n
-                position_x\n
-                position_y\n
-                position_z\n
-                orientation_x\n
-                orientation_y\n
-                orientation_z\n
-                orientation_w\n
-                region_id\n
-        inhibitory neuron/\n
-            # same as excitatory neuron\n
-        astrocyte/\n
-            # same as excitatory neuron\n
-        oligodendrocyte/\n
-            # same as excitatory neuron\n
-        microglia/\n
-            # same as excitatory neuron\n
+    Output layout as depicted by h5ls -r `output_path`:\n
+        /                        Group\n
+        /nodes                   Group\n
+        /nodes/atlas_cells       Group\n
+        /nodes/atlas_cells/0     Group\n
+        /nodes/atlas_cells/0/@library Group\n
+        /nodes/atlas_cells/0/@library/cell_type Dataset\n
+        /nodes/atlas_cells/0/cell_type Dataset\n
+        /nodes/atlas_cells/0/orientation_w Dataset\n
+        /nodes/atlas_cells/0/orientation_x Dataset\n
+        /nodes/atlas_cells/0/orientation_y Dataset\n
+        /nodes/atlas_cells/0/orientation_z Dataset\n
+        /nodes/atlas_cells/0/region_id Dataset\n
+        /nodes/atlas_cells/0/x   Dataset\n
+        /nodes/atlas_cells/0/y   Dataset\n
+        /nodes/atlas_cells/0/z   Dataset\n
+        /nodes/atlas_cells/node_type_id Dataset\n
+
+        Note: The node_type_ids are all set to -1 by voxcell.CellCollection.save_sonata)\n
 
     How to read the output file:\n
+        # The recommanded way: use voxcell.CellCollection support for libsonata\n
+        from voxcell import CellCollection\n
+        cell_collection = CellCollection.load_sonata('positions_and_orientations.h5')\n
+        positions = cell_collection.positions # float32 array of shape (N, 3)\n
+        # CellCollection orientations are 3 x 3 orthogonal matrices\n
+        orientations = cell_collection.orientations # float32 of shape (N, 3, 3)\n
+        properties = cell_collection.properties # pandas.DataFrame\n
+        region_ids = properties['region_id'] # uint32 array of shape (N,)\n
+        cell_types = properties['cell_type']  # str array of shape (N,)\n
+
         import h5py\n
         cell_collections = h5py.File('positions_and_orientations.h5', 'r')
-        astrocyte_orientation_x = cell_collections.get('/nodes/astrocyte/0/orientation_x')[()]\n
-        oligodendrocyte_position_y = cell_collections.get('/nodes/oligodendrocyte/0/y')[()]\n
-        astrocyte_region_ids = cell_collections.get('/nodes/astrocyte/0/region_id')[()]\n
+        orientation_x = cell_collections.get('/nodes/atlas_cells/0/orientation_x')[()]\n
+        position_y = cell_collections.get('/nodes/atlas_cells/0/y')[()]\n
+        region_ids = cell_collections.get('/nodes/atlas_cells/0/region_id')[()]\n
+        # uint32 array of shape (N,)\n
+        cell_types = cell_collections.get('/nodes/atlas_cells/0/cell_type')[()]\n
+        # An extra dataset is needed to map utin32 indices to cell type strings,\n
+        # that is, the following literal string array of shape (5,) \n
+        cell_type_literals = cell_collection.get('/nodes/atlas_cells/0/@library/cell_type')
     """
     # pylint: disable=too-many-arguments, too-many-locals
     L.info('Loading density configuration file %s ...', config_path)
@@ -622,83 +633,83 @@ def positions_and_orientations(
         annotation.voxel_dimensions, orientation.voxel_dimensions
     ), 'The annotation and orientation files have different voxel dimensions.'
 
-    # For each cell type, a voxcell.CellCollection is created and saved to a temporary hdf5 file.
-    # We use a dict to hold the names and the paths of the cell collections to be merged into a
-    # single sonata file.
-    files = dict()
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp_dir = Path(tmp_dir)
-        for (cell_type, density_path) in config['inputDensityVolumePath'].items():
-            L.info('Loading density file %s ...', density_path)
-            density_voxel_data = VoxelData.load_nrrd(density_path)
-            if not np.allclose(density_voxel_data.offset, annotation.offset):
-                raise BrainBuilderError(
-                    f'The input density file {density_path} and the input annotation file '
-                    f'{annotation_path} have different offsets: '
-                    f'{density_voxel_data.offset} != {annotation.offset}'
-                )
-            if not np.allclose(
-                density_voxel_data.voxel_dimensions, annotation.voxel_dimensions
-            ):
-                raise BrainBuilderError(
-                    f'The input density file {density_path} and the input annotation file '
-                    f'{annotation_path} have different voxel dimensions: '
-                    f'{density_voxel_data.voxel_dimensions} != {annotation.voxel_dimensions}'
-                )
-            L.info('Creating positions for the %s population', cell_type)
+    # The columns to be populated
+    positions = []
+    orientations = []
+    region_ids = []
+    cell_types = []
 
-            # Microglia cell density can take negative values, see
-            # https://bbpteam.epfl.ch/project/issues/browse/NSETM-1260.
-            # As a temporary fix, negative values are zeroed. Hence -S extra cells
-            # are created where S is the sum of negative values.
-            # TODO: implement a long term solution in atlas-building-tools
-            negative_mask = density_voxel_data.raw < 0.0
-            if np.any(negative_mask):
-                L.warning(
-                    'Negative density values in %s summing up to %f. Zeroing negative values.',
-                    density_path,
-                    np.sum(density_voxel_data.raw[negative_mask]))
-                density_voxel_data.raw[negative_mask] = 0.0
+    for (cell_type, density_path) in config['inputDensityVolumePath'].items():
+        L.info('Loading density file %s ...', density_path)
+        density_voxel_data = VoxelData.load_nrrd(density_path)
+        if not np.allclose(density_voxel_data.offset, annotation.offset):
+            raise BrainBuilderError(
+                f'The input density file {density_path} and the input annotation file '
+                f'{annotation_path} have different offsets: '
+                f'{density_voxel_data.offset} != {annotation.offset}'
+            )
+        if not np.allclose(
+            density_voxel_data.voxel_dimensions, annotation.voxel_dimensions
+        ):
+            raise BrainBuilderError(
+                f'The input density file {density_path} and the input annotation file '
+                f'{annotation_path} have different voxel dimensions: '
+                f'{density_voxel_data.voxel_dimensions} != {annotation.voxel_dimensions}'
+            )
 
-            positions = create_cell_positions(density_voxel_data, seed=0)
-            L.info('Retrieving voxel indices ...')
-            voxel_indices = annotation.positions_to_indices(positions)
-            voxel_indices = tuple(voxel_indices.T)
-            L.info(
-                'Creation of the cell collection dataframe.'
-                ' \n Setting positions, orientations and region ids ...'
-            )
-            datasets = np.hstack(
-                [
-                    positions,
-                    orientation.raw[voxel_indices],
-                ]
-            )
-            df = pd.DataFrame(
-                datasets,
-                columns=[
-                    'x',
-                    'y',
-                    'z',
-                    # We assume quaternions to be under the form [w, x, y, z]
-                    'orientation_w',
-                    'orientation_x',
-                    'orientation_y',
-                    'orientation_z',
-                ],
-            )
-            df['region_id'] = annotation.raw[voxel_indices]
-            df.index = 1 + np.arange(len(df))  # CellCollection has a 1-based index
-            L.info('Building a CellCollection for the %s population ...', cell_type)
-            cells = CellCollection.from_dataframe(df)
-            cells.population_name = cell_type
-            cells_path = tmp_dir / density_path.replace('.nrrd', '.h5')
-            files[cells_path] = [cell_type]
-            L.info('Saving %s to sonata format ...', cells_path)
-            cells.save_sonata(cells_path)
+        # Microglia cell density can take negative values, see
+        # https://bbpteam.epfl.ch/project/issues/browse/NSETM-1260.
+        # As a temporary fix, negative values are zeroed. Hence -S extra cells
+        # are created where S is the sum of negative values.
+        # TODO: implement a long term solution in atlas-building-tools
+        negative_mask = density_voxel_data.raw < 0.0
+        if np.any(negative_mask):
+            L.warning(
+                'Negative density values in %s summing up to %f. Zeroing negative values.',
+                density_path,
+                np.sum(density_voxel_data.raw[negative_mask]))
+            density_voxel_data.raw[negative_mask] = 0.0
 
-        L.info(
-            'Merging all CellCollections into a single sonata hdf5 file: %s ...',
-            output_path,
-        )
-        merge_h5_files(files, 'nodes', output_path)
+        L.info('Creating cell positions for the cell type "%s" ...', cell_type)
+        positions_ = create_cell_positions(density_voxel_data, seed=0)
+        positions.append(positions_)
+
+        L.info('Retrieving voxel indices for the cell type "%s\n" ...', cell_type)
+        voxel_indices = annotation.positions_to_indices(positions_)
+        voxel_indices = tuple(voxel_indices.T)
+        orientations.append(orientation.raw[voxel_indices])
+        region_ids.append(annotation.raw[voxel_indices])
+        cell_types += [cell_type] * len(voxel_indices[0])
+
+    L.info(
+        'Creation of the cell collection dataframe.'
+        ' \n Setting positions, orientations, region ids and cell types ...'
+    )
+    datasets = np.hstack(
+        [
+            np.asarray(np.concatenate(positions), dtype=np.float32),
+            np.asarray(np.concatenate(orientations), dtype=np.float32)
+        ]
+    )
+    df = pd.DataFrame(
+        datasets,
+        columns=[
+            'x',
+            'y',
+            'z',
+            # We assume quaternions to be under the form [w, x, y, z]
+            'orientation_w',
+            'orientation_x',
+            'orientation_y',
+            'orientation_z',
+        ],
+    )
+    df['region_id'] = np.concatenate(region_ids)
+    df['cell_type'] = cell_types
+    df.index = 1 + np.arange(len(df))  # CellCollection has a 1-based index
+    L.info('Building a voxcell.CellCollection ...')
+    cells = CellCollection.from_dataframe(df)
+    cells.population_name = 'atlas_cells'
+
+    L.info('Saving %s to sonata format ...', output_path)
+    cells.save_sonata(output_path)
