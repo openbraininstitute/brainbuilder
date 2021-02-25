@@ -35,10 +35,6 @@ Based on:
  - the BBP web Cell Atlas (https://bbpcode.epfl.ch/code/#/admin/projects/nexus/cell-atlas)
  - the point neuron whole brain workflow
     (https://bbpcode.epfl.ch/code/#/admin/projects/bbpnr/genBrain)
-
-Note: Due to the current implementation of voxcell.CellCollection.save_sonata, the type of every
-    dataset in the saved output file is float 64.
-
 """
 import logging
 import json
