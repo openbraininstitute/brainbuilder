@@ -55,27 +55,14 @@ from brainbuilder.cell_positions import create_cell_positions
 from brainbuilder.utils import bbp
 
 from brainbuilder.app._utils import REQUIRED_PATH
+from brainbuilder.utils.bbp import load_cell_composition
+
 L = logging.getLogger('brainbuilder')
 
 
 @click.group()
 def app():
     """ Building CellCollection """
-
-
-def load_recipe(filepath):
-    """
-    Load cell composition YAML recipe.
-
-    TODO: link to spec
-    """
-    with open(filepath, 'r') as f:
-        content = yaml.safe_load(f)
-
-    # TODO: validate the content against schema
-    assert content['version'] in ('v2.0',)
-
-    return content
 
 
 def load_mtype_taxonomy(filepath):
@@ -233,7 +220,7 @@ def _place(
     # pylint: disable=too-many-arguments, too-many-locals
     atlas = Atlas.open(atlas_url, cache_dir=atlas_cache)
 
-    recipe = load_recipe(composition_path)
+    recipe = load_cell_composition(composition_path)
     mtype_taxonomy = load_mtype_taxonomy(mtype_taxonomy_path)
 
     # Cache frequently used atlas data

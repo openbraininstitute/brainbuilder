@@ -4,6 +4,7 @@
   * BBPP82-499: Add `cells positions_and_orientations` command to create a sonata file to be used by the web Cell Atlas
     and by Point neuron whole mouse brain
   * Allow users to set the seed of the numpy random generator when calling `cell_positions.create_cell_positions`
+  * new python API `brainbuilder.utils.bbp.load_cell_composition` to load cell composition yaml
 
 ## 0.14.1
   * Fix bugs du to voxcell >= 3.0.0

@@ -6,6 +6,7 @@ import h5py
 import lxml.etree
 import numpy as np
 import pandas as pd
+import yaml
 
 from voxcell import CellCollection
 
@@ -42,6 +43,21 @@ def load_neurondb_v3(neurondb_filename):
             morphology, layer, mtype, etype, me_combo
     '''
     return load_neurondb(neurondb_filename, with_emodels=True)
+
+
+def load_cell_composition(filepath):
+    """Load cell composition YAML recipe.
+
+    https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html#cell-composition-yaml
+    """
+    doc_url = 'https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html' \
+              '#cell-composition-yaml'
+    with open(filepath, 'r') as f:
+        content = yaml.safe_load(f)
+
+    if not (content['version'].startswith('v2') and 'neurons' in content):
+        raise ValueError(f'Use cell composition file of version 2 in {filepath}, see {doc_url}')
+    return content
 
 
 def gid2str(gid):

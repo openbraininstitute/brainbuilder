@@ -5,7 +5,7 @@ try:
 except ImportError:
     from io import StringIO
 
-from nose.tools import eq_, raises
+from nose.tools import eq_, raises, assert_raises, assert_list_equal
 
 import numpy as np
 import pandas as pd
@@ -20,53 +20,22 @@ from brainbuilder.utils import bbp
 DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
 
 
-# @patch('voxcell.VoxelData.load_nrrd')
-# @patch('numpy.loadtxt')
-# def test_load_metype_composition(mock_loadtxt, mock_load_nrrd):
-#     atlas = VoxelData(np.array([[2, 22, 404], [3, 0, 405]]), voxel_dimensions=(10,))
-#     region_map = {'L2': (2, 22), 'L3': (3,), '404': (404,)}
+def test_load_cell_composition_v1():
+    with assert_raises(ValueError) as e:
+        bbp.load_cell_composition(os.path.join(DATA_PATH, 'cell_composition_v1.yaml'))
+    assert 'Use cell composition file of version 2' in e.exception.args[0]
 
-#     relative_distance = VoxelData(np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]), voxel_dimensions=(10,))
 
-#     MC_density_1d = np.arange(100)
-#     mock_loadtxt.return_value = MC_density_1d
-
-#     MC_density_3d = bbp.bind_profile1d_to_atlas(MC_density_1d, relative_distance)
-#     mock_load_nrrd.return_value = MC_density_3d
-
-#     total_density, sdist, etypes = bbp.load_metype_composition(
-#         os.path.join(DATA_PATH, 'metype_composition.yaml'), atlas, region_map,
-#         relative_distance=relative_distance
-#     )
-
-#     assert_almost_equal(total_density.raw, [[42 + 0.1 * 10, 42 + 0.1 * 20, 0], [40, 0, 0]])
-
-#     assert_equal(sdist.field.raw, [[1, 2, -1], [0, -1, -1]])
-#     assert_frame_equal(
-#         sdist.traits,
-#         pd.DataFrame([
-#             ['L2', 'L23_MC'],
-#             ['L2', 'L2_IPC'],
-#             ['L3', 'L23_MC'],
-#         ], columns=['region', 'mtype'])
-#     )
-#     assert_frame_equal(
-#         sdist.distributions,
-#         pd.DataFrame([
-#             [0.0, 0.0232558, 0.0454545],
-#             [0.0, 0.9767442, 0.9545455],
-#             [1.0, 0.0000000, 0.0000000],
-#         ]),
-#         check_dtype=False
-#     )
-
-#     assert_equal(
-#         etypes, {
-#             ('L2', 'L23_MC'): {'cNAC': 0.6667, 'bNAC': 0.3333},
-#             ('L2', 'L2_IPC'): {'cADpyr': 1.0},
-#             ('L3', 'L23_MC'): {'cNAC': 0.5, 'bNAC': 0.5},
-#         }
-#     )
+def test_load_cell_composition_v2():
+    content = bbp.load_cell_composition(os.path.join(DATA_PATH, 'cell_composition_v2.yaml'))
+    assert content == {'version': 'v2.0', 'neurons': [{'density': 68750, 'region': 'mc0;Rt',
+                                                       'traits': {'layer': 'Rt', 'mtype': 'Rt_RC',
+                                                                  'etype': {'cNAD_noscltb': 0.43,
+                                                                            'cAD_noscltb': 0.57}}},
+                                                      {'density': 68750, 'region': 'mc1;Rt',
+                                                       'traits': {'layer': 'Rt', 'mtype': 'Rt_RC',
+                                                                  'etype': {'cNAD_noscltb': 0.43,
+                                                                            'cAD_noscltb': 0.57}}}]}
 
 
 def test_load_neurondb_v2():
