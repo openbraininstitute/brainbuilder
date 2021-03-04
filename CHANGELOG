@@ -5,6 +5,8 @@
     and by Point neuron whole mouse brain
   * Allow users to set the seed of the numpy random generator when calling `cell_positions.create_cell_positions`
   * new python API `brainbuilder.utils.bbp.load_cell_composition` to load cell composition yaml
+  * Check if all the mecombo from a cell file are present in the emodel release
+    in `utils.sonata.convert._add_me_info` function. If not raise.
 
 ## 0.14.1
   * Fix bugs du to voxcell >= 3.0.0

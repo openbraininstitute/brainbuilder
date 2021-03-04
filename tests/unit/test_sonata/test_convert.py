@@ -8,6 +8,7 @@ from nose.tools import ok_, eq_, assert_raises
 from pandas.testing import assert_frame_equal
 
 from brainbuilder.utils.sonata import convert
+from brainbuilder.exceptions import BrainBuilderError
 
 
 def test__add_me_info():
@@ -19,8 +20,8 @@ def test__add_me_info():
         return voxcell.CellCollection.from_dataframe(df)
 
     cells = _mock_cells()
-    mecombo_info = pd.DataFrame({'combo_name': ['me_combo_%d' % i for i in range(10)],
-                                 'threshold': ['threshold_%d' % i for i in range(10)],
+    mecombo_info = pd.DataFrame({'combo_name': [f'me_combo_{i}' for i in range(10)],
+                                 'threshold': [f'threshold_{i}' for i in range(10)],
                                  })
     convert._add_me_info(cells, mecombo_info)
     cells = cells.as_dataframe()
@@ -30,9 +31,15 @@ def test__add_me_info():
 
     cells = _mock_cells()
     mecombo_info = pd.DataFrame({'combo_name': ['me_combo_0' for _ in range(10)],
-                                 'threshold': ['threshold_%d' % i for i in range(10)],
+                                 'threshold': [f'threshold_{i}' for i in range(10)],
                                  })
     assert_raises(AssertionError, convert._add_me_info, cells, mecombo_info)
+
+    cells = _mock_cells()
+    mecombo_info = pd.DataFrame({'combo_name': [f'me_combo_{i}' for i in range(9)],
+                                 'threshold': [f'threshold_{i}' for i in range(9)],
+                                 })
+    assert_raises(BrainBuilderError, convert._add_me_info, cells, mecombo_info)
 
 
 def test_provide_me_info():
