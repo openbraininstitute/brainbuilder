@@ -20,7 +20,7 @@ BASE_REQUIRES = [
     'scipy>=0.13',
     'tqdm>=4.0',
 ] + [
-    'bluepy>=0.13.0',
+    'bluepy>=2.1',
     'libsonata>=0.1.6',
     'voxcell>=3.0.0',
 ]
