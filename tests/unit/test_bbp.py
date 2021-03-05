@@ -32,7 +32,7 @@ def test_load_cell_composition_v2():
                                                        'traits': {'layer': 'Rt', 'mtype': 'Rt_RC',
                                                                   'etype': {'cNAD_noscltb': 0.43,
                                                                             'cAD_noscltb': 0.57}}},
-                                                      {'density': 68750, 'region': 'mc1;Rt',
+                                                      {'density': '{L23_MC}', 'region': 'mc1;Rt',
                                                        'traits': {'layer': 'Rt', 'mtype': 'Rt_RC',
                                                                   'etype': {'cNAD_noscltb': 0.43,
                                                                             'cAD_noscltb': 0.57}}}]}
