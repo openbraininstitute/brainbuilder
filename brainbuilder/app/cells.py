@@ -351,7 +351,7 @@ def assign_emodels(cells_path, morphdb, seed, output):
     np.random.seed(seed)
 
     cells = CellCollection.load(cells_path)
-    morphdb = bbp.load_neurondb_v3(morphdb)
+    morphdb = bbp.load_extneurondb(morphdb)
     result = bbp.assign_emodels(cells, morphdb)
 
     result.save(output)

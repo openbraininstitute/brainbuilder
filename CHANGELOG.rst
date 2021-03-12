@@ -1,3 +1,13 @@
+Changelog
+=========
+
+## 0.16.0
+  * Refactor neurondb functions from `brainbuilder.utils.bbp`. The previous API must be changed as:
+
+    - ``load_neurondb(file, False)`` => ``load_neurondb(file)``
+    - ``load_neurondb(file, True)`` => ``load_extneurondb(file)``
+    - ``load_neurondb_v3(file)`` => ``load_extneurondb(file)``
+
 ## 0.15.1
   * Introduce [reindex] extras
   * Move morph-tool to test dependencies

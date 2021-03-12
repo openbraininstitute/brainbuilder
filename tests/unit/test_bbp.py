@@ -5,7 +5,7 @@ try:
 except ImportError:
     from io import StringIO
 
-from nose.tools import eq_, raises, assert_raises, assert_list_equal
+from nose.tools import eq_, raises, assert_raises
 
 import numpy as np
 import pandas as pd
@@ -38,7 +38,7 @@ def test_load_cell_composition_v2():
                                                                             'cAD_noscltb': 0.57}}}]}
 
 
-def test_load_neurondb_v2():
+def test_load_neurondb():
     actual = bbp.load_neurondb(os.path.join(DATA_PATH, 'neuronDBv2.dat'))
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
@@ -48,8 +48,8 @@ def test_load_neurondb_v2():
     assert_frame_equal(actual, expected, check_like=True)
 
 
-def test_load_neurondb_v3_as_v2():
-    actual = bbp.load_neurondb(os.path.join(DATA_PATH, 'neuronDBv3.dat'))
+def test_load_extneurondb_as_neurondb():
+    actual = bbp.load_neurondb(os.path.join(DATA_PATH, 'extneuronDB.dat'))
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
         'layer': ["L1", "L2"],
@@ -58,8 +58,14 @@ def test_load_neurondb_v3_as_v2():
     assert_frame_equal(actual, expected, check_like=True)
 
 
-def test_load_neurondb_v3():
-    actual = bbp.load_neurondb_v3(os.path.join(DATA_PATH, 'neuronDBv3.dat'))
+def test_load_invalid_neurondb():
+    with assert_raises(ValueError) as e:
+        bbp.load_neurondb(os.path.join(DATA_PATH, 'hierarchy.json'))
+    assert 'Invalid NeuronDB format' in e.exception.args[0]
+
+
+def test_load_extneurondb():
+    actual = bbp.load_extneurondb(os.path.join(DATA_PATH, 'extneuronDB.dat'))
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
         'layer': ["L1", "L2"],
@@ -70,16 +76,43 @@ def test_load_neurondb_v3():
     assert_frame_equal(actual, expected, check_like=True)
 
 
-def test_load_neurondb_v4_as_v3():
-    actual = bbp.load_neurondb_v3(os.path.join(DATA_PATH, 'neuronDBv4.dat'))
+def test_load_mecombo_emodel_as_extneurondb():
+    actual = bbp.load_extneurondb(os.path.join(DATA_PATH, 'mecombo_emodel.dat'))
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
         'layer': [1, 2],
         'mtype': ["L1_DAC", "L23_PC"],
         'etype': ["bNAC", "dNAC"],
-        'me_combo': ["me-combo-a", "me-combo-b"],
+        'me_combo': ["emodel-a", "emodel-b"],
     })
     assert_frame_equal(actual, expected, check_like=True)
+
+
+def test_load_invalid_extneurondb():
+    with assert_raises(ValueError) as e:
+        bbp.load_extneurondb(os.path.join(DATA_PATH, 'neuronDBv2.dat'))
+    assert 'Invalid ExtNeuronDB format' in e.exception.args[0]
+
+
+def test_load_mecombo_emodel():
+    actual = bbp.load_mecombo_emodel(os.path.join(DATA_PATH, 'mecombo_emodel.dat'))
+    expected = pd.DataFrame({
+        'morphology': ["morph-a", "morph-b"],
+        'layer': [1, 2],
+        'mtype': ["L1_DAC", "L23_PC"],
+        'etype': ["bNAC", "dNAC"],
+        'emodel': ["emodel-a", "emodel-b"],
+        'me_combo': ["me-combo-a", "me-combo-b"],
+        'threshold_current': [1., 1.],
+        'holding_current': [2., 2.],
+    })
+    assert_frame_equal(actual, expected, check_like=True)
+
+
+def test_load_invalid_mecombo_emodel():
+    with assert_raises(ValueError) as e:
+        bbp.load_mecombo_emodel(os.path.join(DATA_PATH, 'extneuronDB.dat'))
+    assert 'Invalid mecombo_emodel format' in e.exception.args[0]
 
 
 def test_gid2str():
