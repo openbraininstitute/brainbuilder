@@ -1,3 +1,6 @@
+## 0.15.1
+  * Move morph-tool to test dependencies
+
 ## 0.15.0
   * Drop python 2 support
   * Add 'split_population' SONATA command to break monolithic node/edge files into smaller version
