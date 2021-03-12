@@ -1,4 +1,5 @@
 ## 0.15.1
+  * Introduce [reindex] extras
   * Move morph-tool to test dependencies
 
 ## 0.15.0

@@ -14,7 +14,6 @@ BASE_REQUIRES = [
     'click>=7.0,<8.0',
     'h5py>=3.1.0',
     'lxml>=3.3',
-    'morphio>=2.3,<3',
     'numpy>=1.9',
     'pandas>=1.0.0',
     'scipy>=0.13',
@@ -33,6 +32,10 @@ SUBCELLULAR_REQUIRES = [
 ]
 
 
+REINDEX_REQUIRES = [
+    'morphio>=2.3,<3',
+]
+
 setup(
     name='brainbuilder',
     author='NSE Team',
@@ -44,8 +47,9 @@ setup(
     license='BBP-internal-confidential',
     install_requires=BASE_REQUIRES,
     extras_require={
-        'all': SUBCELLULAR_REQUIRES,
+        'all': SUBCELLULAR_REQUIRES + REINDEX_REQUIRES,
         'subcellular': SUBCELLULAR_REQUIRES,
+        'reindex': REINDEX_REQUIRES,
     },
     packages=find_packages(),
     python_requires='>=3.6',

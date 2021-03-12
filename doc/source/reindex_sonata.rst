@@ -1,5 +1,10 @@
 SONATA: Single Child Reindex
 ============================
+Brainbuilder must be installed with `reindex` or `all` extras.
+
+.. code-block:: bash
+
+    pip install brainbuilder[reindex]
 
 The Problem
 -----------
