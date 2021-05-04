@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## 0.16.1
+
+  * Fix compat for bluepy>=2.3
+
 ## 0.16.0
   * Refactor neurondb functions from `brainbuilder.utils.bbp`. The previous API must be changed as:
 

@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import h5py
 
-from bluepy.v2.impl.target import TargetContext
+from bluepy.impl.target import TargetContext
 from voxcell import CellCollection
 from brainbuilder.exceptions import BrainBuilderError
 

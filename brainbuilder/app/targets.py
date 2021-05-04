@@ -9,7 +9,7 @@ import logging
 import click
 import yaml
 
-from bluepy.v2 import Circuit
+from bluepy import Circuit
 from voxcell import ROIMask
 
 from brainbuilder.exceptions import BrainBuilderError

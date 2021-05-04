@@ -33,7 +33,7 @@ SUBCELLULAR_REQUIRES = [
 
 
 REINDEX_REQUIRES = [
-    'morphio>=2.3,<3',
+    'morphio>=3,<4',
 ]
 
 setup(
