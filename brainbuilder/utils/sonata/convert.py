@@ -8,6 +8,7 @@ import glob
 import json
 import logging
 import os
+import re
 
 from collections import OrderedDict
 
@@ -15,7 +16,7 @@ import numpy as np
 import pandas as pd
 import h5py
 
-from bluepy.impl.target import TargetContext
+from bluepy import Circuit
 from voxcell import CellCollection
 from brainbuilder.exceptions import BrainBuilderError
 
@@ -224,7 +225,27 @@ def write_network_config(base_dir,
         json.dump(content, f, indent=2)
 
 
-def write_node_set_from_targets(input_dir, output_file):
+def validate_node_set(node_set, cells):
+    """Validate a node_set file"""
+
+    def get_ids(cells, node_set, target):
+        """Get ids for a target."""
+        if isinstance(target, list):
+            return np.hstack([get_ids(cells, node_set, node_set[t]) for t in target])
+        if 'node_id' in target:
+            return np.array(target['node_id']) + 1
+        return cells.ids(target)
+
+    for name, target in node_set.items():
+        L.info('Validating %s...', name)
+        target_ids = cells.ids(name)
+        node_set_ids = get_ids(cells, node_set, target)
+        if (np.setdiff1d(target_ids, node_set_ids).size > 0 or
+                np.setdiff1d(node_set_ids, target_ids).size > 0):
+            raise BrainBuilderError(f'Target {name} differs in target file and node set file')
+
+
+def write_node_set_from_targets(input_dir, output_file, cells_path):
     """Write SONATA node_set from all target files in a directory.
 
     This function allows to directly convert a set of target files created from a mvd3 file
@@ -233,16 +254,45 @@ def write_node_set_from_targets(input_dir, output_file):
 
     The 'brainbuilder targets node-sets' should be preferred if possible.
     """
-    target = TargetContext.load(glob.glob(input_dir + '/*.target'))
+    cells = Circuit({'cells': cells_path,
+                     'targets': glob.glob(input_dir + '/*.target')}).cells
     if not os.path.basename(output_file) == 'node_sets.json':
         basename = os.path.basename(output_file)
         L.warning('basename "%s" is not "node_sets.json" change your config file accordingly.',
                   basename)
+
     output_dict = {}
-    for target_name in target.names:
-        # targets are built from a mvd3 file so indexing starts from 1 compare to 0 in SONATA
-        node_ids = target.resolve(target_name) - 1
-        output_dict[target_name] = {"node_id": node_ids.tolist()}
+
+    properties = set.intersection(cells.available_properties, ['etype', 'mtype', 'region'])
+
+    # Create a mapping from unique property values (possible target names) to property names
+    # e.g. {'dNAC': {'etype': 'dNAC'}} (i.e, for all cells in target 'dNAC': etype==dNAC)
+    mapping = {target_name: {property_name: target_name} for property_name in properties
+               for target_name in cells.get(properties=property_name).unique()}
+    mapping.update({'Excitatory': {'synapse_class': 'EXC'},
+                   'Inhibitory': {'synapse_class': 'INH'}})
+
+    target_context = cells._targets  # pylint: disable=protected-access
+    targets = target_context._targets  # pylint: disable=protected-access
+
+    re_layer = re.compile(r'^layer(\d)$', re.IGNORECASE)
+    re_node_id = re.compile(r'^a\d+$')
+
+    def target_to_node_set_entry(name, target):
+        L.info('Converting %s...', name)
+        if name in mapping:
+            return mapping[name]
+        if re_layer.match(name):
+            return {'layer': int(re_layer.match(name).group(1))}
+        if re_node_id.match(target.children[0]):
+            # targets are built from a mvd3 file so indexing starts from 1 compare to 0 in SONATA
+            return {'node_id': (target_context.resolve(name) - 1).tolist()}
+
+        return list(set(target.children))
+
+    output_dict = {name: target_to_node_set_entry(name, target) for name, target in targets.items()}
+
+    validate_node_set(output_dict, cells)
 
     with open(output_file, "w") as fd:
         json.dump(output_dict, fd, indent=2)

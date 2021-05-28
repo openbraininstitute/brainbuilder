@@ -92,14 +92,15 @@ def network_config(
 @app.command()
 @click.option("--input-dir", help="Path to the input directory containing the targets files",
               required=True)
+@click.option("-c", "--cells-path", help="Path to cells file", required=True)
 @click.option("-o", "--output", help="Path to output the .json file", required=True)
-def node_set_from_targets(input_dir, output):
+def node_set_from_targets(input_dir, cells_path, output):
     """Convert target files into a single node_set.json like file.
 
     Please check 'brainbuilder targets node-sets' also.
     """
     from brainbuilder.utils.sonata.convert import write_node_set_from_targets
-    write_node_set_from_targets(input_dir, output)
+    write_node_set_from_targets(input_dir, output, cells_path)
 
 
 @app.command()

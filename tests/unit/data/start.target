@@ -1,0 +1,97 @@
+
+Target Cell Mosaic
+{
+  All
+}
+
+Target Cell All
+{
+  L1_DLAC L23_PC L4_NBC L5_TTPC1 L6_LBC
+}
+
+Target Cell Excitatory
+{
+  a2
+  a4
+}
+
+Target Cell Inhibitory
+{
+  a1
+  a3
+  a5
+}
+
+Target Cell L1_DLAC
+{
+  a1
+}
+
+Target Cell L23_PC
+{
+  a2
+}
+
+Target Cell L4_NBC
+{
+  a3
+}
+
+Target Cell L5_TTPC1
+{
+  a4
+}
+
+Target Cell L6_LBC
+{
+  a5
+}
+
+Target Cell cADpyr
+{
+  a2
+  a4
+}
+
+Target Cell cNAC
+{
+  a1
+  a5
+}
+
+Target Cell dNAC
+{
+  a3
+}
+
+Target Cell Layer1
+{
+  a1
+}
+
+Target Cell Layer2
+{
+  a2
+}
+
+Target Cell Layer4
+{
+  a3
+}
+
+Target Cell Layer5
+{
+  a4
+}
+
+Target Cell Layer6
+{
+  a5
+}
+
+Target Cell Just_testing
+{
+  a1
+  a2
+  a3
+}

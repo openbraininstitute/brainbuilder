@@ -1,4 +1,6 @@
 import json
+from mock import Mock
+import numpy as np
 from pathlib import Path
 import tempfile
 import voxcell
@@ -89,7 +91,7 @@ def test_write_network_config():
       }
     ]
   }
-}    
+}
     ''')
 
     with tempfile.NamedTemporaryFile() as tfp:
@@ -101,3 +103,51 @@ def test_write_network_config():
         )
         actual_config = json.load(tfp)
         assert expected_config == actual_config
+
+
+def test_write_node_set_from_targets():
+    target_path = './tests/unit/data/'
+    cells_path = './tests/unit/data/circuit.mvd2'
+
+    all_keys = {'All', 'Excitatory', 'Inhibitory', 'Just_testing', 'L1_DLAC', 'L23_PC', 'L4_NBC',
+                'L5_TTPC1', 'L6_LBC', 'Layer1', 'Layer2', 'Layer4', 'Layer5', 'Layer6', 'Mosaic',
+                'cADpyr', 'cNAC', 'dNAC'}
+
+    keys_with_node_ids = {'Just_testing'}
+    keys_without_node_ids = all_keys - keys_with_node_ids
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_dir = Path(tmp_dir)
+        out_file = tmp_dir / 'node_set.json'
+        convert.write_node_set_from_targets(target_path, out_file, cells_path)
+        with open(out_file, 'r') as fd:
+            data = json.load(fd)
+
+    assert set(data.keys()) == all_keys
+    assert 'node_id' in data['Just_testing']
+    assert set(data['Just_testing']['node_id']) == set([0, 1, 2])
+    assert all('node_id' not in data[k] for k in keys_without_node_ids)
+
+
+def test_validate_node_set():
+    fake_set = {'All': ['fake1', 'fake2'],
+                'fake1': {'node_id': [0, 1]},
+                'fake2': {'fake_property': [3, 4]}}
+
+    def fake_ids(name):
+        if name == 'fake1':
+            return np.array(fake_set['fake1']['node_id']) + 1
+        if name == 'fake2' or isinstance(name, dict):
+            return fake_set['fake2']['fake_property']
+        if name == 'All':
+            return np.hstack((fake_ids('fake1'), fake_ids('fake2')))
+
+    cells = Mock()
+    cells.ids = fake_ids
+    convert.validate_node_set(fake_set, cells)
+
+    incorrect_set = {'All': ['fake1', 'fake2'],
+                     'fake1': {'node_id': [1]},
+                     'fake2': {'fake_property': [3, 4]}}
+
+    assert_raises(BrainBuilderError, convert.validate_node_set, incorrect_set, cells)
