@@ -21,6 +21,7 @@ BASE_REQUIRES = [
 ] + [
     'bluepy>=2.1',
     'libsonata>=0.1.6',
+    'morphio>=3,<4',
     'voxcell>=3.0.0',
 ]
 
@@ -29,11 +30,6 @@ SUBCELLULAR_REQUIRES = [
     'entity-management>=0.1.11,<1.0',
     'subcellular-querier>=0.0.3',
     'tables>=3.4',
-]
-
-
-REINDEX_REQUIRES = [
-    'morphio>=3,<4',
 ]
 
 setup(
@@ -47,9 +43,9 @@ setup(
     license='BBP-internal-confidential',
     install_requires=BASE_REQUIRES,
     extras_require={
-        'all': SUBCELLULAR_REQUIRES + REINDEX_REQUIRES,
+        'all': SUBCELLULAR_REQUIRES,
         'subcellular': SUBCELLULAR_REQUIRES,
-        'reindex': REINDEX_REQUIRES,
+        'reindex': [],  # for compatibility
     },
     packages=find_packages(),
     python_requires='>=3.6',

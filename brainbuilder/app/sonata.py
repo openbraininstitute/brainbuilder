@@ -2,8 +2,12 @@
 
 import json
 import os
+import sys
+
+from pathlib import Path
 
 import click
+
 from brainbuilder.app._utils import REQUIRED_PATH_DIR, REQUIRED_PATH
 
 
@@ -101,6 +105,37 @@ def node_set_from_targets(input_dir, cells_path, output):
     """
     from brainbuilder.utils.sonata.convert import write_node_set_from_targets
     write_node_set_from_targets(input_dir, output, cells_path)
+
+
+@app.command()
+@click.option("--h5-morphs", required=True, type=REQUIRED_PATH_DIR,
+              help="Path to h5 morphology directory")
+@click.option("--morphdb", required=True, type=REQUIRED_PATH,
+              help="Path to extNeuronDB.dat")
+def check_morphologies(h5_morphs, morphdb):
+    """Make sure the h5 morphology files pass the required SONATA invariants"""
+    from brainbuilder.utils import bbp
+    from brainbuilder.utils.sonata.curate import check_morphology_invariants
+
+    morphs = bbp.load_extneurondb(morphdb).morphology.to_list()
+    with click.progressbar(morphs) as morphs:
+        incorrect_ordering, have_unifurcations = check_morphology_invariants(Path(h5_morphs),
+                                                                             morphs)
+
+    if incorrect_ordering:
+        click.secho(f"The following morphs have incorrect ordering: {incorrect_ordering}",
+                    fg='red')
+
+    if have_unifurcations:
+        click.secho(f"The following morphs have unifurcations: {have_unifurcations}",
+                    fg='red')
+
+    if not incorrect_ordering and not have_unifurcations:
+        click.secho("morphologies appear correct",
+                    fg='green')
+
+    sys.exit(int(len(have_unifurcations) > 0 or
+                 len(incorrect_ordering) > 0))
 
 
 @app.command()

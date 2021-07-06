@@ -1,9 +1,12 @@
 """Collection of functions to curate/edit SONATA circuits."""
 import logging
+
 import h5py
+import morphio
 import numpy as np
 import voxcell
 import voxcell.sonata
+
 
 L = logging.getLogger(__name__)
 
@@ -290,3 +293,41 @@ def merge_h5_files(files, root, output_file):
                     population_names = list(h5f[root])
                 for name in population_names:
                     h5f.copy(f'{root}/{name}/', out_h5f[f'{root}'])
+
+
+def _has_sonata_ordering(morph):
+    '''check if morph has correct ordering
+
+    https://github.com/AllenInstitute/sonata/blob/master/docs/SONATA_DEVELOPER_GUIDE.md
+    The soma is always section 0.
+    The rest of the sections are first grouped by section type in this order:
+        1 = axon, 2 = basal and 3 = apical.
+    '''
+    REQUIRED_ORDER = {morphio.SectionType.axon: 0,
+                      morphio.SectionType.basal_dendrite: 1,
+                      morphio.SectionType.apical_dendrite: 2,
+                      }
+    section_types = [s.type for s in morph.root_sections]
+    ordered = sorted(section_types, key=lambda s: REQUIRED_ORDER[s])
+    return ordered == section_types
+
+
+def _has_unifurcations(morph):
+    '''check if `morph` has unifurcations'''
+    return any(len(section.children) == 1 for section in morph.iter())
+
+
+def check_morphology_invariants(h5_morph_dir, morph_names):
+    '''check if morphologies follow the SONATA spec and have no unifurcations'''
+
+    incorrect_ordering = set()
+    have_unifurcations = set()
+    for name in morph_names:
+        morph = morphio.Morphology(h5_morph_dir / (name + '.h5'))
+        if not _has_sonata_ordering(morph):
+            incorrect_ordering.add(name)
+
+        if _has_unifurcations(morph):
+            have_unifurcations.add(name)
+
+    return incorrect_ordering, have_unifurcations

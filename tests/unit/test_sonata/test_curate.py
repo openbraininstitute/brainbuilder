@@ -1,3 +1,4 @@
+import morphio
 import shutil
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
@@ -5,6 +6,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
+from brainbuilder.utils import bbp
 from brainbuilder.utils.sonata import curate
 
 import nose.tools as nt
@@ -135,3 +137,19 @@ def test_merge_h5_files():
             with h5py.File(merged_file, 'r') as h5f:
                 assert '/nodes/default/0' in h5f
                 assert '/nodes/newname/0' in h5f
+
+def test__has_unifurcations():
+    morph = morphio.Morphology(DATA_PATH / 'wrong-order-with-unifurcations.h5')
+    assert curate._has_unifurcations(morph)
+
+
+def test__has_sonata_ordering():
+    morph = morphio.Morphology(DATA_PATH / 'wrong-order-with-unifurcations.h5')
+    assert not curate._has_sonata_ordering(morph)
+
+
+def test_check_morphology_invariants():
+    morph_names = bbp.load_extneurondb(str(DATA_PATH / 'neurondbExt.dat')).morphology.to_list()
+    incorrect_ordering, have_unifurcations =  curate.check_morphology_invariants(DATA_PATH, morph_names)
+    assert incorrect_ordering == {'wrong-order-with-unifurcations'}
+    assert have_unifurcations == {'wrong-order-with-unifurcations'}
