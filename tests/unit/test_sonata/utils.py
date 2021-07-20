@@ -54,4 +54,4 @@ def assert_h5_files_equal(actual_path, expected_path):
 
 def assert_json_files_equal(actual_path, expected_path):
     with open(actual_path) as actual, open(expected_path) as expected:
-        assert_equal(json.load(actual), json.load(expected))
+        assert json.load(actual) == json.load(expected)

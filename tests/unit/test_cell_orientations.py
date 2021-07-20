@@ -1,4 +1,3 @@
-import nose.tools as nt
 import numpy as np
 import numpy.testing as npt
 
@@ -32,4 +31,4 @@ def test_apply_rotation_2():
 def test_apply_random_rotation():
     A = np.random.random((2, 3, 3))
     A2 = test_module.apply_random_rotation(A, 'x', distr=('uniform', {'low': 0, 'high': np.pi}))
-    nt.assert_equal(A2.shape, A.shape)
+    assert A2.shape == A.shape

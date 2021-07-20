@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 from numpy.testing import assert_allclose
-from nose.tools import eq_, ok_
 
 from brainbuilder.utils.sonata import reindex
 from brainbuilder.utils.sonata.reindex import FIRST_POINT_ID, PARENT_GROUP_ID
@@ -90,7 +89,7 @@ STRUCTURE_THREE_CHILD_UNMERGED = np.array([[0, 1, -1],  # 0
 
 def test__get_only_children():
     ret = reindex._get_only_children(STRUCTURE_SOMA_SINGLE_CHILD[:, PARENT_GROUP_ID])
-    ok_(not len(ret))  # first section is not collapsed
+    assert not len(ret)  # first section is not collapsed
 
     ret = reindex._get_only_children(STRUCTURE_SOMA_SINGLE_CHILDREN[:, PARENT_GROUP_ID])
     assert_allclose(ret, [2, 3, ])
@@ -112,32 +111,32 @@ def test__only_child_removal():
     new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_SOMA_SINGLE_CHILDREN[:, PARENT_GROUP_ID],
         STRUCTURE_SOMA_SINGLE_CHILDREN[:, FIRST_POINT_ID])
-    eq_(new_parents, [2, 3, ])
-    eq_(new_segment_offset, {2: 1, 3: 2})
+    assert new_parents == [2, 3, ]
+    assert new_segment_offset == {2: 1, 3: 2}
 
     new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_MID_SINGLE_CHILDREN[:, PARENT_GROUP_ID],
         STRUCTURE_MID_SINGLE_CHILDREN[:, FIRST_POINT_ID])
-    eq_(new_parents, [6, 7, 8, 10, 12, ])
-    eq_(new_segment_offset, {6: 1, 7: 2, 8: 3, 10: 1, 12: 1, })
+    assert new_parents == [6, 7, 8, 10, 12, ]
+    assert new_segment_offset == {6: 1, 7: 2, 8: 3, 10: 1, 12: 1, }
 
     new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_LEAF_SINGLE_CHILDREN[:, PARENT_GROUP_ID],
         STRUCTURE_LEAF_SINGLE_CHILDREN[:, FIRST_POINT_ID])
-    eq_(new_parents, [2, 6, 7, 8, ])
-    eq_(new_segment_offset, {2: 1, 6: 1, 7: 2, 8: 3, })
+    assert new_parents == [2, 6, 7, 8, ]
+    assert new_segment_offset == {2: 1, 6: 1, 7: 2, 8: 3, }
 
     new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_TWO_CHILD_UNMERGED[:, PARENT_GROUP_ID],
         STRUCTURE_TWO_CHILD_UNMERGED[:, FIRST_POINT_ID])
-    eq_(new_parents, [2, 3, 5, 7, 8, ])
-    eq_(new_segment_offset, {2: (5 - 1 - 1), 3: 3 + 2, 5: 1, 7: 1, 8: 1 + 1})
+    assert new_parents == [2, 3, 5, 7, 8, ]
+    assert new_segment_offset == {2: (5 - 1 - 1), 3: 3 + 2, 5: 1, 7: 1, 8: 1 + 1}
 
     new_parents, new_segment_offset = reindex._only_child_removal(
         STRUCTURE_THREE_CHILD_UNMERGED[:, PARENT_GROUP_ID],
         STRUCTURE_THREE_CHILD_UNMERGED[:, FIRST_POINT_ID])
-    eq_(new_parents, [2, 4, 6, 9, 11])
-    eq_(new_segment_offset, {2: 1, 4: 1, 6: 1, 9: 1, 11: 1})
+    assert new_parents == [2, 4, 6, 9, 11]
+    assert new_segment_offset == {2: 1, 4: 1, 6: 1, 9: 1, 11: 1}
 
 
 
@@ -146,8 +145,8 @@ def test__update_structure_and_points():
         points = np.vstack([np.arange(structure[-1, 0] + 5)] * 3).T
         new_structure, new_points = reindex._update_structure_and_points(
             structure, points, new_parents)
-        eq_(len(new_parents), len(structure) - len(new_structure))
-        eq_(len(new_parents), len(points) - len(new_points))
+        assert len(new_parents) == len(structure) - len(new_structure)
+        assert len(new_parents) == len(points) - len(new_points)
 
     test(STRUCTURE_SOMA_SINGLE_CHILDREN, [2, 3, ])
     test(STRUCTURE_MID_SINGLE_CHILDREN, [6, 7, 8, 10, 12, ])
@@ -158,8 +157,8 @@ def test__update_section_ids():
     segment_id = np.array([], dtype=np.int)
     new_section_id, new_segment_id = reindex._update_section_and_segment_ids(
         section_id, segment_id, {'new_parents': {}, 'new_segment_offset': {}, })
-    eq_(len(section_id), 0)
-    eq_(len(segment_id), 0)
+    assert len(section_id) == 0
+    assert len(segment_id) == 0
 
     section_id = np.array([0, 1, 2, 3, 4], dtype=np.int)
     segment_id = np.array([9, 10, 11, 12, 13], dtype=np.int)
@@ -168,8 +167,8 @@ def test__update_section_ids():
                }
     new_section_id, new_segment_id = reindex._update_section_and_segment_ids(
         section_id, segment_id, updates)
-    eq_(list(new_section_id), [0, 1, 1, 1, 2, ])
-    eq_(list(new_segment_id), [9, 10, 11 + 2, 12 + 4, 13])
+    assert list(new_section_id) == [0, 1, 1, 1, 2, ]
+    assert list(new_segment_id) == [9, 10, 11 + 2, 12 + 4, 13]
 
 
 def test__apply_to_edges():
@@ -236,7 +235,7 @@ def test_reindex():
         temp_dir = os.path.join(tmp, 'reindex')
         morphs_path = str(DATA_PATH / 'morphs')
         h5_updates = reindex.generate_h5_updates(morphs_path)
-        eq_(len(h5_updates), 2)
+        assert len(h5_updates) == 2
 
         #{'two_child_unmerged.h5':
         # {'new_parents': [2, 3, 5, 7, 8], 'new_segment_offset': {2: 3, 3: 5, 5: 1, 7: 1, 8: 2}},
@@ -250,7 +249,7 @@ def test_reindex():
                      'two_child_merged.h5',
                      'two_child_unmerged.h5',
                      ):
-            ok_(os.path.exists(os.path.join(new_morph_path, path)))
+            assert os.path.exists(os.path.join(new_morph_path, path))
 
         #TODO: h5diff three_child_merged.h5 three_child_unmerged.h5
 
@@ -292,9 +291,9 @@ def test_reindex():
             [ 10 ]     0     5   0     1
         '''
         with h5py.File(edge, 'r') as h5:
-            eq_(list(h5['edges/default/0/afferent_section_id'][[0, 2, 4, 5, 6, 8, 9, 10]]),
+            assert (list(h5['edges/default/0/afferent_section_id'][[0, 2, 4, 5, 6, 8, 9, 10]]) ==
                 [3, 2, 6, 3, 4, 1, 3, 2])
-            eq_(list(h5['edges/default/0/afferent_segment_id'][[0, 2, 4, 5, 6, 8, 9, 10]]),
+            assert (list(h5['edges/default/0/afferent_segment_id'][[0, 2, 4, 5, 6, 8, 9, 10]]) ==
                 [2, 1, 1, 1, 0, 5, 1, 1])
 
         reindex.write_sonata_pos(new_morph_path, morphologies, population, [edge, ])

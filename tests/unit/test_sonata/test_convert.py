@@ -6,7 +6,7 @@ import tempfile
 import voxcell
 import pandas as pd
 
-from nose.tools import ok_, eq_, assert_raises
+import pytest
 from pandas.testing import assert_frame_equal
 
 from brainbuilder.utils.sonata import convert
@@ -28,20 +28,22 @@ def test__add_me_info():
     convert._add_me_info(cells, mecombo_info)
     cells = cells.as_dataframe()
 
-    eq_(len(cells), 10)
-    ok_('@dynamics:threshold' in cells)
+    assert len(cells) == 10
+    assert '@dynamics:threshold' in cells
 
     cells = _mock_cells()
     mecombo_info = pd.DataFrame({'combo_name': ['me_combo_0' for _ in range(10)],
                                  'threshold': [f'threshold_{i}' for i in range(10)],
                                  })
-    assert_raises(AssertionError, convert._add_me_info, cells, mecombo_info)
+    with pytest.raises(AssertionError):
+        convert._add_me_info(cells, mecombo_info)
 
     cells = _mock_cells()
     mecombo_info = pd.DataFrame({'combo_name': [f'me_combo_{i}' for i in range(9)],
                                  'threshold': [f'threshold_{i}' for i in range(9)],
                                  })
-    assert_raises(BrainBuilderError, convert._add_me_info, cells, mecombo_info)
+    with pytest.raises(BrainBuilderError):
+        convert._add_me_info(cells, mecombo_info)
 
 
 def test_provide_me_info():
@@ -150,4 +152,5 @@ def test_validate_node_set():
                      'fake1': {'node_id': [1]},
                      'fake2': {'fake_property': [3, 4]}}
 
-    assert_raises(BrainBuilderError, convert.validate_node_set, incorrect_set, cells)
+    with pytest.raises(BrainBuilderError):
+        convert.validate_node_set(incorrect_set, cells)

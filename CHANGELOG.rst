@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## 0.16.2
+  * Added more intelligent target to node set converter (BBPP82-514)
+  * Use pytest for tests (NSETM-1543)
+
 ## 0.16.1
 
   * Fix compat for bluepy>=2.3

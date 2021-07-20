@@ -1,45 +1,40 @@
-import os
-
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from io import StringIO
-
-from nose.tools import eq_, raises, assert_raises
+from io import StringIO
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from pandas.testing import assert_frame_equal
-
 from voxcell import CellCollection
+
+import pytest
 
 from brainbuilder.exceptions import BrainBuilderError
 from brainbuilder.utils import bbp
 
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
+DATA_PATH = Path(__file__).resolve().parent / 'data'
 
 
 def test_load_cell_composition_v1():
-    with assert_raises(ValueError) as e:
-        bbp.load_cell_composition(os.path.join(DATA_PATH, 'cell_composition_v1.yaml'))
-    assert 'Use cell composition file of version 2' in e.exception.args[0]
+    with pytest.raises(ValueError, match='Use cell composition file of version 2'):
+        bbp.load_cell_composition(DATA_PATH / 'cell_composition_v1.yaml')
 
 
 def test_load_cell_composition_v2():
-    content = bbp.load_cell_composition(os.path.join(DATA_PATH, 'cell_composition_v2.yaml'))
-    assert content == {'version': 'v2.0', 'neurons': [{'density': 68750, 'region': 'mc0;Rt',
-                                                       'traits': {'layer': 'Rt', 'mtype': 'Rt_RC',
-                                                                  'etype': {'cNAD_noscltb': 0.43,
-                                                                            'cAD_noscltb': 0.57}}},
-                                                      {'density': '{L23_MC}', 'region': 'mc1;Rt',
-                                                       'traits': {'layer': 'Rt', 'mtype': 'Rt_RC',
-                                                                  'etype': {'cNAD_noscltb': 0.43,
-                                                                            'cAD_noscltb': 0.57}}}]}
+    content = bbp.load_cell_composition(DATA_PATH / 'cell_composition_v2.yaml')
+    assert content == {'version': 'v2.0',
+                       'neurons': [{'density': 68750, 'region': 'mc0;Rt',
+                                    'traits': {'layer': 'Rt', 'mtype': 'Rt_RC',
+                                               'etype': {'cNAD_noscltb': 0.43,
+                                                         'cAD_noscltb': 0.57}}},
+                                   {'density': '{L23_MC}', 'region': 'mc1;Rt',
+                                    'traits': {'layer': 'Rt', 'mtype': 'Rt_RC',
+                                               'etype': {'cNAD_noscltb': 0.43,
+                                                         'cAD_noscltb': 0.57}}}]}
 
 
 def test_load_neurondb():
-    actual = bbp.load_neurondb(os.path.join(DATA_PATH, 'neuronDBv2.dat'))
+    actual = bbp.load_neurondb(DATA_PATH / 'neuronDBv2.dat')
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
         'layer': ["L1", "L2"],
@@ -49,7 +44,7 @@ def test_load_neurondb():
 
 
 def test_load_extneurondb_as_neurondb():
-    actual = bbp.load_neurondb(os.path.join(DATA_PATH, 'extneuronDB.dat'))
+    actual = bbp.load_neurondb(DATA_PATH / 'extneuronDB.dat')
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
         'layer': ["L1", "L2"],
@@ -59,13 +54,12 @@ def test_load_extneurondb_as_neurondb():
 
 
 def test_load_invalid_neurondb():
-    with assert_raises(ValueError) as e:
-        bbp.load_neurondb(os.path.join(DATA_PATH, 'hierarchy.json'))
-    assert 'Invalid NeuronDB format' in e.exception.args[0]
+    with pytest.raises(ValueError, match='Invalid NeuronDB format'):
+        bbp.load_neurondb(DATA_PATH / 'hierarchy.json')
 
 
 def test_load_extneurondb():
-    actual = bbp.load_extneurondb(os.path.join(DATA_PATH, 'extneuronDB.dat'))
+    actual = bbp.load_extneurondb(DATA_PATH / 'extneuronDB.dat')
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
         'layer': ["L1", "L2"],
@@ -77,7 +71,7 @@ def test_load_extneurondb():
 
 
 def test_load_mecombo_emodel_as_extneurondb():
-    actual = bbp.load_extneurondb(os.path.join(DATA_PATH, 'mecombo_emodel.dat'))
+    actual = bbp.load_extneurondb(DATA_PATH / 'mecombo_emodel.dat')
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
         'layer': [1, 2],
@@ -89,13 +83,12 @@ def test_load_mecombo_emodel_as_extneurondb():
 
 
 def test_load_invalid_extneurondb():
-    with assert_raises(ValueError) as e:
-        bbp.load_extneurondb(os.path.join(DATA_PATH, 'neuronDBv2.dat'))
-    assert 'Invalid ExtNeuronDB format' in e.exception.args[0]
+    with pytest.raises(ValueError, match='Invalid ExtNeuronDB format'):
+        bbp.load_extneurondb(DATA_PATH / 'neuronDBv2.dat')
 
 
 def test_load_mecombo_emodel():
-    actual = bbp.load_mecombo_emodel(os.path.join(DATA_PATH, 'mecombo_emodel.dat'))
+    actual = bbp.load_mecombo_emodel(DATA_PATH / 'mecombo_emodel.dat')
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
         'layer': [1, 2],
@@ -110,14 +103,13 @@ def test_load_mecombo_emodel():
 
 
 def test_load_invalid_mecombo_emodel():
-    with assert_raises(ValueError) as e:
-        bbp.load_mecombo_emodel(os.path.join(DATA_PATH, 'extneuronDB.dat'))
-    assert 'Invalid mecombo_emodel format' in e.exception.args[0]
+    with pytest.raises(ValueError, match='Invalid mecombo_emodel format'):
+        bbp.load_mecombo_emodel(DATA_PATH / 'extneuronDB.dat')
 
 
 def test_gid2str():
     actual = bbp.gid2str(42)
-    eq_(actual, "a42")
+    assert actual == "a42"
 
 
 def test_write_target():
@@ -133,7 +125,7 @@ def test_write_target():
         "}",
         ""
     ])
-    eq_(actual, expected)
+    assert actual == expected
 
 
 def test_write_property_targets():
@@ -170,7 +162,7 @@ def test_write_property_targets():
         "}",
         ""
     ])
-    eq_(actual, expected)
+    assert actual == expected
 
 
 def test_assign_emodels():
@@ -223,13 +215,13 @@ def test_assign_emodels_overwrite():
     assert_frame_equal(actual, expected, check_like=True)
 
 
-@raises(BrainBuilderError)
 def test_assign_emodels_raises():
-    cells = CellCollection()
-    cells.properties = pd.DataFrame([
-        ('morph-A', 1, 'mtype-A', 'etype-A', 'prop-A'),
-    ], columns=['morphology', 'layer', 'mtype', 'etype', 'prop'])
-    morphdb = pd.DataFrame([
-        ('morph-A', 1, 'mtype-A', 'etype-A1', 'me_combo-A1'),
-    ], columns=['morphology', 'layer', 'mtype', 'etype', 'me_combo'])
-    actual = bbp.assign_emodels(cells, morphdb)
+    with pytest.raises(BrainBuilderError):
+        cells = CellCollection()
+        cells.properties = pd.DataFrame([
+            ('morph-A', 1, 'mtype-A', 'etype-A', 'prop-A'),
+        ], columns=['morphology', 'layer', 'mtype', 'etype', 'prop'])
+        morphdb = pd.DataFrame([
+            ('morph-A', 1, 'mtype-A', 'etype-A1', 'me_combo-A1'),
+        ], columns=['morphology', 'layer', 'mtype', 'etype', 'me_combo'])
+        bbp.assign_emodels(cells, morphdb)

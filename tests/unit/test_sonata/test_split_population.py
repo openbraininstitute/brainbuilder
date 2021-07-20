@@ -8,7 +8,6 @@ import pandas as pd
 from numpy.testing import assert_array_equal
 
 from brainbuilder.utils.sonata import split_population
-from nose.tools import eq_, ok_
 
 import utils
 
@@ -17,8 +16,8 @@ DATA_PATH = (Path(__file__).parent / '../data/sonata/split_population/').resolve
 
 
 def test__get_population_name():
-    eq_('src__dst__chemical', split_population._get_population_name(src='src', dst='dst'))
-    eq_('src', split_population._get_population_name(src='src', dst='src'))
+    assert 'src__dst__chemical' == split_population._get_population_name(src='src', dst='dst')
+    assert 'src' == split_population._get_population_name(src='src', dst='src')
 
 
 def test__write_nodes():
@@ -29,8 +28,8 @@ def test__write_nodes():
                    }
     with utils.tempdir('test__write_nodes') as tmp:
         split_population._write_nodes(tmp, split_nodes)
-        ok_((Path(tmp) / 'nodes_A.h5').exists())
-        ok_((Path(tmp) / 'nodes_B.h5').exists())
+        assert (Path(tmp) / 'nodes_A.h5').exists()
+        assert (Path(tmp) / 'nodes_B.h5').exists()
 
         with h5py.File((Path(tmp) / 'nodes_A.h5'), 'r') as h5:
             assert_array_equal(h5['/nodes/A/0/fake_prop'], np.arange(10))
@@ -45,24 +44,24 @@ def test__get_node_id_mapping():
                    'B': pd.DataFrame(index=np.arange(10, 15)),
                    }
     ret = split_population._get_node_id_mapping(split_nodes)
-    eq_(len(ret), 2)
-    eq_(ret['A'].new_id.to_list(), list(range(10)))
-    eq_(ret['B'].new_id.to_list(), list(range(5)))
+    assert len(ret) == 2
+    assert ret['A'].new_id.to_list() == list(range(10))
+    assert ret['B'].new_id.to_list() == list(range(5))
 
 
 def test__split_population_by_attribute():
     # nodes.h5 contains 3 nodes with mtypes "L2_X", "L6_Y", "L6_Y"
     nodes_path = DATA_PATH / 'nodes.h5'
     ret = split_population._split_population_by_attribute(nodes_path, 'mtype')
-    eq_(len(ret), 2)
-    ok_(isinstance(ret['L2_X'], pd.DataFrame))
+    assert len(ret) == 2
+    assert isinstance(ret['L2_X'], pd.DataFrame)
 
-    eq_(len(ret['L2_X']), 1)
-    eq_(ret['L2_X'].mtype.unique()[0], 'L2_X')
+    assert len(ret['L2_X']) == 1
+    assert ret['L2_X'].mtype.unique()[0] == 'L2_X'
     assert_array_equal(ret['L2_X'].index, [0])
 
-    eq_(len(ret['L6_Y']), 2)
-    eq_(ret['L6_Y'].mtype.unique()[0], 'L6_Y')
+    assert len(ret['L6_Y']) == 2
+    assert ret['L6_Y'].mtype.unique()[0] == 'L6_Y'
     assert_array_equal(ret['L6_Y'].index, [1, 2])
 
 
@@ -74,11 +73,11 @@ def test__write_circuit_config():
         split_population._write_circuit_config(tmp, split_nodes)
         with open(os.path.join(tmp, 'circuit_config.json'), 'r') as fd:
             ret = json.load(fd)
-            ok_('manifest' in ret)
-            ok_('networks' in ret)
-            ok_('nodes' in ret['networks'])
-            ok_('nodes' in ret['networks'])
-            eq_(len(ret['networks']['edges']), 0)  # no edge files
+            assert 'manifest' in ret
+            assert 'networks' in ret
+            assert 'nodes' in ret['networks']
+            assert 'nodes' in ret['networks']
+            assert len(ret['networks']['edges']) == 0  # no edge files
 
         open(os.path.join(tmp, 'edges_A.h5'), 'w').close()
         open(os.path.join(tmp, 'edges_B.h5'), 'w').close()
@@ -86,7 +85,7 @@ def test__write_circuit_config():
         split_population._write_circuit_config(tmp, split_nodes)
         with open(os.path.join(tmp, 'circuit_config.json'), 'r') as fd:
             ret = json.load(fd)
-            eq_(len(ret['networks']['edges']), 3)
+            assert len(ret['networks']['edges']) == 3
 
 
 def test__write_edges():

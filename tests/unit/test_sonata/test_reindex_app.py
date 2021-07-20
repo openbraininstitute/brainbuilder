@@ -5,7 +5,6 @@ import h5py
 
 from morph_tool import diff
 
-from nose.tools import ok_
 from numpy.testing import assert_allclose, assert_array_equal
 
 TEST_DATA_PATH = Path(__file__).parent.parent / 'data'
@@ -53,14 +52,14 @@ def test__update_morphologies():
         with h5py.File(three_child_expected, 'r') as exp, h5py.File(three_child_updated, 'r') as act:
             assert_array_equal(exp['structure'][:], act['structure'][:])
             assert_allclose(exp['points'][:], act['points'][:])
-        ok_(not diff(three_child_expected, three_child_updated))
+        assert not diff(three_child_expected, three_child_updated)
 
         two_child_expected = MORPHS_PATH / 'two_child_merged.h5'
         two_child_updated = output_dir / 'two_child_unmerged.h5'
         with h5py.File(two_child_expected, 'r') as exp, h5py.File(two_child_updated, 'r') as act:
             assert_array_equal(exp['structure'][:], act['structure'][:])
             assert_allclose(exp['points'][:], act['points'][:])
-        ok_(not diff(two_child_expected, two_child_updated))
+        assert not diff(two_child_expected, two_child_updated)
 
         with h5py.File(edges_copy, 'r') as h5:
             grp = h5['/edges/default/0']

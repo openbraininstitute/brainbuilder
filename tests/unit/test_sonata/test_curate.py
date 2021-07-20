@@ -6,10 +6,11 @@ from pathlib import Path
 import h5py
 import numpy as np
 
+import pytest
+
 from brainbuilder.utils import bbp
 from brainbuilder.utils.sonata import curate
 
-import nose.tools as nt
 
 TEST_DATA_PATH = Path(__file__).parent.parent / 'data'
 DATA_PATH = TEST_DATA_PATH / 'sonata' / 'curate'
@@ -31,24 +32,28 @@ def test_get_popualtion_names():
     with _copy_file(NODES_FILE) as edges_copy_file:
         with h5py.File(edges_copy_file, 'r+') as h5f:
             del h5f['/nodes']
-        nt.assert_raises(AssertionError, curate.get_population_names, edges_copy_file)
+        with pytest.raises(AssertionError):
+            curate.get_population_names(edges_copy_file)
 
     with _copy_file(EDGES_FILE) as edges_copy_file:
         with h5py.File(edges_copy_file, 'r+') as h5f:
             del h5f['/edges']
-        nt.assert_raises(AssertionError, curate.get_population_names, edges_copy_file)
+        with pytest.raises(AssertionError):
+            curate.get_population_names(edges_copy_file)
 
 
 def test_get_population_name():
     assert 'default' == curate.get_population_name(NODES_FILE)
     assert 'default' == curate.get_population_name(EDGES_FILE)
 
-    nt.assert_raises(ValueError, curate.get_population_name, EDGES_FILE, 'unknown')
+    with pytest.raises(ValueError):
+        curate.get_population_name(EDGES_FILE, 'unknown')
 
     with _copy_file(NODES_FILE) as nodes_copy_file:
         with h5py.File(nodes_copy_file, 'r+') as h5f:
             h5f['nodes'].create_group('2nd_population')
-        nt.assert_raises(AssertionError, curate.get_population_name, nodes_copy_file)
+        with pytest.raises(AssertionError):
+            curate.get_population_name(nodes_copy_file)
 
 
 def test_rename_node_population():
