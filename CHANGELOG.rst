@@ -4,6 +4,8 @@ Changelog
 ## 0.16.2
   * Added more intelligent target to node set converter (BBPP82-514)
   * Use pytest for tests (NSETM-1543)
+  * Deprecate ``brainbuilder.utils.sonata.convert.write_network_config``. Use circuit-build
+    project instead (NSETM-1526).
 
 ## 0.16.1
 

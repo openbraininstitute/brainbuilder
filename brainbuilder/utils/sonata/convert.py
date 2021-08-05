@@ -19,6 +19,7 @@ import h5py
 from bluepy import Circuit
 from voxcell import CellCollection
 from brainbuilder.exceptions import BrainBuilderError
+from brainbuilder.utils import deprecate
 
 
 L = logging.getLogger('brainbuilder')
@@ -206,6 +207,7 @@ def write_network_config(base_dir,
     """
 
     # pylint: disable=too-many-arguments
+    deprecate.warn('`write_network_config` is deprecated. Use the one from "circuit-build" instead')
     content = OrderedDict()
     content['manifest'] = {
         '$BASE_DIR': base_dir,
