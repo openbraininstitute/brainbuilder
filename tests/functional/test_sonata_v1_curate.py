@@ -1,4 +1,6 @@
-"""Application of `curate` functionality to existing circuits"""
+"""Application of `curate` functionality to existing Sonata circuits of version 1.
+
+The version 1 is the original and a base for Sonata BBP spec."""
 import shutil
 import tempfile
 from pathlib import Path
