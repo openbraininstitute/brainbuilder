@@ -17,10 +17,10 @@ import pandas as pd
 import h5py
 
 from bluepy import Circuit
+from bluepy.impl.target import TARGET_REGEX
 from voxcell import CellCollection
 from brainbuilder.exceptions import BrainBuilderError
 from brainbuilder.utils import deprecate
-
 
 L = logging.getLogger('brainbuilder')
 
@@ -247,6 +247,29 @@ def validate_node_set(node_set, cells):
             raise BrainBuilderError(f'Target {name} differs in target file and node set file')
 
 
+def _parse_targets(target_files):
+    """Return a dict of all targets.
+
+    This function basically repeats the implementation of targets for bluepy<2.4.1. As of 2.4.1
+    the implementation is optimized to reduce memory. That's why the unoptimized implementation
+    is kept here for conversion purposes only.
+    This function does not check for duplicating of targets because it expects `Circuit`
+    constructor to take care of it.
+    """
+    def _parse_target_file(filepath):
+        """ Parse .target file, return generator of `Target`s. """
+        with open(filepath) as f:
+            contents = f.read()
+        for m in TARGET_REGEX.finditer(contents):
+            yield m.group('name'), m.group('contents').strip().split()
+
+    targets = {}
+    for file in target_files:
+        for target_name, target_content in _parse_target_file(file):
+            targets[target_name] = target_content
+    return targets
+
+
 def write_node_set_from_targets(input_dir, output_file, cells_path):
     """Write SONATA node_set from all target files in a directory.
 
@@ -256,17 +279,14 @@ def write_node_set_from_targets(input_dir, output_file, cells_path):
 
     The 'brainbuilder targets node-sets' should be preferred if possible.
     """
-    cells = Circuit({'cells': cells_path,
-                     'targets': glob.glob(input_dir + '/*.target')}).cells
+    target_files = glob.glob(input_dir + '/*.target')
+    cells = Circuit({'cells': cells_path, 'targets': target_files}).cells
     if not os.path.basename(output_file) == 'node_sets.json':
         basename = os.path.basename(output_file)
         L.warning('basename "%s" is not "node_sets.json" change your config file accordingly.',
                   basename)
 
-    output_dict = {}
-
     properties = set.intersection(cells.available_properties, ['etype', 'mtype', 'region'])
-
     # Create a mapping from unique property values (possible target names) to property names
     # e.g. {'dNAC': {'etype': 'dNAC'}} (i.e, for all cells in target 'dNAC': etype==dNAC)
     mapping = {target_name: {property_name: target_name} for property_name in properties
@@ -274,25 +294,24 @@ def write_node_set_from_targets(input_dir, output_file, cells_path):
     mapping.update({'Excitatory': {'synapse_class': 'EXC'},
                    'Inhibitory': {'synapse_class': 'INH'}})
 
-    target_context = cells._targets  # pylint: disable=protected-access
-    targets = target_context._targets  # pylint: disable=protected-access
-
+    targets = _parse_targets(target_files)
     re_layer = re.compile(r'^layer(\d)$', re.IGNORECASE)
     re_node_id = re.compile(r'^a\d+$')
 
-    def target_to_node_set_entry(name, target):
-        L.info('Converting %s...', name)
-        if name in mapping:
-            return mapping[name]
-        if re_layer.match(name):
-            return {'layer': int(re_layer.match(name).group(1))}
-        if re_node_id.match(target.children[0]):
+    def target_to_node_set_entry(target_name, target_content):
+        L.info('Converting %s...', target_name)
+        if target_name in mapping:
+            return mapping[target_name]
+        if re_layer.match(target_name):
+            return {'layer': int(re_layer.match(target_name).group(1))}
+        if re_node_id.match(target_content[0]):
             # targets are built from a mvd3 file so indexing starts from 1 compare to 0 in SONATA
-            return {'node_id': (target_context.resolve(name) - 1).tolist()}
+            return {'node_id': (cells.ids(target_name) - 1).tolist()}
 
-        return list(set(target.children))
+        return list(set(target_content))
 
-    output_dict = {name: target_to_node_set_entry(name, target) for name, target in targets.items()}
+    output_dict = {name: target_to_node_set_entry(name, contents)
+                   for name, contents in targets.items()}
 
     validate_node_set(output_dict, cells)
 

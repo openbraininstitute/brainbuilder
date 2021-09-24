@@ -127,7 +127,7 @@ def test_write_node_set_from_targets():
 
     assert set(data.keys()) == all_keys
     assert 'node_id' in data['Just_testing']
-    assert set(data['Just_testing']['node_id']) == set([0, 1, 2])
+    assert set(data['Just_testing']['node_id']) == {0, 1, 2}
     assert all('node_id' not in data[k] for k in keys_without_node_ids)
 
 

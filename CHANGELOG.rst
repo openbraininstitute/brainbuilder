@@ -6,6 +6,8 @@ Changelog
   * Use pytest for tests (NSETM-1543)
   * Deprecate ``brainbuilder.utils.sonata.convert.write_network_config``. Use circuit-build
     project instead (NSETM-1526).
+  * Fix ``brainbuilder.utils.sonata.convert.write_node_set_from_targets`` due to optimization
+    of targets in bluepy==2.4.1.
 
 ## 0.16.1
 
