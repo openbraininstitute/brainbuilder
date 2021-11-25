@@ -26,8 +26,8 @@ def _copy_file(file):
 
 
 def test_get_popualtion_names():
-    assert ['default'] == curate.get_population_names(NODES_FILE)
-    assert ['default'] == curate.get_population_names(EDGES_FILE)
+    assert ['not-default'] == curate.get_population_names(NODES_FILE)
+    assert ['not-default'] == curate.get_population_names(EDGES_FILE)
 
     with _copy_file(NODES_FILE) as edges_copy_file:
         with h5py.File(edges_copy_file, 'r+') as h5f:
@@ -43,8 +43,8 @@ def test_get_popualtion_names():
 
 
 def test_get_population_name():
-    assert 'default' == curate.get_population_name(NODES_FILE)
-    assert 'default' == curate.get_population_name(EDGES_FILE)
+    assert 'not-default' == curate.get_population_name(NODES_FILE)
+    assert 'not-default' == curate.get_population_name(EDGES_FILE)
 
     with pytest.raises(ValueError):
         curate.get_population_name(EDGES_FILE, 'unknown')
@@ -61,7 +61,7 @@ def test_rename_node_population():
         curate.rename_node_population(nodes_copy_file, 'newname')
         assert ['newname'] == curate.get_population_names(nodes_copy_file)
     with _copy_file(NODES_FILE) as nodes_copy_file:
-        curate.rename_node_population(nodes_copy_file, 'newname', 'default')
+        curate.rename_node_population(nodes_copy_file, 'newname', 'not-default')
         assert ['newname'] == curate.get_population_names(nodes_copy_file)
 
 
@@ -70,40 +70,40 @@ def test_rename_edge_population():
         curate.rename_edge_population(edges_copy_file, 'newname')
         assert ['newname'] == curate.get_population_names(edges_copy_file)
     with _copy_file(EDGES_FILE) as edges_copy_file:
-        curate.rename_edge_population(edges_copy_file, 'newname', 'default')
+        curate.rename_edge_population(edges_copy_file, 'newname', 'not-default')
         assert ['newname'] == curate.get_population_names(edges_copy_file)
 
 
 def test_add_edge_type_id():
     with _copy_file(EDGES_FILE) as edges_copy_file:
         with h5py.File(edges_copy_file, 'r+') as h5f:
-            del h5f['edges/default/edge_type_id']
-        curate.add_edge_type_id(edges_copy_file, 'default')
+            del h5f['edges/not-default/edge_type_id']
+        curate.add_edge_type_id(edges_copy_file, 'not-default')
         with h5py.File(edges_copy_file, 'r') as h5f:
-            edge_type_id = np.asarray(h5f['edges/default/edge_type_id'])
+            edge_type_id = np.asarray(h5f['edges/not-default/edge_type_id'])
             assert (edge_type_id == -1).all()
 
 
 def test_set_nodes_attribute():
     with _copy_file(NODES_FILE) as nodes_copy_file:
         with h5py.File(nodes_copy_file, 'r+') as h5f:
-            del h5f['nodes/default/0/model_type']
+            del h5f['nodes/not-default/0/model_type']
         curate.set_group_attribute(
-            nodes_copy_file, 'nodes', 'default', '0', 'model_type', 'biophysical')
+            nodes_copy_file, 'nodes', 'not-default', '0', 'model_type', 'biophysical')
         with h5py.File(nodes_copy_file, 'r') as h5f:
-            assert [b'biophysical'] == h5f['nodes/default/0/@library/model_type'][:].tolist()
-            model_type = np.asarray(h5f['nodes/default/0/model_type'])
-            assert model_type.dtype == np.int
+            assert [b'biophysical'] == h5f['nodes/not-default/0/@library/model_type'][:].tolist()
+            model_type = np.asarray(h5f['nodes/not-default/0/model_type'])
+            assert model_type.dtype == int
             assert (model_type == 0).all()
 
 
 def test_set_edges_attribute():
     with _copy_file(EDGES_FILE) as edges_copy_file:
         curate.set_group_attribute(
-            edges_copy_file, 'edges', 'default', '0', 'syn_weight', 2.2, True)
+            edges_copy_file, 'edges', 'not-default', '0', 'syn_weight', 2.2, True)
         with h5py.File(edges_copy_file, 'r') as h5f:
-            syn_weight = np.asarray(h5f['edges/default/0/syn_weight'])
-            assert syn_weight.dtype == np.float
+            syn_weight = np.asarray(h5f['edges/not-default/0/syn_weight'])
+            assert syn_weight.dtype == float
             assert (syn_weight == 2.2).all()
 
 
@@ -138,9 +138,9 @@ def test_merge_h5_files():
         with TemporaryDirectory() as tmpdir:
             merged_file = Path(tmpdir) / 'merged_nodes.h5'
             curate.merge_h5_files([NODES_FILE, nodes_copy_file], 'nodes', merged_file)
-            assert ['default', 'newname'] == curate.get_population_names(merged_file)
+            assert ['newname', 'not-default'] == curate.get_population_names(merged_file)
             with h5py.File(merged_file, 'r') as h5f:
-                assert '/nodes/default/0' in h5f
+                assert '/nodes/not-default/0' in h5f
                 assert '/nodes/newname/0' in h5f
 
 def test__has_unifurcations():

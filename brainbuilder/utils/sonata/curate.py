@@ -266,8 +266,8 @@ def create_projection_source_nodes(projection_file, source_nodes_dir, source_nod
     """
     names = get_population_names(projection_file)
     assert len(names) == 1, f'{projection_file} has multiple populations but must have only one'
-    proj_population_name = names[0]
-    start, _, size = _get_source_nodes_size(projection_file)
+    proj_population_name = next(iter(names))
+    start, _, size = _get_source_nodes_size(projection_file, proj_population_name)
     source_nodes_file = _create_source_nodes(source_nodes_population_name, size, source_nodes_dir)
     _correct_source_nodes_offset(projection_file, proj_population_name, start)
     return source_nodes_file

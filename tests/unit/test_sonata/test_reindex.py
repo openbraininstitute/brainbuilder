@@ -153,15 +153,15 @@ def test__update_structure_and_points():
     test(STRUCTURE_LEAF_SINGLE_CHILDREN, [2, 6, 7, 8, ])
 
 def test__update_section_ids():
-    section_id = np.array([], dtype=np.int)
-    segment_id = np.array([], dtype=np.int)
+    section_id = np.array([], dtype=int)
+    segment_id = np.array([], dtype=int)
     new_section_id, new_segment_id = reindex._update_section_and_segment_ids(
         section_id, segment_id, {'new_parents': {}, 'new_segment_offset': {}, })
     assert len(section_id) == 0
     assert len(segment_id) == 0
 
-    section_id = np.array([0, 1, 2, 3, 4], dtype=np.int)
-    segment_id = np.array([9, 10, 11, 12, 13], dtype=np.int)
+    section_id = np.array([0, 1, 2, 3, 4], dtype=int)
+    segment_id = np.array([9, 10, 11, 12, 13], dtype=int)
     updates = {'new_parents': [2, 3, ],
                'new_segment_offset': {2: 2, 3: 4},
                }
@@ -175,39 +175,39 @@ def test__apply_to_edges():
     names = ('afferent_section_id', 'afferent_segment_id',
              'efferent_section_id', 'efferent_segment_id',
              )
-    edges = {'0': {name: np.array([], dtype=np.int) for name in names},
-             'target_node_id': np.array([], dtype=np.int),
-             'source_node_id': np.array([], dtype=np.int),
+    edges = {'0': {name: np.array([], dtype=int) for name in names},
+             'target_node_id': np.array([], dtype=int),
+             'source_node_id': np.array([], dtype=int),
              }
     updates = {'new_parents': {}, 'new_segment_offset': {}, }
     edges_orig = deepcopy(edges)
 
     #run w/ no changes ids
-    reindex._apply_to_edges(np.array([], np.int), updates, edges)
+    reindex._apply_to_edges(np.array([], int), updates, edges)
 
     for name in names:
         assert_allclose(edges_orig['0'][name], edges['0'][name])
 
     #run w/ missing ids, nothing will match, so no changes
-    reindex._apply_to_edges(np.array([1], np.int), updates, edges)
+    reindex._apply_to_edges(np.array([1], int), updates, edges)
 
     for name in names:
         assert_allclose(edges_orig['0'][name], edges['0'][name])
     assert_allclose(edges_orig['target_node_id'], edges['target_node_id'])
     assert_allclose(edges_orig['source_node_id'], edges['source_node_id'])
 
-    edges = {'0': {'afferent_section_id': np.array([0, 0, 0, 1, 1, 2, ], dtype=np.int),
-                   'afferent_segment_id': np.array([0, 1, 2, 0, 1, 3, ], dtype=np.int),
-                   'efferent_section_id': np.array([10, 10, 10, 11, 11, 12, ], dtype=np.int),
-                   'efferent_segment_id': np.array([0, 1, 2, 0, 1, 3, ], dtype=np.int),
+    edges = {'0': {'afferent_section_id': np.array([0, 0, 0, 1, 1, 2, ], dtype=int),
+                   'afferent_segment_id': np.array([0, 1, 2, 0, 1, 3, ], dtype=int),
+                   'efferent_section_id': np.array([10, 10, 10, 11, 11, 12, ], dtype=int),
+                   'efferent_segment_id': np.array([0, 1, 2, 0, 1, 3, ], dtype=int),
                    },
-             'target_node_id': np.array([0, 0, 1, 1, 2, 2, ], dtype=np.int),
-             'source_node_id': np.array([10, 10, 11, 11, 12, 12, ], dtype=np.int),
+             'target_node_id': np.array([0, 0, 1, 1, 2, 2, ], dtype=int),
+             'source_node_id': np.array([10, 10, 11, 11, 12, 12, ], dtype=int),
              }
     edges_orig = deepcopy(edges)
 
     updates = {'new_parents': {}, 'new_segment_offset': {}, }
-    reindex._apply_to_edges(np.array([1], np.int), updates, edges)
+    reindex._apply_to_edges(np.array([1], int), updates, edges)
 
     #no changes; updates empty
     for name in names:
@@ -216,7 +216,7 @@ def test__apply_to_edges():
     assert_allclose(edges_orig['source_node_id'], edges['source_node_id'])
 
     updates = {'new_parents': {1: []}, 'new_segment_offset': {1: 10}, }
-    ids = np.array([1], np.int)
+    ids = np.array([1], int)
     reindex._apply_to_edges(ids, updates, edges)
 
     # only afferent changes, since ids == 1
