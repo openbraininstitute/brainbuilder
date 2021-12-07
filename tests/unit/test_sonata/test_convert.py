@@ -1,14 +1,15 @@
 import json
-from mock import Mock
 import numpy as np
 from pathlib import Path
 import tempfile
+from unittest.mock import Mock
 import voxcell
 import pandas as pd
 
 import pytest
 from pandas.testing import assert_frame_equal
 
+from brainbuilder.utils import load_json
 from brainbuilder.utils.sonata import convert
 from brainbuilder.exceptions import BrainBuilderError
 
@@ -122,8 +123,7 @@ def test_write_node_set_from_targets():
         tmp_dir = Path(tmp_dir)
         out_file = tmp_dir / 'node_set.json'
         convert.write_node_set_from_targets(target_path, out_file, cells_path)
-        with open(out_file, 'r') as fd:
-            data = json.load(fd)
+        data = load_json(out_file)
 
     assert set(data.keys()) == all_keys
     assert 'node_id' in data['Just_testing']

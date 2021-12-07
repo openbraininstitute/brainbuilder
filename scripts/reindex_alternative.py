@@ -110,6 +110,7 @@ def _map_merged_section_pos(unmerged_sec_points, unmerged_pos, merged_sec_points
 
 def update_morphologies(asc_morphs, nodes, _, output, edges):  # pylint: disable=too-many-locals, too-many-statements
     """Update h5 morphologies"""
+    # pylint: disable=import-outside-toplevel
     from voxcell import CellCollection
 
     morph_filenames = CellCollection.load(nodes).as_dataframe()['morphology']

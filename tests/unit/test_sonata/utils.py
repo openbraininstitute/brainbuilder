@@ -1,4 +1,3 @@
-import json
 import subprocess
 import tempfile
 import shutil
@@ -6,6 +5,8 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from numpy.testing import assert_equal
+
+from brainbuilder.utils import load_json
 
 
 @contextmanager
@@ -53,5 +54,4 @@ def assert_h5_files_equal(actual_path, expected_path):
 
 
 def assert_json_files_equal(actual_path, expected_path):
-    with open(actual_path) as actual, open(expected_path) as expected:
-        assert json.load(actual) == json.load(expected)
+    assert load_json(actual_path) == load_json(expected_path)

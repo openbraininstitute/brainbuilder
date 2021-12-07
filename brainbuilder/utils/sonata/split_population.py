@@ -1,8 +1,8 @@
 """Split a SONATA node/edge population into sub-populations"""
 import itertools
-import json
 import logging
 import os
+from pathlib import Path
 
 import h5py
 import libsonata
@@ -11,6 +11,7 @@ import pandas as pd
 import voxcell
 
 from brainbuilder import utils
+from brainbuilder.utils import dump_json
 
 L = logging.getLogger(__name__)
 
@@ -272,9 +273,8 @@ def _write_circuit_config(output, split_nodes):
                     'edge_types_file': None
                 })
 
-    filepath = os.path.join(output, 'circuit_config.json')
-    with open(filepath, 'w') as fd:
-        json.dump(tmpl, fd)
+    filepath = Path(output) / 'circuit_config.json'
+    dump_json(filepath, tmpl)
     L.debug('Written circuit config %s', filepath)
 
 

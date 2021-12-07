@@ -27,6 +27,7 @@ def app():
 def assign(cells_path, subcellular_dir, transcriptome, mtype_taxonomy, cell_proteins,
            synapse_proteins, seed, output):
     """ Assign subcellular data """
+    # pylint: disable=import-outside-toplevel
     from brainbuilder.subcellular import assign as _assign
 
     cells = CellCollection.load(cells_path)

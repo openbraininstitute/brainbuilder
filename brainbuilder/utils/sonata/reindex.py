@@ -1,12 +1,14 @@
 r'''
-Single parents; collapse to single segment
+Single parents; collapse to single segment::
 
-Leaf node:
+    Leaf node
+
     ...---O---O---| => ...---------|
 
-Which is a general case of:
+Which is a general case of::
 
-Internal node:
+    Internal node
+
                     /-----|                   /-----|
     ...---O---O---O<         => ...---------O<
                     \-----|                   \-----|
@@ -101,10 +103,16 @@ def generate_h5_updates(h5_morph_path):
         h5_morph_path(str): path to location of h5 morphology files
 
     Returns:
-        dict(morph_name -> {'new_parents': list(deleted_child_id)
-                            'new_segment_offset':
-                                deleted_child_id -> segment_id increase needed,
-                           }
+        dict of updates with the following structure::
+
+            {
+                <morph_name>: {
+                    'new_parents': list(<deleted_child_id>)
+                    'new_segment_offset': {
+                        <deleted_child_id>: <segment_id increase needed>
+                    }
+                }
+            }
     '''
     ret = {}
     for file_ in glob.glob(os.path.join(h5_morph_path, '*.h5')):

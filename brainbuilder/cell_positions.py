@@ -64,9 +64,9 @@ def get_bbox_nonzero_entries(data, bbox, voxel_dimensions):
 
 
 def _create_cell_positions_uniform(density, density_factor):
-    '''Helper function that given cell density volumetric data creates cell
-    positions. Within voxels, samples are created according to a uniform
-    distribution.
+    '''Create cell positions given cell density volumetric data (using uniform distribution).
+
+    Within voxels, samples are created according to a uniform distribution.
 
     The total cell count is calculated based on cell density values.
 
@@ -76,8 +76,8 @@ def _create_cell_positions_uniform(density, density_factor):
             voxels. Default is 1.0.
 
     Returns:
-        positions: numpy.array of shape (cell_count, 3) where each row
-            represents a cell and the columns correspond to (x, y, z).
+        numpy.array: array of positions of shape (cell_count, 3) where each row
+        represents a cell and the columns correspond to (x, y, z).
     '''
     cell_count_per_voxel, cell_count = _get_cell_count(density, density_factor)
 
@@ -95,9 +95,7 @@ def _create_cell_positions_uniform(density, density_factor):
 
 
 def _create_cell_positions_poisson_disc(density, density_factor):
-    '''Helper function that given cell density volumetric data creates cell
-    positions with an algorithm that is based on the poisson disc sampling
-    method.
+    '''Create cell positions given cell density volumetric data (using poisson disc sampling).
 
     The upper limit of the total cell count is calculated based on cell density
     values. The minimum distance between points is based on the expected number
@@ -110,10 +108,11 @@ def _create_cell_positions_poisson_disc(density, density_factor):
             voxels. Default is 1.0.
 
     Returns:
-        positions: numpy.array of shape (nb_points, 3) where each row
-            represents a cell and the columns correspond to (x, y, z). The
-            upper limit of nb_points is the total cell count as extracted from
-            the density volumetric data.
+        numpy.array: array of positions of shape (nb_points, 3) where each row
+        represents a cell and the columns correspond to (x, y, z).
+
+        The upper limit of nb_points is the total cell count as extracted from
+        the density volumetric data.
     '''
     # pylint: disable=assignment-from-no-return
     cell_count_per_voxel, cell_count = _get_cell_count(density, density_factor)
@@ -155,19 +154,20 @@ def create_cell_positions(density, density_factor=1.0, method='basic', seed=None
         density(VoxelData): cell density (count / mm^3)
         density_factor(float): reduce / increase density proportionally for all
             voxels. Default is 1.0.
-        method: algorithm used for cell position creation. Default is 'basic'.
-            - 'basic': generated positions may collide or form clusters
-            - 'poisson_disc': positions are created with poisson disc sampling
-                              algorithm where minimum distance between points
-                              is modulated based on density values
+        method(str): algorithm used for cell position creation.
+            Default is ``basic`` and the possible values are:
 
-    seed: (optional) the numpy random seed (int) to be used.
+            - ``basic``: generated positions may collide or form clusters
+            - ``poisson_disc``: positions are created with poisson disc sampling algorithm
+              where minimum distance between points is modulated based on density values
+
+        seed(int): (optional) the numpy random seed to be used.
             Defaults to None, in which case the seed is not set and the outcome
             cannot be predicted.
 
     Returns:
-        positions: numpy.array of shape (cell_count, 3) where each row represents
-            a cell and the columns correspond to (x, y, z).
+        numpy.array: array of positions of shape (cell_count, 3) where each row represents
+        a cell and the columns correspond to (x, y, z).
     '''
     if seed is not None:
         np.random.seed(seed)  # make the output reproducible

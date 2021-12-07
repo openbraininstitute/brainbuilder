@@ -1,7 +1,6 @@
 '''test positions_and_orientations'''
 from unittest.mock import patch
 import h5py
-import yaml
 
 import numpy as np
 import numpy.testing as npt
@@ -10,6 +9,7 @@ from click.testing import CliRunner
 from voxcell import CellCollection, VoxelData  # type: ignore
 
 import brainbuilder.app.cells as tested
+from brainbuilder.utils import dump_yaml
 
 
 def get_result(runner):
@@ -123,8 +123,7 @@ def test_positions_and_orientations_valid_input():
     config = create_density_configuration()
     runner = CliRunner()
     with runner.isolated_filesystem():
-        with open('config.yaml', 'w') as out:
-            yaml.dump(config, out)
+        dump_yaml('config.yaml', config)
         for cell_type, path in config['inputDensityVolumePath'].items():
             # the input densities are expressed in number of cells per voxel
             VoxelData(
@@ -199,8 +198,7 @@ def test_positions_and_orientations_invalid_input():
     input_ = create_input()
     runner = CliRunner()
     with runner.isolated_filesystem():
-        with open('config.yaml', 'w') as out:
-            yaml.dump(config, out)
+        dump_yaml('config.yaml', config)
         for cell_type, path in config['inputDensityVolumePath'].items():
             # the input densities are expressed in number of cells per voxel
             VoxelData(
@@ -223,8 +221,7 @@ def test_positions_and_orientations_negative_density(L_warning_mock):
     input_['microglia'][0, 0, 1] = -1.0  # negative density value on purpose
     runner = CliRunner()
     with runner.isolated_filesystem():
-        with open('config.yaml', 'w') as out:
-            yaml.dump(config, out)
+        dump_yaml('config.yaml', config)
         for cell_type, path in config['inputDensityVolumePath'].items():
             # the input densities are expressed in number of cells per voxel
             VoxelData(

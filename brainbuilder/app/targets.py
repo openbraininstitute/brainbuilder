@@ -1,19 +1,15 @@
-"""
-Target generation.
-"""
-
-import json
+"""Target generation."""
+# pylint: disable=import-outside-toplevel
 import collections
 import logging
 
 import click
-import yaml
 
 from bluepy import Circuit
 from voxcell import ROIMask
 
 from brainbuilder.exceptions import BrainBuilderError
-from brainbuilder.utils import bbp
+from brainbuilder.utils import bbp, load_yaml, dump_json
 
 L = logging.getLogger('brainbuilder')
 
@@ -76,8 +72,7 @@ def _load_targets(filepath):
         atlas_based:
             cylinder: '{S1HL-cylinder}'
     """
-    with open(filepath) as f:
-        content = yaml.load(f, Loader=yaml.FullLoader)['targets']
+    content = load_yaml(filepath)['targets']
 
     return (
         content.get('query_based'),
@@ -97,7 +92,7 @@ def from_input(cells_path, atlas, atlas_cache, targets, allow_empty, output):
     # pylint: disable=too-many-locals
     circuit = Circuit({'cells': cells_path})
     cells = circuit.cells.get()
-    with open(output, 'w') as f:
+    with open(output, 'w', encoding='utf-8') as f:
         write_default_targets(cells, f)
         if targets is None:
             if 'layer' in cells:
@@ -175,5 +170,4 @@ def node_sets(cells_path, atlas, atlas_cache, targets, allow_empty, population, 
                 ids = xyz.index[mask] - 1
                 result[name] = {"population": population, "node_id": ids.tolist()}
 
-    with open(output, 'w') as f:
-        json.dump(result, f, indent=2)
+    dump_json(output, result)

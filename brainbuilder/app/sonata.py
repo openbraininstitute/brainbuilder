@@ -1,6 +1,5 @@
-""" Tools for working with SONATA """
-
-import json
+"""Tools for working with SONATA."""
+# pylint: disable=import-outside-toplevel
 import os
 import sys
 
@@ -9,6 +8,7 @@ from pathlib import Path
 import click
 
 from brainbuilder.app._utils import REQUIRED_PATH_DIR, REQUIRED_PATH
+from brainbuilder.utils import load_json, dump_json
 
 
 @click.group()
@@ -152,9 +152,8 @@ def update_morphologies(h5_morphs, output):
 
     reindex.write_new_h5_morphs(h5_updates, h5_morphs, output)
 
-    h5_updates_path = os.path.join(output, 'h5_updates.json')
-    with open(h5_updates_path, 'w') as fd:
-        json.dump(h5_updates, fd, indent=2)
+    h5_updates_path = Path(output) / 'h5_updates.json'
+    dump_json(h5_updates_path, h5_updates)
 
     click.echo('h5_updates output to %s' % h5_updates_path)
 
@@ -172,8 +171,7 @@ def update_edge_population(h5_updates, nodes, population, edges):
     from brainbuilder.utils.sonata import reindex
     from voxcell import CellCollection
 
-    with open(h5_updates, 'r') as fd:
-        h5_updates = json.load(fd)
+    h5_updates = load_json(h5_updates)
 
     for v in h5_updates.values():
         v['new_parents'] = [int(k) for k in v['new_parents']]

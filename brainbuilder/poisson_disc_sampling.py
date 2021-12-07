@@ -10,7 +10,7 @@ from tqdm import tqdm
 from brainbuilder.exceptions import BrainBuilderError
 
 
-class Grid(object):
+class Grid:
     '''Class representing grid, used as spatial index. Every grid point
     contains one value:
         -1 : no sample present

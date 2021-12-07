@@ -1,4 +1,3 @@
-import json
 import os.path
 from pathlib import Path
 
@@ -7,6 +6,7 @@ import numpy as np
 import pandas as pd
 from numpy.testing import assert_array_equal
 
+from brainbuilder.utils import load_json
 from brainbuilder.utils.sonata import split_population
 
 import utils
@@ -71,21 +71,19 @@ def test__write_circuit_config():
                    }
     with utils.tempdir('test__write_circuit_config') as tmp:
         split_population._write_circuit_config(tmp, split_nodes)
-        with open(os.path.join(tmp, 'circuit_config.json'), 'r') as fd:
-            ret = json.load(fd)
-            assert 'manifest' in ret
-            assert 'networks' in ret
-            assert 'nodes' in ret['networks']
-            assert 'nodes' in ret['networks']
-            assert len(ret['networks']['edges']) == 0  # no edge files
+        ret = load_json(os.path.join(tmp, 'circuit_config.json'))
+        assert 'manifest' in ret
+        assert 'networks' in ret
+        assert 'nodes' in ret['networks']
+        assert 'nodes' in ret['networks']
+        assert len(ret['networks']['edges']) == 0  # no edge files
 
         open(os.path.join(tmp, 'edges_A.h5'), 'w').close()
         open(os.path.join(tmp, 'edges_B.h5'), 'w').close()
         open(os.path.join(tmp, 'edges_A__B__chemical.h5'), 'w').close()
         split_population._write_circuit_config(tmp, split_nodes)
-        with open(os.path.join(tmp, 'circuit_config.json'), 'r') as fd:
-            ret = json.load(fd)
-            assert len(ret['networks']['edges']) == 3
+        ret = load_json(os.path.join(tmp, 'circuit_config.json'))
+        assert len(ret['networks']['edges']) == 3
 
 
 def test__write_edges():

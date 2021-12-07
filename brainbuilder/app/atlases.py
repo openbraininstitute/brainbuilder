@@ -1,9 +1,9 @@
 """Tool for artificial atlas building."""
 import os
-import json
 import logging
 import itertools
 from collections import OrderedDict
+from pathlib import Path
 
 import click
 import numpy as np
@@ -11,6 +11,7 @@ import numpy as np
 from voxcell import math_utils, VoxelData
 
 from brainbuilder.masks import regular_convex_polygon_mask_from_side
+from brainbuilder.utils import dump_json
 
 L = logging.getLogger('brainbuilder')
 
@@ -300,8 +301,7 @@ def column(ctx, width, hex_side):
 
     hierarchy = _mosaic_hierarchy(width, list(layers.keys()), region_ids)
     L.info("Write 'hierarchy.json'...")
-    with open(os.path.join(output_dir, "hierarchy.json"), "w") as f:
-        json.dump(_normalize_hierarchy(hierarchy), f, indent=2)
+    dump_json(Path(output_dir) / "hierarchy.json", _normalize_hierarchy(hierarchy))
 
     L.info("Done!")
 
@@ -326,7 +326,6 @@ def hyperrectangle(ctx, x_length, z_length):
 
     hierarchy = _hyperrectangle_hierarchy(region_ids)
     L.info("Write 'hierarchy.json'...")
-    with open(os.path.join(output_dir, "hierarchy.json"), "w") as f:
-        json.dump(_normalize_hierarchy(hierarchy), f, indent=2)
+    dump_json(Path(output_dir) / "hierarchy.json", _normalize_hierarchy(hierarchy))
 
     L.info("Done!")

@@ -5,7 +5,6 @@ https://github.com/AllenInstitute/sonata/blob/master/docs/SONATA_DEVELOPER_GUIDE
 """
 
 import glob
-import json
 import logging
 import os
 import re
@@ -20,7 +19,7 @@ from bluepy import Circuit
 from bluepy.impl.target import TARGET_REGEX
 from voxcell import CellCollection
 from brainbuilder.exceptions import BrainBuilderError
-from brainbuilder.utils import deprecate
+from brainbuilder.utils import deprecate, dump_json
 
 L = logging.getLogger('brainbuilder')
 
@@ -223,8 +222,7 @@ def write_network_config(base_dir,
         ('nodes', _node_populations('$NETWORK_NODES_DIR', nodes)),
         ('edges', _edge_populations('$NETWORK_EDGES_DIR', edges_suffix, edges)),
     ])
-    with open(output_path, 'w') as f:
-        json.dump(content, f, indent=2)
+    dump_json(output_path, content)
 
 
 def validate_node_set(node_set, cells):
@@ -258,7 +256,7 @@ def _parse_targets(target_files):
     """
     def _parse_target_file(filepath):
         """ Parse .target file, return generator of `Target`s. """
-        with open(filepath) as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             contents = f.read()
         for m in TARGET_REGEX.finditer(contents):
             yield m.group('name'), m.group('contents').strip().split()
@@ -315,5 +313,4 @@ def write_node_set_from_targets(input_dir, output_file, cells_path):
 
     validate_node_set(output_dict, cells)
 
-    with open(output_file, "w") as fd:
-        json.dump(output_dict, fd, indent=2)
+    dump_json(output_file, output_dict)

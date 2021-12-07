@@ -3,11 +3,11 @@ import shutil
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch, Mock
 
 import pandas as pd
 import numpy as np
 
-from mock import patch, Mock
 import pytest
 
 import brainbuilder.subcellular as test_module

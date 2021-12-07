@@ -6,12 +6,12 @@ import h5py
 import lxml.etree
 import numpy as np
 import pandas as pd
-import yaml
 from pandas.errors import ParserError
 
 from voxcell import CellCollection
 
 from brainbuilder.exceptions import BrainBuilderError
+from brainbuilder.utils import load_yaml
 
 NEURONDB_COLUMNS = ['morphology', 'layer', 'mtype']
 EXTNEURONDB_COLUMNS = NEURONDB_COLUMNS + ['etype', 'me_combo']
@@ -83,10 +83,8 @@ def load_cell_composition(filepath):
 
     https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html#cell-composition-yaml
     """
-    doc_url = 'https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html' \
-              '#cell-composition-yaml'
-    with open(filepath, 'r') as f:
-        content = yaml.safe_load(f)
+    doc_url = 'https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html#cell-composition-yaml'
+    content = load_yaml(filepath)
 
     if not (content['version'].startswith('v2') and 'neurons' in content):
         raise ValueError(f'Use cell composition file of version 2 in {filepath}, see {doc_url}')

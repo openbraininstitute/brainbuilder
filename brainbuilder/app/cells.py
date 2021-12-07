@@ -37,7 +37,6 @@ Based on:
     (https://bbpcode.epfl.ch/code/#/admin/projects/bbpnr/genBrain)
 """
 import logging
-import json
 import numbers
 import os
 
@@ -45,14 +44,13 @@ from collections.abc import Mapping
 import click
 import numpy as np
 import pandas as pd
-import yaml
 
 from voxcell import CellCollection, ROIMask, VoxelData
 from voxcell.nexus.voxelbrain import Atlas
 
 from brainbuilder import BrainBuilderError
 from brainbuilder.cell_positions import create_cell_positions
-from brainbuilder.utils import bbp
+from brainbuilder.utils import bbp, load_json, load_yaml
 
 from brainbuilder.app._utils import REQUIRED_PATH
 from brainbuilder.utils.bbp import load_cell_composition
@@ -191,7 +189,7 @@ def _assign_atlas_property(cells, prop, atlas, dset):
     if dset == 'FAST-HEMISPHERE':
         # TODO: remove as soon as "slow" way of assigning hemisphere
         # (with a volumetric dataset) is available
-        values = np.where(xyz[:, 2] < 5700, u'left', u'right')
+        values = np.where(xyz[:, 2] < 5700, 'left', 'right')
     else:
         values = atlas.load_data(dset).lookup(xyz)
         if resolve_ids:
@@ -358,8 +356,7 @@ def assign_emodels(cells_path, morphdb, seed, output):
 
 
 def _parse_emodel_mapping(filepath):
-    with open(filepath) as f:
-        content = json.load(f)
+    content = load_json(filepath)
     result = {}
     for emodel, mapping in content.items():
         assert isinstance(mapping['etype'], str)
@@ -603,7 +600,7 @@ def positions_and_orientations(
     """
     # pylint: disable=too-many-arguments, too-many-locals
     L.info('Loading density configuration file %s ...', config_path)
-    config = yaml.load(open(config_path), Loader=yaml.SafeLoader)
+    config = load_yaml(config_path)
     L.info('Loading annotation file %s ...', annotation_path)
     annotation = VoxelData.load_nrrd(annotation_path)
     L.info('Loading orientation file %s ...', orientation_path)

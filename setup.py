@@ -1,17 +1,19 @@
 #!/usr/bin/env python
 
-""" Distribution configuration """
-
-import imp
-import sys
+import importlib.util
 
 from setuptools import setup, find_packages
 
-
-VERSION = imp.load_source("brainbuilder.version", "brainbuilder/version.py").VERSION
+spec = importlib.util.spec_from_file_location(
+    "brainbuilder.version",
+    "brainbuilder/version.py",
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+VERSION = module.__version__
 
 BASE_REQUIRES = [
-    'click>=7.0,<8.0',
+    'click>=7.0,<9.0',
     'h5py>=3.1.0',
     'lxml>=3.3',
     'numpy>=1.9',

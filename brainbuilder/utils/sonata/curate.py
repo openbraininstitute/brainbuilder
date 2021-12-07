@@ -5,7 +5,6 @@ import h5py
 import morphio
 import numpy as np
 import voxcell
-import voxcell.sonata
 
 
 L = logging.getLogger(__name__)
@@ -160,8 +159,8 @@ def rewire_edge_population(
 
     New name = {source_nodes_population_name}__{target_nodes_population_name}__{syn_type}.
     Names of 'source_node_id' and 'source_node_id' of edge population change correspondingly. For
-    details see `Circuit Documentation<https://bbpteam.epfl.ch/documentation/projects/
-    Circuit%20Documentation/latest/sonata.html#populations>`__
+    details see `Circuit Documentation
+    <https://bbpteam.epfl.ch/documentation/projects/circuit-documentation/latest/sonata.html#populations>`__
 
     Args:
         edges_file (str/Path): SONATA edges file
