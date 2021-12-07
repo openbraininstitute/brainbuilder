@@ -72,24 +72,24 @@ def _check_syn2_invariants(path, population, expected_properties, afferent_index
     assert afferent_index, 'checking for efferent indexing not supported'
 
     def _h5_path(path):
-        assert path in h5, 'missing "%s" dataset' % path
+        assert path in h5, f'missing "{path}" dataset'
         return h5[path]
 
     with h5py.File(path, 'r') as h5:
         _h5_path('/synapses')
-        population_path = '/synapses/%s' % population
+        population_path = f'/synapses/{population}'
         population = _h5_path(population_path)
         props = _h5_path(population_path + '/properties')
 
         for expected in expected_properties:
-            assert expected in props, 'missing "%s" dataset in properties dataset' % expected
+            assert expected in props, f'missing "{expected}" dataset in properties dataset'
 
-        primary_sort = 'connected_neurons_%s' % ('post' if afferent_index else 'pre')
-        secondary_sort = 'connected_neurons_%s' % ('pre' if afferent_index else 'post')
+        primary_sort = f"connected_neurons_{'post' if afferent_index else 'pre'}"
+        secondary_sort = f"connected_neurons_{'pre' if afferent_index else 'post'}"
 
         primary_gids = props[primary_sort]
         diff = primary_gids[1:] - primary_gids[:-1]
-        assert np.all(diff >= 0), '%s must be sorted' % primary_sort
+        assert np.all(diff >= 0), f'{primary_sort} must be sorted'
 
         secondary_gids = props[secondary_sort]
         start = 0
@@ -97,7 +97,7 @@ def _check_syn2_invariants(path, population, expected_properties, afferent_index
         for end in groups:
             end += 1
             assert np.all(secondary_gids[start:end - 1] <= secondary_gids[start + 1:end]), \
-                '%s must be sorted' % secondary_sort
+                f'{secondary_sort} must be sorted'
             start = end
 
         assert 'indexes' in population, 'missing "/synapses/default/indexes" dataset'
@@ -114,9 +114,9 @@ def _check_syn2_invariants(path, population, expected_properties, afferent_index
                 ranges = idx_post['neuron_id_to_range'][gid]
                 assert len(ranges) == 2, 'if properly sorted, should only have 2 positions in range'
                 assert idx_post['range_to_synapse_id'][ranges[0]][0] == start, \
-                    'start index position is wrong for gid == %s' % gid
+                    f'start index position is wrong for gid == {gid}'
                 assert idx_post['range_to_synapse_id'][ranges[0]][1] == end, \
-                    'end index position is wrong for gid == %s' % gid
+                    f'end index position is wrong for gid == {gid}'
                 start = end
 
 

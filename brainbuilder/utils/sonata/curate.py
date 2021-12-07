@@ -180,10 +180,11 @@ def rewire_edge_population(
         target_nodes_file, target_nodes_population_name)
     edge_population_name = get_population_name(edges_file, edge_population_name)
     with h5py.File(edges_file, 'r+') as h5f:
-        new_name = '/edges/%s__%s__%s' % \
-                   (source_nodes_population_name, target_nodes_population_name, syn_type)
+        new_name = (
+            f'/edges/{source_nodes_population_name}__{target_nodes_population_name}__{syn_type}'
+        )
         L.debug('rewire_edge_population: %s', new_name)
-        h5f.move('/edges/%s' % edge_population_name, new_name)
+        h5f.move(f'/edges/{edge_population_name}', new_name)
 
         h5f[new_name]['source_node_id'].attrs['node_population'] = source_nodes_population_name
         h5f[new_name]['target_node_id'].attrs['node_population'] = target_nodes_population_name

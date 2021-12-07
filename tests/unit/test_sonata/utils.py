@@ -28,9 +28,9 @@ def assert_h5_dirs_equal(actual_dir, expected_dir, pattern='*.h5'):
     assert_equal(
         {f.name for f in actual_files},
         {f.name for f in expected_files},
-        err_msg='comparing with {}'.format(expected_dir),
+        err_msg=f'comparing with {expected_dir}',
     )
-    assert len(expected_files) > 0, 'No files match {!r} in {}'.format(pattern, expected_dir)
+    assert len(expected_files) > 0, f'No files match {pattern!r} in {expected_dir}'
     for actual_file, expected_file in zip(actual_files, expected_files):
         assert_h5_files_equal(actual_file, expected_file)
 
@@ -49,7 +49,7 @@ def assert_h5_files_equal(actual_path, expected_path):
     cmd = ['h5diff', '--use-system-epsilon', actual_path, expected_path]
     exit_code = subprocess.call(cmd)
     if exit_code != 0:
-        msg = "H5 file different from what expected: {} [code: {}]".format(expected_path, exit_code)
+        msg = f"H5 file different from what expected: {expected_path} [code: {exit_code}]"
         raise AssertionError(msg)
 
 

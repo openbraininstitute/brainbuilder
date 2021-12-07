@@ -156,7 +156,7 @@ def write_edges_from_syn2(syn2_path, population, source, target, out_h5_path):
             syn2_population = next(iter(syn2['/synapses'].values()))
             _write_edge_population(
                 syn2_population, source, target,
-                h5f.create_group('/edges/%s' % population)
+                h5f.create_group(f'/edges/{population}')
             )
 
 
@@ -173,7 +173,7 @@ def _node_populations(nodes_dir, nodes):
 def _edge_populations(edges_dir, edges_suffix, edges):
     return [
         OrderedDict([
-            ('edges_file', os.path.join(edges_dir, population, 'edges%s.h5' % edges_suffix)),
+            ('edges_file', os.path.join(edges_dir, population, f'edges{edges_suffix}.h5')),
             ('edge_types_file', None),
         ])
         for population in edges

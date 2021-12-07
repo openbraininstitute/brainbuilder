@@ -323,7 +323,7 @@ def _update_pos(h5_population, section_lengths, ids):
     h5_group = h5_population['0']
 
     def _data(name, direction, mask):
-        path = '{direction}_{name}'.format(name=name, direction=direction)
+        path = f'{direction}_{name}'
         if path not in h5_group:
             return None
         return h5_group[path][mask]
@@ -342,7 +342,7 @@ def _update_pos(h5_population, section_lengths, ids):
             L.info('Cannot update %s positions in %s', direction, h5_group.file.filename)
             continue
 
-        h5_group['%s_section_pos' % direction][mask] = _calculate_section_position(
+        h5_group[f'{direction}_section_pos'][mask] = _calculate_section_position(
             section_lengths, section_id, segment_id, offset)
 
 

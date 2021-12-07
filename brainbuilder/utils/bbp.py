@@ -93,12 +93,12 @@ def load_cell_composition(filepath):
 
 def gid2str(gid):
     """ 42 -> 'a42' """
-    return "a%d" % gid
+    return f"a{gid}"
 
 
 def write_target(f, name, gids=None, include_targets=None):
     """ Append contents to .target file. """
-    f.write("\nTarget Cell %s\n{\n" % name)
+    f.write(f"\nTarget Cell {name}\n{{\n")
     if gids is not None:
         f.write("  ")
         f.write(" ".join(map(gid2str, gids)))
@@ -133,7 +133,7 @@ def assign_emodels(cells, morphdb):
 
     not_assigned = np.count_nonzero(df[ME_COMBO].isnull())
     if not_assigned > 0:
-        raise BrainBuilderError("Could not pick emodel for %d cell(s)" % not_assigned)
+        raise BrainBuilderError(f"Could not pick emodel for {not_assigned} cell(s)")
 
     # choose 'me_combo' randomly if several are available
     df = df.sample(frac=1)

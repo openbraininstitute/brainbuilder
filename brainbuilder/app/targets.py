@@ -27,11 +27,7 @@ def _synapse_class_name(synclass):
 
 
 def _layer_name(layer):
-    return "Layer%s" % layer
-
-
-def _column_name(column):
-    return "mc%d_Column" % column
+    return f"Layer{layer}"
 
 
 def write_default_targets(cells, output):
@@ -49,7 +45,7 @@ def write_query_targets(query_based, circuit, output, allow_empty=False):
     for name, query in query_based.items():
         gids = circuit.cells.ids(query)
         if len(gids) < 1:
-            msg = "Empty target: {} {}".format(name, query)
+            msg = f"Empty target: {name} {query}"
             if allow_empty:
                 L.warning(msg)
             else:
@@ -130,12 +126,12 @@ def node_sets(cells_path, atlas, atlas_cache, targets, allow_empty, population, 
 
         for name, query in sorted(to_add.items()):
             if name in result:
-                raise BrainBuilderError("Duplicate node set: '%s'" % name)
+                raise BrainBuilderError(f"Duplicate node set: '{name}'")
             count = cells.count(query)
             if count > 0:
                 L.info("Target '%s': %d cell(s)", name, count)
             else:
-                msg = "Empty target: {} {}".format(name, query)
+                msg = f"Empty target: {name} {query}"
                 if allow_empty:
                     L.warning(msg)
                 else:

@@ -198,12 +198,12 @@ def _column_hierarchy(column_label, layers, region_ids):
     """ Build 'hierarchy' dict for single hypercolumn. """
     return OrderedDict([
         ('id', region_ids[(column_label, None)]),
-        ('acronym', "mc{}_Column".format(column_label)),
-        ('name', "hypercolumn {}".format(column_label)),
+        ('acronym', f"mc{column_label}_Column"),
+        ('name', f"hypercolumn {column_label}"),
         ('children', [OrderedDict([
             ('id', region_ids[(column_label, layer)]),
-            ('acronym', 'mc{};{}'.format(column_label, layer)),
-            ('name', "hypercolumn {}, {}".format(column_label, layer))
+            ('acronym', f'mc{column_label};{layer}'),
+            ('name', f"hypercolumn {column_label}, {layer}")
         ]) for layer in layers])
     ])
 
@@ -213,8 +213,8 @@ def _mosaic_hierarchy(width, layers, region_ids):
     columns = sorted(set(col for col, _ in region_ids))
     return OrderedDict([
         ('id', 65535),
-        ('acronym', "O{}".format(width)),
-        ('name', "O{} mosaic".format(width)),
+        ('acronym', f"O{width}"),
+        ('name', f"O{width} mosaic"),
         ('children', [_column_hierarchy(c, layers, region_ids) for c in columns])
     ])
 
@@ -226,8 +226,8 @@ def _hyperrectangle_hierarchy(region_ids):
         """ Build 'hierarchy' dict for hyperrectangle layer """
         return OrderedDict([
             ('id', layer_id),
-            ('acronym', "{}".format(layer_name)),
-            ('name', "Hyperrectangle layer{}, {}".format(layer_id, layer_name)),
+            ('acronym', layer_name),
+            ('name', f"Hyperrectangle layer{layer_id}, {layer_name}"),
         ])
 
     return OrderedDict([

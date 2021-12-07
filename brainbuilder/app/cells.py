@@ -108,7 +108,7 @@ def _load_density(value, mask, atlas):
         L.info("Loading 3D density profile from '%s'...", value)
         result = VoxelData.load_nrrd(value).raw.astype(np.float32)
     else:
-        raise BrainBuilderError("Unexpected density value: '%s'" % value)
+        raise BrainBuilderError(f"Unexpected density value: '{value}'")
 
     # Mask away density values outside region mask (NaNs are fine there)
     result[~mask] = 0
@@ -123,7 +123,7 @@ def _check_traits(traits):
     missing = set(['layer', 'mtype', 'etype']).difference(traits)
     if missing:
         raise BrainBuilderError(
-            "Missing properties {} for group {}".format(list(missing), traits)
+            f"Missing properties {list(missing)} for group {traits}"
         )
 
 
@@ -134,7 +134,7 @@ def _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement):
     if root_mask is not None:
         region_mask.raw &= root_mask.raw
     if not np.any(region_mask.raw):
-        raise BrainBuilderError("Empty region mask for region: '%s'" % conf['region'])
+        raise BrainBuilderError(f"Empty region mask for region: '{conf['region']}'")
 
     density = region_mask.with_data(
         _load_density(conf['density'], region_mask.raw, atlas)
@@ -159,7 +159,7 @@ def _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement):
 
 def _assign_property(cells, prop, values):
     if prop in cells:
-        raise BrainBuilderError("Duplicate property: '%s'" % prop)
+        raise BrainBuilderError(f"Duplicate property: '{prop}'")
     cells[prop] = values
 
 
@@ -385,7 +385,7 @@ def _write_mecombo_tsv(out_tsv, cells, emodels, **optional_columns):
     me_combos = me_combos.join(emodels, on=('layer', 'etype'))
     if me_combos['emodel'].isna().any():
         mismatch = me_combos[me_combos['emodel'].isna()][['layer', 'etype']]
-        raise BrainBuilderError("Can not assign emodels for: %s" % mismatch)
+        raise BrainBuilderError(f"Can not assign emodels for: {mismatch}")
     COLUMNS = ['morph_name', 'layer', 'fullmtype', 'etype', 'emodel', 'combo_name']
     for column_name, column_value in optional_columns.items():
         if column_value is not None:
@@ -415,18 +415,16 @@ def assign_emodels2(cells_path, emodels, threshold_current, holding_current,
     cells = CellCollection.load(cells_path)
     emodels = _parse_emodel_mapping(emodels)
     cells = cells.as_dataframe()
-    cells['me_combo'] = cells.apply(lambda row: "{etype}_{layer}_{morph}".format(
-        etype=row.etype,
-        layer=row.layer,
-        morph=os.path.basename(row.morphology)
-    ), axis=1)
+    cells['me_combo'] = cells.apply(
+        lambda row: f"{row.etype}_{row.layer}_{os.path.basename(row.morphology)}", axis=1
+    )
 
     if out_mvd3 is None and not out_cells_path.lower().endswith('mvd3'):
         cells['layer'] = cells['layer'].astype(str)
         cells = cells.join(emodels, on=('layer', 'etype'))
         if cells['emodel'].isna().any():
             mismatch = cells[cells['emodel'].isna()][['layer', 'etype']]
-            raise BrainBuilderError("Can not assign emodels for: %s" % mismatch)
+            raise BrainBuilderError(f"Can not assign emodels for: {mismatch}")
         cells.rename({'emodel': 'model_template'}, inplace=True)
         cells['model_template'] = 'hoc:' + cells['model_template']
         if threshold_current is not None:

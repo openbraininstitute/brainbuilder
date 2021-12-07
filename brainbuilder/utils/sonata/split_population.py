@@ -23,31 +23,31 @@ GROUP_NAME = '0'
 
 def _get_population_name(src, dst, synapse_type='chemical'):
     """Return the population name based off `src` and `dst` node population names."""
-    return src if src == dst else '{}__{}__{}'.format(src, dst, synapse_type)
+    return src if src == dst else f'{src}__{dst}__{synapse_type}'
 
 
 def _get_edge_file_name(output, new_pop_name):
     """Return the name of the edge file split by population."""
-    return os.path.join(output, 'edges_{}.h5'.format(new_pop_name))
+    return os.path.join(output, f'edges_{new_pop_name}.h5')
 
 
 def _get_node_file_name(output, new_pop_name):
     """Return the name of the node file split by population."""
-    return os.path.join(output, 'nodes_{}.h5'.format(new_pop_name))
+    return os.path.join(output, f'nodes_{new_pop_name}.h5')
 
 
 def _get_unique_population(parent):
     """Return the h5 unique population, raise an exception if not unique."""
     population_names = list(parent)
     if len(population_names) != 1:
-        raise ValueError('Single population is supported only, found {}'.format(population_names))
+        raise ValueError(f'Single population is supported only, found {population_names}')
     return parent[population_names[0]]
 
 
 def _get_unique_group(parent):
     """Return the h5 group 0, raise an exception if non present."""
     if GROUP_NAME not in parent:
-        raise ValueError('Single group {!r} is required'.format(GROUP_NAME))
+        raise ValueError(f'Single group {GROUP_NAME!r} is required')
     return parent[GROUP_NAME]
 
 
@@ -184,7 +184,7 @@ def _check_written_edges(h5in, written_edges):
     orig_edges = _get_unique_population(h5in['edges'])
     expected_edges = len(orig_edges['source_node_id'])
     if expected_edges != written_edges:
-        msg = 'Written edges mismatch: expected={}, actual={}'.format(expected_edges, written_edges)
+        msg = f'Written edges mismatch: expected={expected_edges}, actual={written_edges}'
         raise RuntimeError(msg)
 
 

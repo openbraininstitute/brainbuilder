@@ -43,13 +43,13 @@ def progress_finalize():
 
 
 def check_individual_file(nrn_file):
-    first_file = "%s.0" % nrn_file
+    first_file = f"{nrn_file}.0"
     if not os.path.exists(first_file):
-        print((">WARNING %s ... does not exist ... SKIP" % first_file))
+        print((f">WARNING {first_file} ... does not exist ... SKIP"))
         return False
 
     if os.path.exists(nrn_file):
-        print((">WARNING %s ... already exist ... SKIP" % nrn_file))
+        print((f">WARNING {nrn_file} ... already exist ... SKIP"))
         return False
 
     return True
@@ -71,13 +71,13 @@ def get_nrnfiles(nrn_dir, only):
 
 def count_subfiles(filename):
     count = 1
-    while os.path.exists("%s.%d" % (filename, count)):
+    while os.path.exists(f"{filename}.{count}"):
         count += 1
     return count
 
 
 def get_all_dataset(filename, file_number, dset):
-    n_filename = "%s.%d" % (filename, file_number)
+    n_filename = f"{filename}.{file_number}"
     with h5py.File(n_filename, 'r') as f:
         all_keys = f.keys()
         dset[file_number] = [key for key in all_keys if key[0] == "a"]
@@ -93,38 +93,38 @@ def finalize_metadata(fdesc, total_files):
 
 def create_merged_file(filename, link=False):
     print(">")
-    print(">> start merge for %s" % filename)
+    print(f">> start merge for {filename}")
     total_files = count_subfiles(filename)
-    print(">> %d files to merge" % total_files)
+    print(f">> {total_files} files to merge")
     dset = {}
     n = 0
     t1 = time.time()
     progress_print(">>")
     for i in range(0, total_files):
         n += get_all_dataset(filename, i, dset)
-        progress_print(">> got all keys for file %s.%d" % (filename, i))
+        progress_print(f">> got all keys for file {filename}.{i}")
     progress_finalize()
-    print(">> complete listing done in %fs" % (time.time() - t1))
-    print(">> total of %d datasets to merge" % n)
+    print(f">> complete listing done in {time.time() - t1:f}s")
+    print(f">> total of {n} datasets to merge")
     t1 = time.time()
     progress_print(">>")
     with h5py.File(filename, 'w') as merged:
         for i in range(0, total_files):
-            chunk_filename = "%s.%d" % (filename, i)
+            chunk_filename = f"{filename}.{i}"
             if link:
-                progress_print(">> create external references file %s" % chunk_filename)
+                progress_print(f">> create external references file {chunk_filename}")
                 for k in dset[i]:
-                    d_name = "/%s" % (k)
+                    d_name = f"/{k}"
                     merged[d_name] = h5py.ExternalLink(chunk_filename, d_name)
             else:
-                progress_print(">> copy over data from %s" % chunk_filename)
+                progress_print(f">> copy over data from {chunk_filename}")
                 with h5py.File(chunk_filename, 'r') as chunk:
                     for k in dset[i]:
-                        d_name = "/%s" % (k)
+                        d_name = f"/{k}"
                         merged[d_name] = chunk[d_name][:]
         finalize_metadata(merged, (total_files if link else 1))
     progress_finalize()
-    print(">> complete merging done in %fs" % (time.time() - t1))
+    print(f">> complete merging done in {time.time() - t1:f}s")
 
 
 @contextmanager
@@ -235,7 +235,7 @@ def _write_nrn(output, index1, index2, mapping, properties, pre_synaptic_ids):
                 continue
 
             if r1_start > r1_end:
-                raise Exception('Start index (%d) > than end index (%d)' % (r1_start, r1_end))
+                raise Exception(f'Start index ({r1_start}) > than end index ({r1_end})')
 
             assert r1_start == r1_end - 1, 'With postsynaptic sorting, should only have 1 row'
 
@@ -246,7 +246,7 @@ def _write_nrn(output, index1, index2, mapping, properties, pre_synaptic_ids):
             # NRN is 1 based for pre and post gids
             columns[:, 0] = pre_synaptic_ids[range2] + 1
             assert np.all(columns[:-1, 0] <= columns[1:, 0]), 'Must be postsynaptically sorted'
-            dst['a%d' % (gid + 1)] = columns
+            dst[f'a{gid + 1}'] = columns
 
 
 @app.command()

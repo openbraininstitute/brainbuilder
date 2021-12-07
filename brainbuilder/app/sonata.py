@@ -155,7 +155,7 @@ def update_morphologies(h5_morphs, output):
     h5_updates_path = Path(output) / 'h5_updates.json'
     dump_json(h5_updates_path, h5_updates)
 
-    click.echo('h5_updates output to %s' % h5_updates_path)
+    click.echo(f'h5_updates output to {h5_updates_path}')
 
 
 @app.command()

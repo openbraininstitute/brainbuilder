@@ -39,7 +39,7 @@ def add_property(mvd3, prop, voxel_data, output):
     cells = CellCollection.load_mvd3(mvd3)
     if prop in cells.properties:
         choice = input(
-            "There is already '%s' property in the provided MVD3. Overwrite (y/n)? " % prop
+            f"There is already '{prop}' property in the provided MVD3. Overwrite (y/n)? "
         )
         if choice.lower() not in ('y', 'yes'):
             return
