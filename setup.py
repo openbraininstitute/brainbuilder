@@ -15,6 +15,7 @@ VERSION = module.__version__
 BASE_REQUIRES = [
     'click>=7.0,<9.0',
     'h5py>=3.1.0',
+    'jsonschema>=3.2.0',
     'lxml>=3.3',
     'numpy>=1.9',
     'pandas>=1.0.0',

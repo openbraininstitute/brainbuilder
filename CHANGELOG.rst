@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## 0.17.0
+  * Update ``write_network_config`` to be compatible with the new BBP sonata specs, moved from
+    ``brainbuilder.utils.sonata.convert`` to ``brainbuilder.utils.sonata.config`` (NSETM-1526).
+
 ## 0.16.2
   * Added more intelligent target to node set converter (BBPP82-514)
   * Use pytest for tests (NSETM-1543)
@@ -10,7 +14,6 @@ Changelog
     of targets in bluepy==2.4.1.
 
 ## 0.16.1
-
   * Fix compat for bluepy>=2.3
 
 ## 0.16.0

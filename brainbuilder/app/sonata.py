@@ -66,11 +66,25 @@ def from_syn2(syn2, population, source, target, output):
 @click.option(
     "--emodel-dir", help="Cell electrical models directory (relative to BASE_DIR)", required=True)
 @click.option("--nodes-dir", help="Node files directory (relative to BASE_DIR)", required=True)
-@click.option("--nodes", help="Node population(s) (';'-separated)", required=True)
+@click.option(
+    "--nodes",
+    help=(
+        "Nodes file(s) (';'-separated). For each file, the populations must be specified "
+        "in the format 'path:pop1,pop2...'"
+    ),
+    required=True
+)
 @click.option("--node-sets", help="Node sets file (JSON)", required=True)
 @click.option("--edges-dir", help="Edge files directory (relative to BASE_DIR)", required=True)
 @click.option("--edges-suffix", help="Edge file suffix", default="")
-@click.option("--edges", help="Edge population(s) (';'-separated)", required=True)
+@click.option(
+    "--edges",
+    help=(
+        "Edges file(s) (';'-separated). For each file, the populations must be specified "
+        "in the format 'path:pop1,pop2...'"
+    ),
+    required=True,
+)
 @click.option("-o", "--output", help="Path to output file (JSON)", required=True)
 def network_config(
     base_dir, morph_dir, emodel_dir, nodes_dir, nodes,
@@ -78,7 +92,7 @@ def network_config(
 ):
     """Write SONATA network config"""
     # pylint: disable=too-many-arguments
-    from brainbuilder.utils.sonata.convert import write_network_config
+    from brainbuilder.utils.sonata.write_config import write_network_config
     write_network_config(
         base_dir=base_dir,
         morph_dir=morph_dir,

@@ -9,8 +9,6 @@ import logging
 import os
 import re
 
-from collections import OrderedDict
-
 import numpy as np
 import pandas as pd
 import h5py
@@ -19,7 +17,7 @@ from bluepy import Circuit
 from bluepy.impl.target import TARGET_REGEX
 from voxcell import CellCollection
 from brainbuilder.exceptions import BrainBuilderError
-from brainbuilder.utils import deprecate, dump_json
+from brainbuilder.utils import dump_json
 
 L = logging.getLogger('brainbuilder')
 
@@ -158,71 +156,6 @@ def write_edges_from_syn2(syn2_path, population, source, target, out_h5_path):
                 syn2_population, source, target,
                 h5f.create_group(f'/edges/{population}')
             )
-
-
-def _node_populations(nodes_dir, nodes):
-    return [
-        OrderedDict([
-            ('nodes_file', os.path.join(nodes_dir, population, 'nodes.h5')),
-            ('node_types_file', None)
-        ])
-        for population in nodes
-    ]
-
-
-def _edge_populations(edges_dir, edges_suffix, edges):
-    return [
-        OrderedDict([
-            ('edges_file', os.path.join(edges_dir, population, f'edges{edges_suffix}.h5')),
-            ('edge_types_file', None),
-        ])
-        for population in edges
-    ]
-
-
-def write_network_config(base_dir,
-                         morph_dir,
-                         emodel_dir,
-                         nodes_dir, nodes, node_sets,
-                         edges_dir, edges_suffix, edges,
-                         output_path):
-    """Write SONATA network config to ``output_path``.
-
-    if a relative path is used for any filepath argument then it will be prepended with a
-    corresponding SONATA path. For example ``morph_dir`` will be prepended with ``base_dir``. If an
-    absolute path is used then it will be used as is.
-
-    Args:
-        base_dir (str): $BASE_DIR of the written config
-        morph_dir (str): 'morphologies_dir' of the written config
-        emodel_dir (str): 'biophysical_neuron_models_dir' of the written config
-        nodes_dir (str): folder that would contain all nodes of the written config network
-        nodes (list): list of paths to nodes files.
-        node_sets (str): 'node_sets_file' of the written config
-        edges_dir (str): folder that would contain all edges of the written config network
-        edges_suffix (str): suffix to append to edges files
-        edges (list): list of paths to edges files.
-        output_path (str): path to a file where to write the config
-    """
-
-    # pylint: disable=too-many-arguments
-    deprecate.warn('`write_network_config` is deprecated. Use the one from "circuit-build" instead')
-    content = OrderedDict()
-    content['manifest'] = {
-        '$BASE_DIR': base_dir,
-        '$NETWORK_NODES_DIR': os.path.join('$BASE_DIR', nodes_dir),
-        '$NETWORK_EDGES_DIR': os.path.join('$BASE_DIR', edges_dir),
-    }
-    content['components'] = {
-        'morphologies_dir': os.path.join('$BASE_DIR', morph_dir),
-        'biophysical_neuron_models_dir': os.path.join('$BASE_DIR', emodel_dir),
-    }
-    content['node_sets_file'] = os.path.join('$BASE_DIR', node_sets)
-    content['networks'] = OrderedDict([
-        ('nodes', _node_populations('$NETWORK_NODES_DIR', nodes)),
-        ('edges', _edge_populations('$NETWORK_EDGES_DIR', edges_suffix, edges)),
-    ])
-    dump_json(output_path, content)
 
 
 def validate_node_set(node_set, cells):

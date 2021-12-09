@@ -67,47 +67,6 @@ def test_provide_me_info():
                            check_like=True)  # ignore column ordering
 
 
-def test_write_network_config():
-    expected_config = json.loads('''
-{
-  "manifest": {
-    "$BASE_DIR": "/base/dir",
-    "$NETWORK_NODES_DIR": "$BASE_DIR/nodes/dir",
-    "$NETWORK_EDGES_DIR": "$BASE_DIR/edges/dir"
-  },
-  "components": {
-    "morphologies_dir": "$BASE_DIR/morph/dir",
-    "biophysical_neuron_models_dir": "/emodel/dir"
-  },
-  "node_sets_file": "$BASE_DIR/node_sets/file",
-  "networks": {
-    "nodes": [
-      {
-        "nodes_file": "/nodes/file/nodes.h5",
-        "node_types_file": null
-      }
-    ],
-    "edges": [
-      {
-        "edges_file": "$NETWORK_EDGES_DIR/edges/file/edges_suffix.h5",
-        "edge_types_file": null
-      }
-    ]
-  }
-}
-    ''')
-
-    with tempfile.NamedTemporaryFile() as tfp:
-        convert.write_network_config(
-            '/base/dir', 'morph/dir', '/emodel/dir',
-            'nodes/dir', ['/nodes/file'], 'node_sets/file',
-            'edges/dir', '_suffix', ['edges/file'],
-            tfp.name
-        )
-        actual_config = json.load(tfp)
-        assert expected_config == actual_config
-
-
 def test_write_node_set_from_targets():
     target_path = './tests/unit/data/'
     cells_path = './tests/unit/data/circuit.mvd2'
