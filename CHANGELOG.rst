@@ -4,9 +4,11 @@ Changelog
 ## 0.17.0
   * Update ``write_network_config`` to be compatible with the new BBP sonata specs, moved from
     ``brainbuilder.utils.sonata.convert`` to ``brainbuilder.utils.sonata.config`` (NSETM-1526).
+  * Deprecate `FAST-HEMISPHERE` for assigning the `hemisphere` cells property,
+    and support loading it from a volumetric dataset (BRBLD-89).
 
 ## 0.16.2
-  * Added more intelligent target to node set converter (BBPP82-514)
+  * Add more intelligent target to node set converter (BBPP82-514)
   * Use pytest for tests (NSETM-1543)
   * Deprecate ``brainbuilder.utils.sonata.convert.write_network_config``. Use circuit-build
     project instead (NSETM-1526).

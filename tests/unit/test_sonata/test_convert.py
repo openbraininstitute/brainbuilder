@@ -80,7 +80,7 @@ def test_write_node_set_from_targets():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_dir = Path(tmp_dir)
-        out_file = tmp_dir / 'node_set.json'
+        out_file = tmp_dir / 'node_sets.json'
         convert.write_node_set_from_targets(target_path, out_file, cells_path)
         data = load_json(out_file)
 

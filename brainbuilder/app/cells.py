@@ -41,16 +41,23 @@ import numbers
 import os
 
 from collections.abc import Mapping
+
 import click
 import numpy as np
 import pandas as pd
 
-from voxcell import CellCollection, ROIMask, VoxelData
+from voxcell import (
+    CellCollection,
+    ROIMask,
+    VoxelData,
+    values_to_hemisphere,
+    values_to_region_attribute,
+)
 from voxcell.nexus.voxelbrain import Atlas
 
 from brainbuilder import BrainBuilderError
 from brainbuilder.cell_positions import create_cell_positions
-from brainbuilder.utils import bbp, load_json, load_yaml
+from brainbuilder.utils import bbp, deprecate, load_json, load_yaml
 
 from brainbuilder.app._utils import REQUIRED_PATH
 from brainbuilder.utils.bbp import load_cell_composition
@@ -179,24 +186,23 @@ def _assign_mini_frequencies(cells, mini_frequencies):
 
 
 def _assign_atlas_property(cells, prop, atlas, dset):
-    if dset.startswith('~'):
-        dset = dset[1:]
-        resolve_ids = True
-    else:
-        resolve_ids = False
-
     xyz = cells[['x', 'y', 'z']].values
     if dset == 'FAST-HEMISPHERE':
         # TODO: remove as soon as "slow" way of assigning hemisphere
         # (with a volumetric dataset) is available
+        deprecate.warn('`FAST-HEMISPHERE` is deprecated, use a volumetric dataset')
         values = np.where(xyz[:, 2] < 5700, 'left', 'right')
+    elif prop == 'hemisphere':
+        values = values_to_hemisphere(atlas.load_data(dset).lookup(xyz))
+    elif dset.startswith('~'):
+        dset = dset[1:]
+        values = values_to_region_attribute(
+            atlas.load_data(dset).lookup(xyz),
+            region_map=atlas.load_region_map(),
+            attr="acronym",
+        )
     else:
         values = atlas.load_data(dset).lookup(xyz)
-        if resolve_ids:
-            ids, idx = np.unique(values, return_inverse=True)
-            rmap = atlas.load_region_map()
-            resolved = np.array([rmap.get(_id, attr='acronym') for _id in ids])
-            values = resolved[idx]
 
     _assign_property(cells, prop, values)
 
