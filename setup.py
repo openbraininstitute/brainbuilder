@@ -51,7 +51,7 @@ setup(
         'reindex': [],  # for compatibility
     },
     packages=find_packages(),
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     entry_points={
       'console_scripts': [
           'brainbuilder=brainbuilder.app.__main__:main'
