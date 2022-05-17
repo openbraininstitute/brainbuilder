@@ -224,3 +224,16 @@ def split_population(attribute, nodes, edges, output):
     '''Split a single Node and Edges file into multiple nodes and edges based on attribute'''
     from brainbuilder.utils.sonata import split_population as module
     module.split_population(output, attribute, nodes, edges)
+
+
+@app.command()
+@click.option("--nodeset", required=True, help="Name of nodeset")
+@click.option("--nodeset-path", required=True, type=REQUIRED_PATH,
+              help="path to node_sets.json file")
+@click.option("--nodes", required=True, type=REQUIRED_PATH, help="Input node file")
+@click.option("--edges", required=True, type=REQUIRED_PATH, help="Input edge file")
+@click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
+def simple_split_subcircuit(nodeset, nodeset_path, nodes, edges, output):
+    '''Split a subcircuit out from a SONATA circuit based on node_set'''
+    from brainbuilder.utils.sonata import split_population as module
+    module.simple_split_subcircuit(output, nodeset, nodeset_path, nodes, edges)

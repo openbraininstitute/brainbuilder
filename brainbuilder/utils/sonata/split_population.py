@@ -16,7 +16,7 @@ from brainbuilder.utils import dump_json
 L = logging.getLogger(__name__)
 
 # So as not to exhaust memory, the edges files are loaded/written in chunks of this size
-H5_READ_CHUNKSIZE = 500000000
+H5_READ_CHUNKSIZE = 500_000_000
 # Name of the unique expected group in sonata nodes and edges files
 GROUP_NAME = '0'
 
@@ -92,10 +92,9 @@ def _init_edge_group(orig_group, new_group):
         elif isinstance(attr, h5py.Group) and name == 'dynamics_params':
             new_group.create_group(name)
             for k, values in attr.items():
-                if isinstance(values, h5py.Dataset):
-                    utils.create_appendable_dataset(new_group[name], k, values.dtype)
-                else:
-                    L.warning('Not copying dynamics_params subgroup %s', k)
+                assert isinstance(values, h5py.Dataset), \
+                    f'dynamics_params has an h5 subgroup: {k}'
+                utils.create_appendable_dataset(new_group[name], k, values.dtype)
         else:
             raise ValueError('Only "dynamics_params" group is expected')
 
@@ -148,6 +147,7 @@ def _copy_edge_attributes(h5in, h5out, src_node_pop, dst_node_pop, id_mapping, h
         tgids = orig_edges['target_node_id'][sl]
         mask = (np.isin(sgids, id_mapping[src_node_pop].index.to_numpy()) &
                 np.isin(tgids, id_mapping[dst_node_pop].index.to_numpy()))
+
         if np.any(mask):
             utils.append_to_dataset(
                 new_edges['source_node_id'],
@@ -179,37 +179,44 @@ def _write_indexes(edge_file_name, new_pop_name, source_node_count, target_node_
     )
 
 
-def _check_written_edges(h5in, written_edges):
+def _check_all_edges_used(h5in, written_edges):
     """Verify that the number of written edges matches the number of initial edges."""
     orig_edges = _get_unique_population(h5in['edges'])
     expected_edges = len(orig_edges['source_node_id'])
     if expected_edges != written_edges:
-        msg = f'Written edges mismatch: expected={expected_edges}, actual={written_edges}'
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            f'Written edges mismatch: expected={expected_edges}, actual={written_edges}')
 
 
-def _write_edges(output, edges_path, id_mapping, h5_read_chunk_size=H5_READ_CHUNKSIZE):
+def _write_edges(output,
+                 edges_path,
+                 id_mapping,
+                 h5_read_chunk_size=H5_READ_CHUNKSIZE,
+                 expect_to_use_all_edges=True):
     """create all new edge populations in separate files"""
     with h5py.File(edges_path, 'r') as h5in:
         written_edges = 0
         for src_node_pop, dst_node_pop in itertools.product(id_mapping, id_mapping):
             edge_pop_name = _get_population_name(src_node_pop, dst_node_pop)
             edge_file_name = _get_edge_file_name(output, edge_pop_name)
+
             # write the new edges h5 file
             with h5py.File(edge_file_name, 'w') as h5out:
                 _copy_edge_attributes(
                     h5in, h5out, src_node_pop, dst_node_pop, id_mapping, h5_read_chunk_size,
                 )
                 edge_count, sgid_count, tgid_count = _get_node_counts(h5out, edge_pop_name)
+
             # after the h5 file is closed, it's indexed if valid, or it's removed if empty
             if edge_count:
                 _write_indexes(edge_file_name, edge_pop_name, sgid_count, tgid_count)
-                L.debug('Written %s edges to %s', edge_count, edge_file_name)
+                L.debug('Wrote %s edges to %s', edge_count, edge_file_name)
                 written_edges += edge_count
             else:
                 os.unlink(edge_file_name)
-        # verify that all the edges have been written
-        _check_written_edges(h5in, written_edges)
+
+        if expect_to_use_all_edges:
+            _check_all_edges_used(h5in, written_edges)
 
 
 def _write_nodes(output, split_nodes):
@@ -218,7 +225,7 @@ def _write_nodes(output, split_nodes):
         df = df.reset_index(drop=True)
         nodes_path = _get_node_file_name(output, new_population)
         _save_sonata_nodes(nodes_path, df, population_name=new_population)
-        L.debug('Written %s nodes to %s', len(df), nodes_path)
+        L.debug('Wrote %s nodes to %s', len(df), nodes_path)
 
 
 def _get_node_id_mapping(split_nodes):
@@ -298,6 +305,35 @@ def split_population(output, attribute, nodes_path, edges_path):
     _write_nodes(output, split_populations)
 
     id_mapping = _get_node_id_mapping(split_populations)
-    _write_edges(output, edges_path, id_mapping)
+    _write_edges(output, edges_path, id_mapping, expect_to_use_all_edges=True)
 
     _write_circuit_config(output, split_populations)
+
+
+def _split_population_by_node_set(nodes_path, node_set_name, node_set_path):
+    node_storage = libsonata.NodeStorage(nodes_path)
+    node_population = node_storage.open_population(next(iter(node_storage.population_names)))
+
+    node_sets = libsonata.NodeSets.from_file(node_set_path)
+    ids = node_sets.materialize(node_set_name, node_population).flatten()
+
+    split_nodes = {node_set_name: _load_sonata_nodes(nodes_path).loc[ids]}
+    return split_nodes
+
+
+def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, edges_path):
+    '''Split a single subcircuit out of a set of nodes and edges, based on nodeset
+
+    Args:
+        output(str): path where files will be written
+        node_set_name(str): name of nodeset to extract
+        node_set_path(str): path to node_sets.json file
+        nodes_path(str): path to nodes sonata file
+        edges_path(str): path to edges sonata file
+    '''
+    split_populations = _split_population_by_node_set(nodes_path, node_set_name, node_set_path)
+
+    _write_nodes(output, split_populations)
+
+    id_mapping = _get_node_id_mapping(split_populations)
+    _write_edges(output, edges_path, id_mapping, expect_to_use_all_edges=False)

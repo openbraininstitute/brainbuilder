@@ -1,9 +1,10 @@
-import os.path
+import os
 from pathlib import Path
 
 import h5py
 import numpy as np
 import pandas as pd
+import pytest
 from numpy.testing import assert_array_equal
 
 from brainbuilder.utils import load_json
@@ -18,6 +19,22 @@ DATA_PATH = (Path(__file__).parent / '../data/sonata/split_population/').resolve
 def test__get_population_name():
     assert 'src__dst__chemical' == split_population._get_population_name(src='src', dst='dst')
     assert 'src' == split_population._get_population_name(src='src', dst='src')
+
+
+def test__get_unique_group():
+    nodes = DATA_PATH / 'nodes.h5'
+    with h5py.File(nodes, 'r') as h5:
+        parent = h5['nodes/default']
+        assert split_population._get_unique_group(parent)
+
+
+    with utils.tempdir('test__get_unique_group') as tmp:
+        with h5py.File(os.path.join(tmp, 'nodes.h5'), 'w') as h5:
+            parent = h5.create_group('/edges/')
+            parent.create_group('/pop_name/0')
+            parent.create_group('/pop_name/1')
+            with pytest.raises(ValueError):
+                split_population._get_unique_group(parent)
 
 
 def test__write_nodes():
@@ -155,3 +172,44 @@ def test_split_population():
         utils.assert_json_files_equal(
             Path(tmp, 'circuit_config.json'), Path(expected_dir, 'circuit_config.json')
         )
+
+
+def test__split_population_by_node_set():
+    nodes_path = DATA_PATH / 'nodes.h5'
+    node_set_name = 'L2_X'
+    node_set_path = DATA_PATH / 'node_sets.json'
+
+    ret = split_population._split_population_by_node_set(
+        nodes_path, node_set_name, node_set_path)
+
+    assert len(ret) == 1
+    assert isinstance(ret['L2_X'], pd.DataFrame)
+
+    assert len(ret['L2_X']) == 1
+    assert ret['L2_X'].mtype.unique()[0] == 'L2_X'
+    assert_array_equal(ret['L2_X'].index, [0])
+
+
+def test_simple_split_subcircuit():
+    nodes_path = DATA_PATH / 'nodes.h5'
+    edges_path = DATA_PATH / 'edges.h5'
+    node_set_name = 'L6_Y'
+    node_set_path = DATA_PATH / 'node_sets.json'
+
+    with utils.tempdir('test_split_population') as tmp:
+        split_population.simple_split_subcircuit(
+            tmp, node_set_name, node_set_path, nodes_path, edges_path)
+
+        path = Path(tmp)
+
+        assert (path / 'nodes_L6_Y.h5').exists()
+        with h5py.File(path / 'nodes_L6_Y.h5', 'r') as h5:
+            population = h5['nodes/L6_Y/']
+            assert list(population['node_type_id']) == [-1, -1, ]
+            assert len(population['0/layer']) == 2
+
+        assert (path / 'edges_L6_Y.h5').exists()
+        with h5py.File(path / 'edges_L6_Y.h5', 'r') as h5:
+            group = h5['edges/L6_Y/']
+            assert list(group['source_node_id']) == [1, ]
+            assert list(group['target_node_id']) == [0, ]
