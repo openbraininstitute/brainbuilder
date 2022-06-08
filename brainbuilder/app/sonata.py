@@ -237,3 +237,18 @@ def simple_split_subcircuit(nodeset, nodeset_path, nodes, edges, output):
     '''Split a subcircuit out from a SONATA circuit based on node_set'''
     from brainbuilder.utils.sonata import split_population as module
     module.simple_split_subcircuit(output, nodeset, nodeset_path, nodes, edges)
+
+
+@app.command()
+@click.option("--nodeset", required=True, help="Name of nodeset")
+@click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
+@click.option('--include-virtual/--no-include-virtual', default=False)
+@click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
+def split_subcircuit(nodeset, circuit, include_virtual, output):
+    '''Split a subcircuit out from a SONATA circuit based on node_set'''
+    from brainbuilder.utils.sonata import split_population as module
+    module.split_subcircuit(
+        output, node_set_name=nodeset, circuit_config_path=circuit, do_virtual=include_virtual)
+
+    click.echo(click.style(f'Please remember to update the circuit_config.json in {output} '
+                           'to reflect the location of all necessary files', fg='green'))

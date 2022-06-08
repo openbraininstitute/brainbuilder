@@ -1,3 +1,4 @@
+import itertools as it
 import os
 from pathlib import Path
 
@@ -21,12 +22,22 @@ def test__get_population_name():
     assert 'src' == split_population._get_population_name(src='src', dst='src')
 
 
+def test__get_unique_population():
+    nodes = DATA_PATH / 'split_subcircuit' / 'networks' / 'nodes' / 'nodes.h5'
+    with h5py.File(nodes, 'r') as h5:
+        with pytest.raises(ValueError):
+            split_population._get_unique_population(h5['nodes'])
+
+    nodes = DATA_PATH / 'nodes.h5'
+    with h5py.File(nodes, 'r') as h5:
+        assert split_population._get_unique_population(h5['nodes']) == 'default'
+
+
 def test__get_unique_group():
     nodes = DATA_PATH / 'nodes.h5'
     with h5py.File(nodes, 'r') as h5:
         parent = h5['nodes/default']
         assert split_population._get_unique_group(parent)
-
 
     with utils.tempdir('test__get_unique_group') as tmp:
         with h5py.File(os.path.join(tmp, 'nodes.h5'), 'w') as h5:
@@ -157,7 +168,8 @@ def test__write_edges():
         ),
     ]:
         with utils.tempdir('test__write_edges') as tmp:
-            split_population._write_edges(tmp, edges_path, id_mapping, h5_read_chunk_size)
+            split_population._write_edges(
+                tmp, edges_path, id_mapping, h5_read_chunk_size, expect_to_use_all_edges=True)
             utils.assert_h5_dirs_equal(tmp, expected_dir, pattern='edges_*.h5')
 
 
@@ -213,3 +225,75 @@ def test_simple_split_subcircuit():
             group = h5['edges/L6_Y/']
             assert list(group['source_node_id']) == [1, ]
             assert list(group['target_node_id']) == [0, ]
+
+
+def test_split_subcircuit():
+    def check_biophysical_nodes(path):
+        path = Path(path)
+
+        assert (path / 'nodes.h5').exists()
+        with h5py.File((Path(path) / 'nodes.h5'), 'r') as h5:
+            nodes = h5['nodes']
+            for src in ('A', 'B', 'C', ):
+                assert src in nodes
+
+        assert (path / 'edges.h5').exists()
+        with h5py.File((Path(path) / 'edges.h5'), 'r') as h5:
+            edges = h5['edges']
+            assert 'A__B' in edges
+            assert list(edges['A__B']['source_node_id']) == [0, ]
+            assert list(edges['A__B']['target_node_id']) == [0, ]
+
+            assert 'A__C' in edges
+            assert list(edges['A__C']['source_node_id']) == [2, ]
+            assert list(edges['A__C']['target_node_id']) == [2, ]
+
+            assert 'B__C' in edges
+            assert list(edges['B__C']['source_node_id']) == [1, ]
+            assert list(edges['B__C']['target_node_id']) == [1, ]
+
+            assert 'C__A' in edges
+            assert list(edges['C__A']['source_node_id']) == [2, ]
+            assert list(edges['C__A']['target_node_id']) == [2, ]
+
+    node_set_name = 'mtype_a'
+    circuit_config_path = str(DATA_PATH / 'split_subcircuit' / 'circuit_config.json')
+
+    with utils.tempdir('test_split_subcircuit') as tmp:
+        split_population.split_subcircuit(
+            tmp, node_set_name, circuit_config_path, do_virtual=False)
+
+        check_biophysical_nodes(path=tmp)
+
+    with utils.tempdir('test_split_subcircuit') as tmp:
+        split_population.split_subcircuit(
+            tmp, node_set_name, circuit_config_path, do_virtual=True)
+
+        check_biophysical_nodes(path=tmp)
+
+        path = Path(tmp)
+
+        assert (path / 'nodes_V1.h5').exists()
+        with h5py.File(path / 'nodes_V1.h5', 'r') as h5:
+            assert len(h5['nodes/V1/0/model_type']) == 3
+
+        assert (path / 'nodes_V2.h5').exists()
+        with h5py.File(path / 'nodes_V2.h5', 'r') as h5:
+            assert len(h5['nodes/V2/0/model_type']) == 1
+
+        assert (path / 'virtual_edges_V1.h5').exists()
+        with h5py.File(path / 'virtual_edges_V1.h5', 'r') as h5:
+            assert len(h5['edges/V1__A/0/delay']) == 2
+            assert list(h5['edges/V1__A/source_node_id']) == [0, 2]
+            assert list(h5['edges/V1__A/target_node_id']) == [0, 0]
+
+            assert len(h5['edges/V1__B/0/delay']) == 1
+            assert list(h5['edges/V1__B/source_node_id']) == [1]
+            assert list(h5['edges/V1__B/target_node_id']) == [0]
+
+        assert (path / 'virtual_edges_V2.h5').exists()
+        with h5py.File(path / 'virtual_edges_V2.h5', 'r') as h5:
+            assert len(h5['edges/V2__C/0/delay']) == 1
+
+            assert list(h5['edges/V2__C/source_node_id']) == [0]
+            assert list(h5['edges/V2__C/target_node_id']) == [1]

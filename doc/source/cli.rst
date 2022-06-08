@@ -51,9 +51,12 @@ The following subcommands can be used with: ``brainbuilder sonata``
 * ``update-morphologies``         Update h5 morphologies to not include single child parents
 * ``update-edge-population``      Given h5_updates from removing single child parents
 * ``update-edge-pos``             Using section_id, segment_id and offset, create `SONATA` position
+* ``simple-split-subcircuit``     Split a subset of nodes and edges out of node and edges files
+* ``split-subcircuit``            Based on a `circuit_config`; split out a nodeset
 
-For the update-* commands, read more in :ref:`SONATA: Single Child Reindex`
+For the commands starting with _update-_, read more in :ref:`SONATA: Single Child Reindex`
 
+For _"split-subcircuit"_, an attempt is made to make a valid circuit_config.json; however due to the nature of the paths (like the locations of the morphologies), and the expansion of the original "manifest" keys, it requires human intervention post-split
 
 Genes / proteins assignment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
