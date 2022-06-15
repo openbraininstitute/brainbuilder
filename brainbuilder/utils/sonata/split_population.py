@@ -9,9 +9,9 @@ import h5py
 import libsonata
 import numpy as np
 import pandas as pd
+import bluepysnap
 import voxcell
 
-import bluepysnap
 from brainbuilder import utils
 
 L = logging.getLogger(__name__)

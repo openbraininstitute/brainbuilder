@@ -53,6 +53,7 @@ The following subcommands can be used with: ``brainbuilder sonata``
 * ``update-edge-pos``             Using section_id, segment_id and offset, create `SONATA` position
 * ``simple-split-subcircuit``     Split a subset of nodes and edges out of node and edges files
 * ``split-subcircuit``            Based on a `circuit_config`; split out a nodeset
+* ``node-set-from-targets``       Convert .target files to node_sets
 
 For the commands starting with _update-_, read more in :ref:`SONATA: Single Child Reindex`
 

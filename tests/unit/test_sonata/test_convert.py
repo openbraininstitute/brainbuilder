@@ -68,20 +68,20 @@ def test_provide_me_info():
 
 
 def test_write_node_set_from_targets():
-    target_path = './tests/unit/data/'
+    target_path = Path('./tests/unit/data/')
     cells_path = './tests/unit/data/circuit.mvd2'
 
     all_keys = {'All', 'Excitatory', 'Inhibitory', 'Just_testing', 'L1_DLAC', 'L23_PC', 'L4_NBC',
                 'L5_TTPC1', 'L6_LBC', 'Layer1', 'Layer2', 'Layer4', 'Layer5', 'Layer6', 'Mosaic',
-                'cADpyr', 'cNAC', 'dNAC'}
+                'cADpyr', 'cNAC', 'dNAC', 'User:target'}
 
     keys_with_node_ids = {'Just_testing'}
     keys_without_node_ids = all_keys - keys_with_node_ids
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp_dir = Path(tmp_dir)
-        out_file = tmp_dir / 'node_sets.json'
-        convert.write_node_set_from_targets(target_path, out_file, cells_path)
+        out_file = Path(tmp_dir) / 'node_sets.json'
+        target_files = [str(target_path / 'start.target'),  str(target_path / 'user.target'), ]
+        convert.write_node_set_from_targets(target_files, out_file, cells_path)
         data = load_json(out_file)
 
     assert set(data.keys()) == all_keys

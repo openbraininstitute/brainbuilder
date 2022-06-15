@@ -4,6 +4,7 @@ Changelog
 ## 0.17.1
   * Add simple circuit splitting for SONATA (BRBLD-90).
   * Add subcircuit splitting for SONATA (BRBLD-90).
+  * teach `node-set-from-targets` to take paths to files, add to documentation
 
 ## 0.17.0
   * Update ``write_network_config`` to be compatible with the new BBP sonata specs, moved from

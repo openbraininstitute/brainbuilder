@@ -4,7 +4,6 @@ Temporary SONATA converters.
 https://github.com/AllenInstitute/sonata/blob/master/docs/SONATA_DEVELOPER_GUIDE.md
 """
 
-import glob
 import logging
 import os
 import re
@@ -191,18 +190,22 @@ def _parse_targets(target_files):
         """ Parse .target file, return generator of `Target`s. """
         with open(filepath, 'r', encoding='utf-8') as f:
             contents = f.read()
+
         for m in TARGET_REGEX.finditer(contents):
             yield m.group('name'), m.group('contents').strip().split()
 
     targets = {}
     for file in target_files:
         for target_name, target_content in _parse_target_file(file):
+            if target_name in targets:
+                raise BrainBuilderError(f"{target_name} is duplicated, please check target files")
             targets[target_name] = target_content
+
     return targets
 
 
-def write_node_set_from_targets(input_dir, output_file, cells_path):
-    """Write SONATA node_set from all target files in a directory.
+def write_node_set_from_targets(target_files, output_file, cells_path):
+    """Write SONATA node_set from `target_files`
 
     This function allows to directly convert a set of target files created from a mvd3 file
     into the corresponding node_set.json file. This is useful if user does not have the yaml target
@@ -210,7 +213,6 @@ def write_node_set_from_targets(input_dir, output_file, cells_path):
 
     The 'brainbuilder targets node-sets' should be preferred if possible.
     """
-    target_files = glob.glob(input_dir + '/*.target')
     cells = Circuit({'cells': cells_path, 'targets': target_files}).cells
     if not os.path.basename(output_file) == 'node_sets.json':
         basename = os.path.basename(output_file)
