@@ -1,0 +1,24 @@
+{
+    "version": 2,
+    "manifest": {
+       "$BASE_DIR": "."
+    },
+    "node_sets_file": "$BASE_DIR/node_sets.json",
+    "networks": {
+        "nodes": [{
+            "nodes_file": "$BASE_DIR/nodes.h5",
+            "populations": {
+                "A": {
+                   "type": "biophysical",
+                   "alternate_morphologies": {
+                      "neurolucida-asc": "$BASE_DIR/asc",
+                      "h5v1": "$BASE_DIR/h5"
+                   },
+                   "morphologies_dir": "$BASE_DIR/swc"
+                }
+            }
+        }
+        ],
+        "edges": []
+    }
+}

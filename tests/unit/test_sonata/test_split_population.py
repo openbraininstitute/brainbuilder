@@ -1,4 +1,3 @@
-import itertools as it
 import os
 from pathlib import Path
 

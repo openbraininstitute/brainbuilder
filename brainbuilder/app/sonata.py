@@ -263,3 +263,14 @@ def split_subcircuit(nodeset, circuit, include_virtual, output):
 
     click.echo(click.style(f'Please remember to update the circuit_config.json in {output} '
                            'to reflect the location of all necessary files', fg='green'))
+
+
+@app.command()
+@click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
+@click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
+@click.option("--population-name", required=True,
+              help="Name of population to clip out morphologies")
+def clip_morphologies(output, circuit, population_name):
+    '''Clip (ie: copy) morphologies actually used by a population into the `output` directory'''
+    from brainbuilder.utils.sonata import clip
+    clip.morphologies(output, circuit, population_name)
