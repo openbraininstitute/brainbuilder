@@ -41,6 +41,7 @@ setup(
     author_email='bbp-ou-nse@groupes.epfl.ch',
     version=VERSION,
     description='BrainBuilder is a tool to define the cells that will compose a circuit.',
+    long_description='BrainBuilder is a tool to define the cells that will compose a circuit.',
     url='https://bbpteam.epfl.ch/project/issues/projects/BRBLD/issues/',
     download_url='https://bbpteam.epfl.ch/repository/devpi/+search?query=name%3Abrainbuilder',
     license='BBP-internal-confidential',

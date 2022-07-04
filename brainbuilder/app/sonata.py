@@ -261,7 +261,7 @@ def split_subcircuit(nodeset, circuit, include_virtual, output):
     module.split_subcircuit(
         output, node_set_name=nodeset, circuit_config_path=circuit, do_virtual=include_virtual)
 
-    click.echo(click.style(f'Please remember to update the circuit_config.json in {output} '
+    click.echo(click.style(f'Please remember to update {output}/circuit_config.json '
                            'to reflect the location of all necessary files', fg='green'))
 
 

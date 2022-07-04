@@ -102,7 +102,7 @@ def test__write_circuit_config():
         assert 'manifest' in ret
         assert 'networks' in ret
         assert 'nodes' in ret['networks']
-        assert 'nodes' in ret['networks']
+        assert 'edges' in ret['networks']
         assert len(ret['networks']['edges']) == 0  # no edge files
 
         open(os.path.join(tmp, 'edges_A.h5'), 'w').close()
@@ -226,18 +226,100 @@ def test_simple_split_subcircuit():
             assert list(group['target_node_id']) == [0, ]
 
 
+def test__gather_layout_from_networks():
+    res = split_population._gather_layout_from_networks(
+        {'nodes': [], 'edges': []})
+    assert res == ({}, {})
+
+    nodes, edges = split_population._gather_layout_from_networks(
+        {'nodes':
+         [{'nodes_file': 'a/b/a.h5',
+           'populations': {'a': {'type': 'biophysical'} },
+           },
+          {'nodes_file': 'a/b/bc.h5',
+           'populations': {'b': {'type': 'biophysical'},
+                           'c': {'type': 'biophysical'} },
+           },
+          {'nodes_file': 'a/b/a.h5',
+           'populations': {'A': {'type': 'biophysical'} },
+           },
+          ],
+         'edges':
+         [{'edges_file': 'a/b/a.h5',
+           'populations': {'a_a': {'type': 'biophysical'} },
+           },
+          {'edges_file': 'a/b/bc.h5',
+           'populations': {'b_c': {'type': 'biophysical'},
+                           'c_b': {'type': 'biophysical'} },
+           },
+          {'edges_file': 'a/a/bc.h5',
+           'populations': {'a_c': {'type': 'biophysical'},
+                           'a_b': {'type': 'biophysical'} },
+           },
+          {'edges_file': 'a/b/a.h5',
+           'populations': {'A_a': {'type': 'biophysical'} },
+           },
+          ],
+         })
+    assert nodes == {'A': 'A/a.h5', 'a': 'a/a.h5', 'b': 'b/bc.h5', 'c': 'b/bc.h5',}
+    assert edges == {'A_a': 'A_a/a.h5',
+                     'a_a': 'a_a/a.h5',
+                     'a_b': 'a/bc.h5', 'a_c': 'a/bc.h5',
+                     'b_c': 'b/bc.h5', 'c_b': 'b/bc.h5',
+                     }
+
+    nodes, edges = split_population._gather_layout_from_networks(
+        {'nodes':
+          [{'nodes_file': 'a/b/bc.h5',
+           'populations': {'b': {'type': 'biophysical'},
+                           'c': {'type': 'biophysical'} },
+           },
+          {'nodes_file': 'a/b/bc.h5',
+           'populations': {'B': {'type': 'biophysical'},
+                           'C': {'type': 'biophysical'} },
+           },
+           ],
+         'edges': [],
+         })
+    assert nodes == {'B': 'b/bc.h5', 'C': 'b/bc.h5', 'b': 'b/bc.h5', 'c': 'b/bc.h5'}
+
+    nodes, edges = split_population._gather_layout_from_networks(
+        {'nodes':
+         [{'nodes_file': 'a/b/a.h5',
+           'populations': {'a': {'type': 'biophysical'} },
+           },
+          {'nodes_file': 'a/b/bc.h5',
+           'populations': {'b': {'type': 'biophysical'} },
+           },
+          {'nodes_file': 'a/b/bc.h5',
+           'populations': {'c': {'type': 'biophysical'} },
+           },
+          {'nodes_file': 'a/b/a.h5',
+           'populations': {'A': {'type': 'biophysical'} },
+           },
+          ],
+         'edges': [],
+         })
+    assert nodes == {'A': 'A/a.h5', 'a': 'a/a.h5', 'b': 'b/bc.h5', 'c': 'c/bc.h5', }
+
+
 def test_split_subcircuit():
-    def check_biophysical_nodes(path):
+    def find_populations_by_path(networks, key, name):
+        populations = {k: v
+                       for population in networks[key]
+                       for k, v in population['populations'].items()
+                       if population[f'{key}_file'] == name}
+        return populations
+
+    def check_biophysical_nodes(path, has_virtual):
         path = Path(path)
 
-        assert (path / 'nodes.h5').exists()
-        with h5py.File((Path(path) / 'nodes.h5'), 'r') as h5:
+        with h5py.File(path / 'nodes' / 'nodes.h5', 'r') as h5:
             nodes = h5['nodes']
             for src in ('A', 'B', 'C', ):
                 assert src in nodes
 
-        assert (path / 'edges.h5').exists()
-        with h5py.File((Path(path) / 'edges.h5'), 'r') as h5:
+        with h5py.File(path / 'edges' / 'edges.h5', 'r') as h5:
             edges = h5['edges']
             assert 'A__B' in edges
             assert list(edges['A__B']['source_node_id']) == [0, ]
@@ -255,6 +337,38 @@ def test_split_subcircuit():
             assert list(edges['C__A']['source_node_id']) == [2, ]
             assert list(edges['C__A']['target_node_id']) == [2, ]
 
+            config = load_json(path / 'circuit_config.json')
+
+            assert 'manifest' in config
+            assert config['manifest']['$BASE_DIR'] == './'
+            assert 'networks' in config
+            assert 'nodes' in config['networks']
+            node_pops = find_populations_by_path(
+                config['networks'], 'nodes', '$BASE_DIR/nodes/nodes.h5')
+            assert node_pops == {'A': {'type': 'biophysical'},
+                                   'B': {'type': 'biophysical'},
+                                   'C': {'type': 'biophysical'}}
+            assert 'edges' in config['networks']
+            edge_pops = find_populations_by_path(
+                config['networks'], 'edges', '$BASE_DIR/edges/edges.h5')
+            assert edge_pops == {'A__B': {'type': 'chemical'},
+                                 'A__C': {'type': 'chemical'},
+                                 'B__A': {'type': 'chemical'},
+                                 'B__C': {'type': 'chemical'},
+                                 'C__A': {'type': 'chemical'},
+                                 'C__B': {'type': 'chemical'}}
+
+            virtual_node_count = sum(population['type'] == 'virtual'
+                                     for node in config['networks']['nodes']
+                                     for population in node['populations'].values()
+                                     )
+            if has_virtual:
+                assert virtual_node_count > 0
+            else:
+                assert virtual_node_count == 0
+                assert len(node_pops) == 3
+                assert len(edge_pops) == 6
+
     node_set_name = 'mtype_a'
     circuit_config_path = str(DATA_PATH / 'split_subcircuit' / 'circuit_config.json')
 
@@ -262,26 +376,27 @@ def test_split_subcircuit():
         split_population.split_subcircuit(
             tmp, node_set_name, circuit_config_path, do_virtual=False)
 
-        check_biophysical_nodes(path=tmp)
+        check_biophysical_nodes(path=tmp, has_virtual=False)
 
-    with utils.tempdir('test_split_subcircuit') as tmp:
+        networks = load_json(Path(tmp) / 'circuit_config.json')['networks']
+        assert len(networks['nodes']) == 1
+        assert len(networks['edges']) == 1
+
+    with utils.tempdir('test_split_subcircuit_virtual') as tmp:
         split_population.split_subcircuit(
             tmp, node_set_name, circuit_config_path, do_virtual=True)
 
-        check_biophysical_nodes(path=tmp)
+        check_biophysical_nodes(path=tmp, has_virtual=True)
 
         path = Path(tmp)
 
-        assert (path / 'nodes_V1.h5').exists()
-        with h5py.File(path / 'nodes_V1.h5', 'r') as h5:
+        with h5py.File(path / 'V1'/ 'nodes.h5', 'r') as h5:
             assert len(h5['nodes/V1/0/model_type']) == 3
 
-        assert (path / 'nodes_V2.h5').exists()
-        with h5py.File(path / 'nodes_V2.h5', 'r') as h5:
+        with h5py.File(path / 'V2' / 'nodes.h5', 'r') as h5:
             assert len(h5['nodes/V2/0/model_type']) == 1
 
-        assert (path / 'virtual_edges_V1.h5').exists()
-        with h5py.File(path / 'virtual_edges_V1.h5', 'r') as h5:
+        with h5py.File(path / 'edges' / 'virtual_edges_V1.h5', 'r') as h5:
             assert len(h5['edges/V1__A/0/delay']) == 2
             assert list(h5['edges/V1__A/source_node_id']) == [0, 2]
             assert list(h5['edges/V1__A/target_node_id']) == [0, 0]
@@ -290,9 +405,23 @@ def test_split_subcircuit():
             assert list(h5['edges/V1__B/source_node_id']) == [1]
             assert list(h5['edges/V1__B/target_node_id']) == [0]
 
-        assert (path / 'virtual_edges_V2.h5').exists()
-        with h5py.File(path / 'virtual_edges_V2.h5', 'r') as h5:
+        with h5py.File(path / 'V2__C' / 'virtual_edges_V2.h5', 'r') as h5:
             assert len(h5['edges/V2__C/0/delay']) == 1
 
             assert list(h5['edges/V2__C/source_node_id']) == [0]
             assert list(h5['edges/V2__C/target_node_id']) == [1]
+
+        networks = load_json(path / 'circuit_config.json')['networks']
+
+        # nodes
+        for pop in (1, 2):
+            virtual_pop = find_populations_by_path(networks, 'nodes', f'$BASE_DIR/V{pop}/nodes.h5')
+            assert len(virtual_pop) == 1
+            assert virtual_pop[f'V{pop}'] == {'type': 'virtual'}
+
+        # edges
+        virtual_pop = find_populations_by_path(networks, 'edges', '$BASE_DIR/edges/virtual_edges_V1.h5')
+        assert virtual_pop == {'V1__A': {'type': 'chemical'}, 'V1__B': {'type': 'chemical'}}
+
+        virtual_pop = find_populations_by_path(networks, 'edges', '$BASE_DIR/V2__C/virtual_edges_V2.h5')
+        assert virtual_pop == {'V2__C': {'type': 'chemical'}, }
