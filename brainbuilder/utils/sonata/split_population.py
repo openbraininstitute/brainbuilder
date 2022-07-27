@@ -129,7 +129,7 @@ def _finalize_edges(new_edges):
     edge_count = len(new_edges['source_node_id'])
     new_edges['edge_type_id'] = np.full(edge_count, -1)
     new_edges['edge_group_id'] = np.full(edge_count, 0)
-    new_edges['edge_group_index'] = np.arange(edge_count)
+    new_edges['edge_group_index'] = np.arange(edge_count, dtype=np.uint64)
 
 
 def _copy_edge_attributes(h5in,
@@ -150,22 +150,31 @@ def _copy_edge_attributes(h5in,
 
     utils.create_appendable_dataset(new_edges, 'source_node_id', np.uint64)
     utils.create_appendable_dataset(new_edges, 'target_node_id', np.uint64)
+
     new_edges['source_node_id'].attrs['node_population'] = src_node_pop
     new_edges['target_node_id'].attrs['node_population'] = dst_node_pop
 
     _init_edge_group(orig_group, new_group)
 
+    sgids_new = id_mapping[src_node_pop].index.to_numpy()
+    tgids_new = id_mapping[dst_node_pop].index.to_numpy()
+    assert (sgids_new >= 0).all(), "Source population ids must be positive."
+    assert (tgids_new >= 0).all(), "Target population ids must be positive."
+
     for start in range(0, len(orig_edges['source_node_id']), h5_read_chunk_size):
         sl = slice(start, start + h5_read_chunk_size)
         sgids = orig_edges['source_node_id'][sl]
         tgids = orig_edges['target_node_id'][sl]
-        mask = (np.isin(sgids, id_mapping[src_node_pop].index.to_numpy()) &
-                np.isin(tgids, id_mapping[dst_node_pop].index.to_numpy()))
+        sgid_mask = np.isin(sgids, sgids_new)
+        tgid_mask = np.isin(tgids, tgids_new)
+
+        mask = sgid_mask & tgid_mask
+        sgids = id_mapping[src_node_pop].loc[sgids[mask]].new_id.to_numpy()
 
         if np.any(mask):
             utils.append_to_dataset(
                 new_edges['source_node_id'],
-                id_mapping[src_node_pop].loc[sgids[mask]].new_id.to_numpy()
+                sgids
             )
             utils.append_to_dataset(
                 new_edges['target_node_id'],
@@ -224,7 +233,7 @@ def _write_edges(output,
                     src_node_pop,
                     dst_node_pop,
                     id_mapping,
-                    h5_read_chunk_size,
+                    h5_read_chunk_size
                 )
                 edge_count, sgid_count, tgid_count = _get_node_counts(h5out, edge_pop_name)
 
@@ -267,7 +276,8 @@ def _write_nodes(output, split_nodes, population_to_path=None):
 def _get_node_id_mapping(split_nodes):
     """return a dict split_nodes.keys() -> DataFrame with index old_ids, and colunm new_id"""
     return {
-        new_population: pd.DataFrame({"new_id": np.arange(len(df))}, index=df.index)
+        new_population: pd.DataFrame({"new_id": np.arange(len(df), dtype=np.int64)},
+                                     index=df.index)
         for new_population, df in split_nodes.items()
     }
 
@@ -381,7 +391,7 @@ def _write_subcircuit_edges(output_path,
                             dst_node_pop,
                             ids_mapping,
                             h5_read_chunk_size=H5_READ_CHUNKSIZE):
-    """copy an population to an edge file
+    """copy a population to an edge file
 
        If DELETED_EMPTY_EDGES_FILE is returned, the file was removed since no
        populations existed in it any more
@@ -459,43 +469,57 @@ def _get_storage_path(edge):
     return edge._edge_storage._h5_filepath
 
 
-def _write_all_subcircuit_edges(output,
-                                circuit,
-                                populations,
-                                edge_populations_to_paths,
-                                id_mapping):
+def _write_subcircuit_biological(output,
+                                 circuit,
+                                 node_pop_to_paths,
+                                 edge_pop_to_paths,
+                                 split_populations,
+                                 id_mapping):
     '''write edges that belong in a subcircuit
 
-    returns a dictionary with edge_population_name -> path
+    Args:
+        output: path to output
+        circuit: bluepysnap circuit
+        node_pop_to_paths(dict): node name -> new relative path
+        edge_pop_to_paths(dict): node name -> new relative path
+        split_populations(dict): population -> node dataframe
+        id_mapping(dict): population name -> df with index old_ids, and colunm new_id
+
+    returns `new_node_files`, `new_edges_files`: the paths to node & edges files that were created
     '''
-    ret = {}
+    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
+
+    new_edges_files = {}
     for name, edge in circuit.edges.items():
-        if edge.source.name in populations and edge.target.name in populations:
+        if edge.source.name in split_populations and edge.target.name in split_populations:
             L.debug("Writing edges %s for %s -> %s", name, edge.source.name, edge.target.name)
-            output_path = output / edge_populations_to_paths[name]
+            output_path = output / edge_pop_to_paths[name]
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            ret[name] = _write_subcircuit_edges(str(output_path),
-                                                _get_storage_path(edge),
-                                                name,
-                                                edge.source.name,
-                                                edge.target.name,
-                                                id_mapping)
-    return ret
+            new_edges_files[name] = _write_subcircuit_edges(str(output_path),
+                                                            _get_storage_path(edge),
+                                                            name,
+                                                            edge.source.name,
+                                                            edge.target.name,
+                                                            id_mapping)
+    return new_node_files, new_edges_files
 
 
 def _write_subcircuit_virtual(output,
                               circuit,
-                              populations,
                               edge_populations_to_paths,
                               split_populations,
                               id_mapping):
-    '''write all node/edge populations that have virtual nodes as source '''
+    '''write all node/edge populations that have virtual nodes as source
+
+    Note: the id_mapping dictionary is updated with the used virtual nodes
+    '''
     # pylint: disable=too-many-locals
     new_node_files, new_edges_files = {}, {}
 
     virtual_populations = {name: edge
                            for name, edge in circuit.edges.items()
-                           if edge.source.type == 'virtual' and edge.target.name in populations}
+                           if(edge.source.type == 'virtual' and
+                              edge.target.name in split_populations)}
 
     # gather the ids of the virtual populations that are used; within a circuit
     # it's possible that a virtual population points to multiple target populations
@@ -595,6 +619,46 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
     return config
 
 
+def _update_node_sets(node_sets, id_mapping):
+    '''using the `id_mapping`, update impacted `node_sets`
+
+    Note: impacted means they have a 'population', and they have 'node_ids' that changed
+    '''
+    ret = {}
+    for name, rule in node_sets.items():
+        # Note: 'node_id' predicates without 'population' aren't copied, since they
+        # don't really makes sense
+        if isinstance(rule, dict) and 'node_id' in rule:
+            if 'population' not in rule:
+                L.warning("No population key in nodeset %s, ignoring", name)
+                continue
+
+            if rule['population'] not in id_mapping:
+                continue
+
+            mapping = id_mapping[rule['population']]
+            ret[name] = rule
+            ret[name]['node_id'] = (mapping
+                                    .loc[mapping.index.intersection(rule['node_id'])]
+                                    .new_id
+                                    .sort_values()
+                                    .to_list()
+                                    )
+        else:
+            ret[name] = rule
+
+    return ret
+
+
+def _write_mapping(output, id_mapping):
+    mapping = {}
+    for population, df in id_mapping.items():
+        mapping[population] = {'old_id': df.index.to_list(),
+                               'new_id': df.new_id.to_list(),
+                               }
+    utils.dump_json(output / 'id_mapping.json', mapping)
+
+
 def split_subcircuit(output, node_set_name, circuit_config_path, do_virtual):
     '''Split a single subcircuit out of circuit, based on nodeset
 
@@ -611,27 +675,30 @@ def split_subcircuit(output, node_set_name, circuit_config_path, do_virtual):
     circuit = bluepysnap.Circuit(circuit_config_path)
 
     nodes = circuit.nodes.get(node_set_name).reset_index().set_index('node_ids')
-    populations = set(nodes.population.unique())
     node_pop_to_paths, edge_pop_to_paths = _gather_layout_from_networks(
         circuit.config['networks'])
 
     split_populations = dict(tuple(nodes.groupby('population')))
     id_mapping = _get_node_id_mapping(split_populations)
 
-    # biological populations
-    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
-    new_edge_files = _write_all_subcircuit_edges(
-        output, circuit, populations, edge_pop_to_paths, id_mapping)
+    new_node_files, new_edge_files = _write_subcircuit_biological(
+        output, circuit, node_pop_to_paths, edge_pop_to_paths, split_populations, id_mapping)
 
-    config = copy.deepcopy(circuit.config)
     if do_virtual:
         new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_virtual(
-            output, circuit, populations, edge_pop_to_paths, split_populations, id_mapping)
+            output, circuit, edge_pop_to_paths, split_populations, id_mapping)
         new_node_files.update(new_virtual_node_files)
         new_edge_files.update(new_virtual_edge_files)
+
+    _write_mapping(output, id_mapping)
+
+    config = copy.deepcopy(circuit.config)
+
+    node_sets = _update_node_sets(utils.load_json(config['node_sets_file']), id_mapping)
+    utils.dump_json(output / 'node_sets.json', node_sets)
+    config['node_sets_file'] = '$BASE_DIR/node_sets.json'
 
     # update circuit_config
     config = _update_config_with_new_paths(output, config, new_node_files, type_='nodes')
     config = _update_config_with_new_paths(output, config, new_edge_files, type_='edges')
-
     utils.dump_json(output / 'circuit_config.json', config)

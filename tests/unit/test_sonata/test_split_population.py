@@ -303,6 +303,32 @@ def test__gather_layout_from_networks():
     assert nodes == {'A': 'A/a.h5', 'a': 'a/a.h5', 'b': 'b/bc.h5', 'c': 'c/bc.h5', }
 
 
+def test__update_node_sets():
+    ret = split_population._update_node_sets(node_sets={}, id_mapping={})
+    assert ret == {}
+
+    node_sets = {
+        "CopiedNoNodeIds": ["All"],
+        "MissingPopluationNotCopied": {
+            "node_id": [15, 280, 397, 509, 555, 624, 651, 789, ]
+            },
+        "HasPopulationCopied": {
+            "population": "A",
+            "node_id": [3, 4, 5,  # exist in the mapping
+                        1003, 1004, 1005],  # not in the mapping
+            "mtype": "foo",
+            },
+        }
+    id_mapping = {
+        'A': pd.DataFrame({'new_id': np.arange(4)}, index=[0, 5, 4, 3, ]),
+        }
+    ret = split_population._update_node_sets(node_sets, id_mapping)
+
+    expected = {'CopiedNoNodeIds': ['All'],
+                'HasPopulationCopied': {'node_id': [1, 2, 3], 'population': 'A', "mtype": "foo",}}
+    assert ret == expected
+
+
 def test_split_subcircuit():
     def find_populations_by_path(networks, key, name):
         populations = {k: v
@@ -369,6 +395,24 @@ def test_split_subcircuit():
                 assert len(node_pops) == 3
                 assert len(edge_pops) == 6
 
+            node_sets = load_json(path / 'node_sets.json')
+            assert node_sets == {'mtype_a': {'mtype': 'a'},
+                                 'someA': {'node_id': [0, 1], 'population': 'A'},
+                                 'allB': {'node_id': [0, 1, 2], 'population': 'B'},
+                                 'noC': {'node_id': [], 'population': 'C'},
+                                 }
+
+            expected_mapping = {'A': {'old_id': [0, 2, 4], 'new_id': [0, 1, 2]},
+                                'B': {'old_id': [0, 2, 4], 'new_id': [0, 1, 2]},
+                                'C': {'old_id': [0, 2, 4], 'new_id': [0, 1, 2]}}
+
+            if has_virtual:
+                expected_mapping['V1'] = {'old_id': [0, 2, 3], 'new_id': [0, 1, 2]}
+                expected_mapping['V2'] = {'old_id': [0], 'new_id': [0]}
+
+            mapping = load_json(path / 'id_mapping.json')
+            assert mapping == expected_mapping
+
     node_set_name = 'mtype_a'
     circuit_config_path = str(DATA_PATH / 'split_subcircuit' / 'circuit_config.json')
 
@@ -425,3 +469,4 @@ def test_split_subcircuit():
 
         virtual_pop = find_populations_by_path(networks, 'edges', '$BASE_DIR/V2__C/virtual_edges_V2.h5')
         assert virtual_pop == {'V2__C': {'type': 'chemical'}, }
+
