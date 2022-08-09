@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 import h5py
 import numpy as np
@@ -168,7 +169,7 @@ def test__write_edges():
     ]:
         with utils.tempdir('test__write_edges') as tmp:
             split_population._write_edges(
-                tmp, edges_path, id_mapping, h5_read_chunk_size, expect_to_use_all_edges=True)
+                tmp, edges_path, id_mapping, expect_to_use_all_edges=True, h5_read_chunk_size=h5_read_chunk_size)
             utils.assert_h5_dirs_equal(tmp, expected_dir, pattern='edges_*.h5')
 
 
@@ -329,6 +330,33 @@ def test__update_node_sets():
     assert ret == expected
 
 
+def test_get_subcircuit_external_ids(monkeypatch):
+    all_sgids = np.array([10, 10, 11, 11, 12, 12, 10, 10, 11, 11, 12, 12, 10, 10, 11, 11, 12, 12,])
+    all_tgids = np.array([10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12,])
+
+    def get_ids(wanted_src_ids, wanted_dst_ids):
+        monkeypatch.setenv('H5_READ_CHUNKSIZE', '3')
+        return split_population._get_subcircuit_external_ids(all_sgids,
+                                                             all_tgids,
+                                                             wanted_src_ids,
+                                                             wanted_dst_ids)
+
+    wanted_src_ids = [10, 12, ]
+    wanted_dst_ids = [10, ]
+    expected = pd.DataFrame({'new_id': np.array([0, 1], np.uint)}, index=[10, 12])
+    pd.testing.assert_frame_equal(expected, get_ids(wanted_src_ids, wanted_dst_ids))
+
+    wanted_src_ids = [10, ]
+    wanted_dst_ids = [10, 12, 11]
+    expected = pd.DataFrame({'new_id': np.array([0, ], np.uint)}, index=[10, ])
+    pd.testing.assert_frame_equal(expected, get_ids(wanted_src_ids, wanted_dst_ids))
+
+    wanted_src_ids = [10, 12, 11, ]
+    wanted_dst_ids = [10, 12]
+    expected = pd.DataFrame({'new_id': np.array([0, 1, 2], np.uint)}, index=[10, 11, 12])
+    pd.testing.assert_frame_equal(expected, get_ids(wanted_src_ids, wanted_dst_ids))
+
+
 def test_split_subcircuit():
     def find_populations_by_path(networks, key, name):
         populations = {k: v
@@ -337,19 +365,34 @@ def test_split_subcircuit():
                        if population[f'{key}_file'] == name}
         return populations
 
-    def check_biophysical_nodes(path, has_virtual):
+    def check_biophysical_nodes(path, has_virtual, has_external):
         path = Path(path)
+
+        mapping = load_json(path / 'id_mapping.json')
+        assert mapping['A'] == {'new_id': [0, 1, 2], 'old_id': [0, 2, 4]}
+        assert mapping['B'] == {'new_id': [0, 1, 2, 3], 'old_id': [0, 2, 4, 5]}
+        assert mapping['C'] == {'new_id': [0, 1, 2, 3], 'old_id': [0, 2, 4, 5]}
 
         with h5py.File(path / 'nodes' / 'nodes.h5', 'r') as h5:
             nodes = h5['nodes']
             for src in ('A', 'B', 'C', ):
                 assert src in nodes
+                assert len(nodes[src]['0/@library/mtype']) == 1
+                assert np.all(nodes[src]['0/@library/mtype'][0] == b'a')
+                assert np.all(nodes[src]['0/mtype'][:] == 0)
+
+            assert len(nodes['A/node_type_id']) == 3
+            assert len(nodes['B/node_type_id']) == 4
+            assert len(nodes['C/node_type_id']) == 4
 
         with h5py.File(path / 'edges' / 'edges.h5', 'r') as h5:
             edges = h5['edges']
+
             assert 'A__B' in edges
-            assert list(edges['A__B']['source_node_id']) == [0, ]
-            assert list(edges['A__B']['target_node_id']) == [0, ]
+            assert list(edges['A__B']['source_node_id']) == [0, 0]
+            assert list(edges['A__B']['target_node_id']) == [0, 0]  # 2nd is duplicate edge
+
+            assert 'B__A' not in edges
 
             assert 'A__C' in edges
             assert list(edges['A__C']['source_node_id']) == [2, ]
@@ -372,8 +415,8 @@ def test_split_subcircuit():
             node_pops = find_populations_by_path(
                 config['networks'], 'nodes', '$BASE_DIR/nodes/nodes.h5')
             assert node_pops == {'A': {'type': 'biophysical'},
-                                   'B': {'type': 'biophysical'},
-                                   'C': {'type': 'biophysical'}}
+                                 'B': {'type': 'biophysical'},
+                                 'C': {'type': 'biophysical'}}
             assert 'edges' in config['networks']
             edge_pops = find_populations_by_path(
                 config['networks'], 'edges', '$BASE_DIR/edges/edges.h5')
@@ -398,17 +441,21 @@ def test_split_subcircuit():
             node_sets = load_json(path / 'node_sets.json')
             assert node_sets == {'mtype_a': {'mtype': 'a'},
                                  'someA': {'node_id': [0, 1], 'population': 'A'},
-                                 'allB': {'node_id': [0, 1, 2], 'population': 'B'},
+                                 'allB': {'node_id': [0, 1, 2, 3], 'population': 'B'},
                                  'noC': {'node_id': [], 'population': 'C'},
                                  }
 
             expected_mapping = {'A': {'old_id': [0, 2, 4], 'new_id': [0, 1, 2]},
-                                'B': {'old_id': [0, 2, 4], 'new_id': [0, 1, 2]},
-                                'C': {'old_id': [0, 2, 4], 'new_id': [0, 1, 2]}}
+                                'B': {'old_id': [0, 2, 4, 5], 'new_id': [0, 1, 2, 3]},
+                                'C': {'old_id': [0, 2, 4, 5], 'new_id': [0, 1, 2, 3]}}
 
             if has_virtual:
                 expected_mapping['V1'] = {'old_id': [0, 2, 3], 'new_id': [0, 1, 2]}
                 expected_mapping['V2'] = {'old_id': [0], 'new_id': [0]}
+
+            if has_external:
+                expected_mapping['external_A__B'] = {'old_id': [5], 'new_id': [0]}
+                expected_mapping['external_A__C'] = {'old_id': [5], 'new_id': [0]}
 
             mapping = load_json(path / 'id_mapping.json')
             assert mapping == expected_mapping
@@ -418,19 +465,48 @@ def test_split_subcircuit():
 
     with utils.tempdir('test_split_subcircuit') as tmp:
         split_population.split_subcircuit(
-            tmp, node_set_name, circuit_config_path, do_virtual=False)
+            tmp, node_set_name, circuit_config_path, do_virtual=False, create_external=False)
 
-        check_biophysical_nodes(path=tmp, has_virtual=False)
+        check_biophysical_nodes(path=tmp, has_virtual=False, has_external=False)
+
+    with utils.tempdir('test_split_subcircuit') as tmp:
+        split_population.split_subcircuit(
+            tmp, node_set_name, circuit_config_path, do_virtual=False, create_external=True)
+
+        check_biophysical_nodes(path=tmp, has_virtual=False, has_external=True)
+
+        path = Path(tmp)
+
+        mapping = load_json(path / 'id_mapping.json')
+        assert mapping['external_A__B'] == {'new_id': [0], 'old_id': [5]}
+        assert mapping['external_A__C'] == {'new_id': [0], 'old_id': [5]}
+        assert 'external_B' not in mapping
+        assert 'external_C' not in mapping
+
+        with h5py.File(path / 'nodes_external_A__B.h5', 'r') as h5:
+            assert len(h5['nodes/external_A__B/0/model_type']) == 1
+
+        with h5py.File(path / 'nodes_external_A__C.h5', 'r') as h5:
+            assert len(h5['nodes/external_A__C/0/model_type']) == 1
+
+        with h5py.File(path / 'external_A__B.h5', 'r') as h5:
+            assert h5['edges/external_A__B/source_node_id'].attrs['node_population'] == 'A'
+            assert h5['edges/external_A__B/target_node_id'].attrs['node_population'] == 'B'
+            assert len(h5['edges/external_A__B/0/delay']) == 1
 
         networks = load_json(Path(tmp) / 'circuit_config.json')['networks']
         assert len(networks['nodes']) == 1
         assert len(networks['edges']) == 1
 
+        with h5py.File(path / 'external_A__C.h5', 'r') as h5:
+            assert len(h5['edges/external_A__C/0/delay']) == 1
+            assert h5['edges/external_A__C/0/delay'][0] == 0.5
+
     with utils.tempdir('test_split_subcircuit_virtual') as tmp:
         split_population.split_subcircuit(
-            tmp, node_set_name, circuit_config_path, do_virtual=True)
+            tmp, node_set_name, circuit_config_path, do_virtual=True, create_external=False)
 
-        check_biophysical_nodes(path=tmp, has_virtual=True)
+        check_biophysical_nodes(path=tmp, has_virtual=True, has_external=False)
 
         path = Path(tmp)
 

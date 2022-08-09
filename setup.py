@@ -21,6 +21,7 @@ BASE_REQUIRES = [
     'pandas>=1.0.0',
     'scipy>=0.13',
     'tqdm>=4.0',
+    'joblib>=1.0.1',
 ] + [
     'bluepy>=2.1',
     'libsonata>=0.1.6',
