@@ -54,10 +54,12 @@ The following subcommands can be used with: ``brainbuilder sonata``
 * ``simple-split-subcircuit``     Split a subset of nodes and edges out of node and edges files
 * ``split-subcircuit``            Based on a `circuit_config`; split out a nodeset
 * ``node-set-from-targets``       Convert .target files to node_sets
+* ``clip-morphologies``           Copy morphologies referenced by a population to a separate output directory
 
 For the commands starting with _update-_, read more in :ref:`SONATA: Single Child Reindex`
 
-For _"split-subcircuit"_, an attempt is made to make a valid circuit_config.json; however due to the nature of the paths (like the locations of the morphologies), and the expansion of the original "manifest" keys, it requires human intervention post-split
+For the commands dealing with circuit splitting, read more in :ref:`SONATA: Split Circuit`
+
 
 Genes / proteins assignment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
