@@ -389,8 +389,8 @@ def test_split_subcircuit():
             edges = h5['edges']
 
             assert 'A__B' in edges
-            assert list(edges['A__B']['source_node_id']) == [0, 0]
-            assert list(edges['A__B']['target_node_id']) == [0, 0]  # 2nd is duplicate edge
+            assert list(edges['A__B']['source_node_id']) == [0, 0, 0]
+            assert list(edges['A__B']['target_node_id']) == [0, 0, 1]  # 2nd is duplicate edge
 
             assert 'B__A' not in edges
 

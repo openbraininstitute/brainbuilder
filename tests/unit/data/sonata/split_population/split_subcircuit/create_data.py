@@ -3,30 +3,32 @@
 
 Have 3 populations, to test that a nodeset that address multiple one
 
-  nodeA  nodeB  nodeC   <- population
-0 0a  >   0a       0a         ('A', 'B', 0, 0)
-1 1b  <   1b       1b         ('B', 'A', 1, 1)
-2 2a      2a   >   2a         ('B', 'C', 2, 2)
-3 3b      3b   <   3b         ('C', 'B', 3, 3)
-4 4a      4a       4a  <      ('A', 'C', 4, 4)
-5 4a      4a       4a  >      ('C', 'A', 4, 4)
-6 5b  >   5a       5a         ('A', 'B', 5, 5)  \ type b -> a
-7 5b      5a       5a  <      ('A', 'C', 5, 5)  /
-8 0a  >   0a       0a         ('A', 'B', 0, 0)  \ duplicates
-9 1b  <   1b       1b         ('B', 'A', 1, 1)  /
-| ||
-| |\ a/b are 'mtypes'
-| \ Node ID
-\ edge id
+   nodeA  nodeB  nodeC   <- population
+00 0a  >   0a       0a         ('A', 'B', 0, 0)
+01 1b  <   1b       1b         ('B', 'A', 1, 1)
+02 2a      2a   >   2a         ('B', 'C', 2, 2)
+03 3b      3b   <   3b         ('C', 'B', 3, 3)
+04 4a      4a       4a  <      ('A', 'C', 4, 4)
+05 4a      4a       4a  >      ('C', 'A', 4, 4)
+06 5b  >   5a       5a         ('A', 'B', 5, 5)  \ type b -> a
+07 5b      5a       5a  <      ('A', 'C', 5, 5)  /
+08 0a  >   0a       0a         ('A', 'B', 0, 0)  \ duplicates
+09 1b  <   1b       1b         ('B', 'A', 1, 1)  /
+10 0a  >   2a       2a         ('A', 'B', 0, 2)
+ | ||
+ | |\ a/b are 'mtypes'
+ | \ Node ID
+ \ edge id
 
 After keeping only mtypes of 'a' type;
 
 nodeA  nodeB  nodeC
 0a  >   0a       0a                    ('A', 'B', 0, 0)
-2a      2a   >   2a      Renumbered -> ('B', 'C', 1, 1)
-4a      4a       4a  <                 ('A', 'C', 2, 2)
-0a  >   0a       0a                    ('A', 'B', 0, 0)  \ duplicates
-1b  <   1b       1b                    ('B', 'A', 1, 1)  /
+        2a   >   2a      Renumbered -> ('B', 'C', 1, 1)
+4a               4a  <                 ('A', 'C', 2, 2)
+0a  >   0a                             ('A', 'B', 0, 0)  \ duplicates
+1b  <   1b                             ('B', 'A', 1, 1)  /
+0a  >   2a                             ('A', 'B', 0, 1)
 
 Note: Since nodes are being removed, only node IDs 0/2/4 will be kept, and they need to be renumbered
 
@@ -93,6 +95,7 @@ edges = (
     Edge('C', 'A', [4], [4]),
     Edge('A', 'B', [0], [0]),
     Edge('B', 'A', [1], [1]),
+    Edge('A', 'B', [0], [2]),
     )
 
 make_edges('edges.h5', edges)

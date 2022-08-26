@@ -606,6 +606,8 @@ def _write_subcircuit_external(output,
 
     returns: (new_node_files, new_edges_files); with, respectively,
     dictionaries with node and edge population_name -> path
+
+    Warning: this writes `id_mapping` in place
     '''
     new_nodes = {}
 
