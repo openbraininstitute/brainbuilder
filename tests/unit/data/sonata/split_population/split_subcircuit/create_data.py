@@ -26,8 +26,7 @@ nodeA  nodeB  nodeC
 0a  >   0a       0a                    ('A', 'B', 0, 0)
         2a   >   2a      Renumbered -> ('B', 'C', 1, 1)
 4a               4a  <                 ('A', 'C', 2, 2)
-0a  >   0a                             ('A', 'B', 0, 0)  \ duplicates
-1b  <   1b                             ('B', 'A', 1, 1)  /
+0a  >   0a                             ('A', 'B', 0, 0)  duplicate
 0a  >   2a                             ('A', 'B', 0, 1)
 
 Note: Since nodes are being removed, only node IDs 0/2/4 will be kept, and they need to be renumbered

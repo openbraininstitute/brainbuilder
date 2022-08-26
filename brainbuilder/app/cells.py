@@ -284,6 +284,16 @@ def _place(
     return out_cells
 
 
+@app.command(short_help="Initialize cell collection")
+@click.option("--population-name", help="Name of population to create", required=True)
+@click.option("-o", "--output", required=True,
+              help="Path to output. Use .mvd3 file extension for MVD3, otherwise SONATA is used")
+def init(population_name, output):
+    """Initialize a cell collection (ie: SONATA node file) with the specified population name"""
+    cells = CellCollection(population_name)
+    cells.save(output)
+
+
 @app.command(short_help="Generate cell positions and me-types")
 @click.option("--composition", help="Path to ME-type composition YAML", required=True)
 @click.option("--mtype-taxonomy", help="Path to mtype taxonomy TSV", required=True)
