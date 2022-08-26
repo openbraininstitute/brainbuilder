@@ -1,7 +1,7 @@
 Changelog
 =========
 
-## 0.17.1
+## 0.18.0
   * Add simple circuit splitting for SONATA (BRBLD-90).
   * Add subcircuit splitting for SONATA (BRBLD-90).
   * teach `node-set-from-targets` to take paths to files, add to documentation
