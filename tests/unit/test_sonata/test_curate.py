@@ -120,17 +120,33 @@ def test_rewire_edge_population():
 
 
 def test_create_projection_source_nodes():
+    projection_file = DATA_PATH / 'projection.h5'
     with TemporaryDirectory() as tmpdir:
-        shutil.copy2(str(DATA_PATH / 'projection.h5'), tmpdir)
         tmpdir = Path(tmpdir)
-        projection_file = tmpdir / 'projection.h5'
         source_nodes_file = curate.create_projection_source_nodes(
-            projection_file, tmpdir, 'projections')
+            projection_file, tmpdir, 'projections', fix_offset=False)
         assert source_nodes_file.stem == 'nodes_projections'
-        assert ['projections'] == curate.get_population_names(source_nodes_file)
+        assert ['projections', ] == curate.get_population_names(source_nodes_file)
+        with h5py.File(source_nodes_file, 'r') as h5f:
+            assert [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ] == h5f['/nodes/projections/0/model_type'][:].tolist()
+
+        source_nodes_file = curate.create_projection_source_nodes(
+            projection_file, tmpdir, 'projections', fix_offset=True)
+        assert source_nodes_file.stem == 'nodes_projections'
+        assert ['projections', ] == curate.get_population_names(source_nodes_file)
         with h5py.File(source_nodes_file, 'r') as h5f:
             assert [b'virtual', b'virtual'] == h5f['/nodes/projections/0/model_type'][:].tolist()
 
+def test_correct_source_nodes_offset():
+    with TemporaryDirectory() as tmpdir:
+        shutil.copy2(DATA_PATH / 'projection.h5', tmpdir)
+        edges_file = Path(tmpdir) / 'projection.h5'
+        curate.correct_source_nodes_offset(edges_file,
+                                           edge_population_name='not-default',
+                                           offset=10)
+        with h5py.File(edges_file, 'r') as h5f:
+            assert h5f['/edges/not-default/0/syn_weight'].shape == (4, )
+            assert [0, 0, 1, 1, ] == h5f['/edges/not-default/source_node_id'][:].tolist()
 
 def test_merge_h5_files():
     with _copy_file(NODES_FILE) as nodes_copy_file:

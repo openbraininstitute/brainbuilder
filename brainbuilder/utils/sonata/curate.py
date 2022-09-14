@@ -213,7 +213,7 @@ def _create_source_nodes(population_name, size, output_dir):
     return output
 
 
-def _correct_source_nodes_offset(edges_file, edge_population_name, offset):
+def correct_source_nodes_offset(edges_file, edge_population_name, offset):
     """Corrects source nodes index offset of edges population.
 
     Args:
@@ -221,7 +221,7 @@ def _correct_source_nodes_offset(edges_file, edge_population_name, offset):
         edge_population_name (str): edges population name
         offset (int): correction offset
     """
-    L.debug('_correct_source_nodes_offset: %s(%d)', edge_population_name, offset)
+    L.debug('correct_source_nodes_offset: %s(%d)', edge_population_name, offset)
     with h5py.File(edges_file, 'r+') as h5f:
         population = h5f['edges'][edge_population_name]
         ids = population['source_node_id'][:] - offset
@@ -236,7 +236,7 @@ def _correct_source_nodes_offset(edges_file, edge_population_name, offset):
         population['indices/source_to_target/node_id_to_ranges'] = idx
 
 
-def _get_source_nodes_size(edges_file, edge_population_name='default'):
+def _get_source_nodes_range(edges_file, edge_population_name='default'):
     """Given edge population, gets size of its source node population.
 
     Args:
@@ -244,22 +244,28 @@ def _get_source_nodes_size(edges_file, edge_population_name='default'):
         edge_population_name (str): edge population name
 
     Returns:
-        (int,int,int): start index, end index, index size of source node population.
+        (int, int, ): start index, end index
     """
     with h5py.File(edges_file, 'r') as h5f:
         source_node_id = h5f[f'/edges/{edge_population_name}/source_node_id']
         start = int(np.min(source_node_id))
         end = int(np.max(source_node_id))
-    return start, end, end - start + 1  # start, end, size
+    return start, end
 
 
-def create_projection_source_nodes(projection_file, source_nodes_dir, source_nodes_population_name):
+def create_projection_source_nodes(projection_file,
+                                   source_nodes_dir,
+                                   source_nodes_population_name,
+                                   fix_offset
+                                   ):
     """Create source nodes file for projection file.
 
     Args:
         projection_file (Path): filepath to projection in SONATA format
         source_nodes_dir (Path): directory where to store source nodes file
         source_nodes_population_name: source nodes population name
+        fix_offset(bool): projections node IDs often don't start from 0; if this is
+        true the offset will be removed (ie: the node IDs will start from 0)
 
     Returns:
         Path: path to created source nodes file.
@@ -267,9 +273,19 @@ def create_projection_source_nodes(projection_file, source_nodes_dir, source_nod
     names = get_population_names(projection_file)
     assert len(names) == 1, f'{projection_file} has multiple populations but must have only one'
     proj_population_name = next(iter(names))
-    start, _, size = _get_source_nodes_size(projection_file, proj_population_name)
+    start, end = _get_source_nodes_range(projection_file, proj_population_name)
+
+    if fix_offset:
+        size = end - start + 1
+    else:
+        if start != 0:
+            L.warning("%s:%s's node_ids don't start from 0 "
+                      "use correct_source_nodes_offset() to fix if required",
+                      projection_file, proj_population_name)
+        size = end + 1
+
     source_nodes_file = _create_source_nodes(source_nodes_population_name, size, source_nodes_dir)
-    _correct_source_nodes_offset(projection_file, proj_population_name, start)
+
     return source_nodes_file
 
 
