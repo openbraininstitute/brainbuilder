@@ -119,6 +119,19 @@ def test_rewire_edge_population():
             assert 'newname' == h5f[expected_name]['target_node_id'].attrs['node_population']
 
 
+def test_get_source_nodes_range():
+    edge_population_name = curate.get_population_name(EDGES_FILE)
+    start, end = curate.get_source_nodes_range(EDGES_FILE, edge_population_name)
+    assert start == 0
+    assert end == 2
+
+    projection_file = DATA_PATH / 'projection.h5'
+    edge_population_name = curate.get_population_name(projection_file)
+    start, end = curate.get_source_nodes_range(projection_file, edge_population_name)
+    assert start == 10
+    assert end == 11
+
+
 def test_create_projection_source_nodes():
     projection_file = DATA_PATH / 'projection.h5'
     with TemporaryDirectory() as tmpdir:
@@ -137,6 +150,7 @@ def test_create_projection_source_nodes():
         with h5py.File(source_nodes_file, 'r') as h5f:
             assert [b'virtual', b'virtual'] == h5f['/nodes/projections/0/model_type'][:].tolist()
 
+
 def test_correct_source_nodes_offset():
     with TemporaryDirectory() as tmpdir:
         shutil.copy2(DATA_PATH / 'projection.h5', tmpdir)
@@ -148,6 +162,7 @@ def test_correct_source_nodes_offset():
             assert h5f['/edges/not-default/0/syn_weight'].shape == (4, )
             assert [0, 0, 1, 1, ] == h5f['/edges/not-default/source_node_id'][:].tolist()
 
+
 def test_merge_h5_files():
     with _copy_file(NODES_FILE) as nodes_copy_file:
         curate.rename_node_population(nodes_copy_file, 'newname')
@@ -158,6 +173,7 @@ def test_merge_h5_files():
             with h5py.File(merged_file, 'r') as h5f:
                 assert '/nodes/not-default/0' in h5f
                 assert '/nodes/newname/0' in h5f
+
 
 def test__has_unifurcations():
     morph = morphio.Morphology(DATA_PATH / 'wrong-order-with-unifurcations.h5')

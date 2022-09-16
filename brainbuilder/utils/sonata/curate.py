@@ -236,7 +236,7 @@ def correct_source_nodes_offset(edges_file, edge_population_name, offset):
         population['indices/source_to_target/node_id_to_ranges'] = idx
 
 
-def _get_source_nodes_range(edges_file, edge_population_name='default'):
+def get_source_nodes_range(edges_file, edge_population_name='default'):
     """Given edge population, gets size of its source node population.
 
     Args:
@@ -247,9 +247,10 @@ def _get_source_nodes_range(edges_file, edge_population_name='default'):
         (int, int, ): start index, end index
     """
     with h5py.File(edges_file, 'r') as h5f:
-        source_node_id = h5f[f'/edges/{edge_population_name}/source_node_id']
+        source_node_id = h5f[f'/edges/{edge_population_name}/source_node_id'][:]
         start = int(np.min(source_node_id))
         end = int(np.max(source_node_id))
+
     return start, end
 
 
@@ -273,7 +274,7 @@ def create_projection_source_nodes(projection_file,
     names = get_population_names(projection_file)
     assert len(names) == 1, f'{projection_file} has multiple populations but must have only one'
     proj_population_name = next(iter(names))
-    start, end = _get_source_nodes_range(projection_file, proj_population_name)
+    start, end = get_source_nodes_range(projection_file, proj_population_name)
 
     if fix_offset:
         size = end - start + 1

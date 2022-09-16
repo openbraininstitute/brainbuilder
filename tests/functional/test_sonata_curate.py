@@ -39,8 +39,11 @@ def test_hippocampus(tmp_path):
     curate.add_edge_type_id(edges_file, curate.get_population_name(edges_file))
 
     proj_source_nodes_file = curate.create_projection_source_nodes(
-        proj_edges_file, original_dir, source_nodes_name
+        proj_edges_file, original_dir, source_nodes_name, fix_offset=True
     )
+    start, _ = curate.get_source_nodes_range(proj_edges_file, edge_population_name='default')
+    curate.correct_source_nodes_offset(proj_edges_file, edge_population_name='default', offset=start)
+
     curate.rewire_edge_population(proj_edges_file, proj_source_nodes_file, nodes_file, syn_type)
 
     curate.merge_h5_files([nodes_file, proj_source_nodes_file], "nodes", curated_dir / "nodes.h5")
