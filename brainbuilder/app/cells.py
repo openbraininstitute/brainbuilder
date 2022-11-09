@@ -18,7 +18,7 @@ Based on YAML cell composition recipe, create MVD3 with:
 
 Based on `extNeuronDB.dat` file, add 'me_combo' to existing MVD3.
 MVD3 is expected to have the following properties already assigned:
- - 'mtype', 'etype'
+ - 'layer', 'mtype', 'etype'
 
 
 # `brainbuilder cells positions_and_orientations`
@@ -164,6 +164,26 @@ def _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement):
     return result
 
 
+def _assign_subregions(cells, brain_regions, region_map):
+    cell_coordinates = cells[["x", "y", "z"]].to_numpy()
+    subregion_index = brain_regions.lookup(cell_coordinates)
+    subregion_index_to_acronym = region_map.as_dataframe()["acronym"]
+    _assign_property(cells, "subregion", subregion_index_to_acronym[subregion_index].to_numpy())
+
+    if "layer" in cells.columns and any(
+        cells["layer"].notnull() & (cells["layer"] != cells["subregion"])
+    ):
+        inconsistent_cells = cells[
+            cells["layer"].notnull() & (cells["layer"] != cells["subregion"])
+        ]
+        raise BrainBuilderError(
+            (
+                "`layer` property is not consistent with the ",
+                f"`subregion` property: {inconsistent_cells}",
+            )
+        )
+
+
 def _assign_property(cells, prop, values):
     if prop in cells:
         raise BrainBuilderError(f"Duplicate property: '{prop}'")
@@ -180,13 +200,10 @@ def _assign_mini_frequencies(cells, mini_frequencies):
     """
     Add the mini_frequency column to `cells`.
     """
-    try:
-        mfreqs_cells = mini_frequencies.loc[cells.layer.values]
-    except AttributeError as e:
-        raise BrainBuilderError("Cannot add mini frequencies to cells with no layer") from e
+    mfreqs_cells = mini_frequencies.loc[cells.subregion.to_numpy()]
 
-    _assign_property(cells, "exc_mini_frequency", mfreqs_cells.exc_mini_frequency.values)
-    _assign_property(cells, "inh_mini_frequency", mfreqs_cells.inh_mini_frequency.values)
+    _assign_property(cells, "exc_mini_frequency", mfreqs_cells.exc_mini_frequency.to_numpy())
+    _assign_property(cells, "inh_mini_frequency", mfreqs_cells.inh_mini_frequency.to_numpy())
 
 
 def _assign_atlas_property(cells, prop, atlas, dset):
@@ -257,6 +274,13 @@ def _place(
     result = pd.concat(groups)
 
     L.info("Total cell count: %d", len(result))
+
+    L.info("Assigning 'subregion'")
+    _assign_subregions(
+        result,
+        atlas.load_data("brain_regions"),
+        atlas.load_region_map()
+    )
 
     L.info("Assigning 'morph_class' / 'synapse_class'...")
     _assign_mtype_traits(result, mtype_taxonomy)
