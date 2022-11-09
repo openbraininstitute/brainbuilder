@@ -3,8 +3,9 @@
 coverage.xml
 *.egg-info
 .coverage
-doc/build
+build
 .tox
 .idea
 venv
 tmptestdir
+dist

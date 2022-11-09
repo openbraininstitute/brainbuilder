@@ -9,7 +9,7 @@ A collection of commands for creating CellCollection and augmenting its properti
 
 Based on YAML cell composition recipe, create MVD3 with:
  - cell positions
- - required cell properties: 'layer', 'mtype', 'etype'
+ - required cell properties: 'mtype', 'etype'
  - additional cell properties prescribed by the recipe and / or atlas
 
 ----
@@ -18,7 +18,7 @@ Based on YAML cell composition recipe, create MVD3 with:
 
 Based on `extNeuronDB.dat` file, add 'me_combo' to existing MVD3.
 MVD3 is expected to have the following properties already assigned:
- - 'layer', 'mtype', 'etype'
+ - 'mtype', 'etype'
 
 
 # `brainbuilder cells positions_and_orientations`
@@ -127,7 +127,7 @@ def _load_density(value, mask, atlas):
 
 
 def _check_traits(traits):
-    missing = set(['layer', 'mtype', 'etype']).difference(traits)
+    missing = {'mtype', 'etype'}.difference(traits)
     if missing:
         raise BrainBuilderError(
             f"Missing properties {list(missing)} for group {traits}"
@@ -180,7 +180,11 @@ def _assign_mini_frequencies(cells, mini_frequencies):
     """
     Add the mini_frequency column to `cells`.
     """
-    mfreqs_cells = mini_frequencies.loc[cells.layer.values]
+    try:
+        mfreqs_cells = mini_frequencies.loc[cells.layer.values]
+    except AttributeError as e:
+        raise BrainBuilderError("Cannot add mini frequencies to cells with no layer") from e
+
     _assign_property(cells, "exc_mini_frequency", mfreqs_cells.exc_mini_frequency.values)
     _assign_property(cells, "inh_mini_frequency", mfreqs_cells.inh_mini_frequency.values)
 

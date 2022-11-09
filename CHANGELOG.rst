@@ -1,6 +1,9 @@
 Changelog
 =========
 
+## 0.18.1
+  * `layer` made an optional trait in `brainbuilder.app.cells.place`
+
 ## 0.18.0
   * Add simple circuit splitting for SONATA (BRBLD-90).
   * Add subcircuit splitting for SONATA (BRBLD-90).
