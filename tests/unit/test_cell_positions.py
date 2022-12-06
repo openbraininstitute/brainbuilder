@@ -2,6 +2,8 @@ import numpy as np
 import scipy.spatial.distance as distance
 import numpy.testing as npt
 
+from pytest import raises
+
 from voxcell import VoxelData
 
 import brainbuilder.cell_positions as test_module
@@ -89,6 +91,13 @@ def test_create_cell_positions_black_grey():
     min_distance = 0.84 * 100. / np.power(4., 1. / 3.)
     min_distance_between_pts = np.min(distance.pdist(result).flatten())
     assert min_distance <= min_distance_between_pts
+
+
+def test_create_cell_positions_negative_density():
+    density = VoxelData(np.ones((3, 3, 3)), voxel_dimensions=(100, 100, 100))
+    density.raw[1, 1, 1] = -1.
+    with raises(Exception) as e:
+        test_module.create_cell_positions(density)
 
 
 def test_get_bbox_indices_nonzero_entries():

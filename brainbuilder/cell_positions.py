@@ -169,6 +169,9 @@ def create_cell_positions(density, density_factor=1.0, method='basic', seed=None
         numpy.array: array of positions of shape (cell_count, 3) where each row represents
         a cell and the columns correspond to (x, y, z).
     '''
+    if np.count_nonzero(density.raw < 0) != 0:
+        raise ValueError('Found negative densities, aborting')
+
     if seed is not None:
         np.random.seed(seed)  # make the output reproducible
 
