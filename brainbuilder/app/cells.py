@@ -104,16 +104,16 @@ def _load_density(value, mask, atlas):
             3D float32 numpy array of same shape as `mask`.
     """
     if isinstance(value, numbers.Number):
-        result = np.zeros_like(mask, dtype=np.float32)
+        result = np.zeros_like(mask, dtype=np.float64)
         result[mask] = float(value)
     elif value.startswith("{"):
         assert value.endswith("}")
         dataset = value[1:-1]
         L.info("Loading 3D density profile from '%s' atlas dataset...", dataset)
-        result = atlas.load_data(dataset, cls=VoxelData).raw.astype(np.float32)
+        result = atlas.load_data(dataset, cls=VoxelData).raw.astype(np.float64)
     elif value.endswith(".nrrd"):
         L.info("Loading 3D density profile from '%s'...", value)
-        result = VoxelData.load_nrrd(value).raw.astype(np.float32)
+        result = VoxelData.load_nrrd(value).raw.astype(np.float64)
     else:
         raise BrainBuilderError(f"Unexpected density value: '{value}'")
 
