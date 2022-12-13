@@ -38,7 +38,6 @@ Based on:
 """
 import logging
 import numbers
-import os
 
 from collections.abc import Mapping
 
@@ -57,7 +56,7 @@ from voxcell.nexus.voxelbrain import Atlas
 
 from brainbuilder import BrainBuilderError
 from brainbuilder.cell_positions import create_cell_positions
-from brainbuilder.utils import bbp, deprecate, load_json, load_yaml
+from brainbuilder.utils import bbp, deprecate, load_yaml
 
 from brainbuilder.app._utils import REQUIRED_PATH
 from brainbuilder.utils.bbp import load_cell_composition
@@ -397,94 +396,6 @@ def assign_emodels(cells_path, morphdb, seed, output):
     result = bbp.assign_emodels(cells, morphdb)
 
     result.save(output)
-
-
-def _parse_emodel_mapping(filepath):
-    content = load_json(filepath)
-    result = {}
-    for emodel, mapping in content.items():
-        assert isinstance(mapping['etype'], str)
-        assert isinstance(mapping['layer'], list)
-        etype = mapping['etype']
-        for layer in mapping['layer']:
-            assert isinstance(layer, str)
-            key = (layer, etype)
-            assert key not in result
-            result[key] = {'emodel': emodel}
-    result = pd.DataFrame(result).transpose()
-    result.index.names = ['layer', 'etype']
-    return result
-
-
-def _write_mecombo_tsv(out_tsv, cells, emodels, **optional_columns):
-    """Writes mecombo tsv file with optional columns if provided"""
-    me_combos = cells[
-        ['morphology', 'layer', 'mtype', 'etype', 'me_combo']
-    ].rename(columns={
-        'morphology': 'morph_name',
-        'mtype': 'fullmtype',
-        'me_combo': 'combo_name',
-    })
-    me_combos['layer'] = me_combos['layer'].astype(str)
-    me_combos = me_combos.join(emodels, on=('layer', 'etype'))
-    if me_combos['emodel'].isna().any():
-        mismatch = me_combos[me_combos['emodel'].isna()][['layer', 'etype']]
-        raise BrainBuilderError(f"Can not assign emodels for: {mismatch}")
-    COLUMNS = ['morph_name', 'layer', 'fullmtype', 'etype', 'emodel', 'combo_name']
-    for column_name, column_value in optional_columns.items():
-        if column_value is not None:
-            me_combos[column_name] = column_value
-            COLUMNS.append(column_name)
-    me_combos[COLUMNS].to_csv(out_tsv, sep='\t', index=False)
-
-
-@app.command()
-@click.argument("cells-path")
-@click.option("--emodels", help="Path to emodel -> etype mapping", required=True)
-@click.option(
-    "--threshold-current", type=float, help="Threshold current to use for all cells", default=None)
-@click.option(
-    "--holding-current", type=float, help="Holding current to use for all cells", default=None)
-@click.option("--out-tsv", help="Path to output mecombo TSV", required=True)
-@click.option(
-    "--out-mvd3", help="Deprecated! Path to output MVD3 file. Use --out-cells-path instead.")
-@click.option("--out-cells-path", help="Path to output cells file. Use .mvd3 file extension for"
-                                       " MVD3, otherwise SONATA is used")
-def assign_emodels2(cells_path, emodels, threshold_current, holding_current,
-                    out_tsv=None, out_mvd3=None, out_cells_path=None):
-    """ Assign 'me_combo' property; write me_combo.tsv """
-
-    if out_cells_path is None and out_mvd3 is None:
-        raise ValueError('Specify output file with --out-cells-path.')
-    cells = CellCollection.load(cells_path)
-    emodels = _parse_emodel_mapping(emodels)
-    cells = cells.as_dataframe()
-    cells['me_combo'] = cells.apply(
-        lambda row: f"{row.etype}_{row.layer}_{os.path.basename(row.morphology)}", axis=1
-    )
-
-    if out_mvd3 is None and not out_cells_path.lower().endswith('mvd3'):
-        cells['layer'] = cells['layer'].astype(str)
-        cells = cells.join(emodels, on=('layer', 'etype'))
-        if cells['emodel'].isna().any():
-            mismatch = cells[cells['emodel'].isna()][['layer', 'etype']]
-            raise BrainBuilderError(f"Can not assign emodels for: {mismatch}")
-        cells.rename({'emodel': 'model_template'}, inplace=True)
-        cells['model_template'] = 'hoc:' + cells['model_template']
-        if threshold_current is not None:
-            cells[cells.SONATA_DYNAMIC_PROPERTY + 'threshold_current'] = threshold_current
-        if holding_current is not None:
-            cells[cells.SONATA_DYNAMIC_PROPERTY + 'holding_current'] = holding_current
-
-    _write_mecombo_tsv(out_tsv, cells, emodels,
-                       threshold_current=threshold_current, holding_current=holding_current)
-    result = CellCollection.from_dataframe(cells)
-    if out_mvd3 is not None:
-        result.save_mvd3(out_mvd3)
-    else:
-        # must be biophysical here as a emodel/me_combo is provided
-        result.properties['model_type'] = "biophysical"
-        result.save(out_cells_path)
 
 
 @app.command(short_help='Generate cell positions and save them together with orientations,'

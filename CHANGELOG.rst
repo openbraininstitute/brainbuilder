@@ -1,6 +1,9 @@
 Changelog
 =========
 
+## 0.18.2
+  * Remove `assign_emodels2`; was a work around for the NCX project
+
 ## 0.18.1
   * Densities are now loaded using float64 precision. Higher precision aids in calculating
     correctly the total counts when accumulation of small and large densities is involved.
