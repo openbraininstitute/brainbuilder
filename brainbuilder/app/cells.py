@@ -186,7 +186,14 @@ def _assign_mini_frequencies(cells, mini_frequencies):
     """
     Add the mini_frequency column to `cells`.
     """
-    mfreqs_cells = mini_frequencies.loc[cells.subregion.to_numpy()]
+    if 'layer' in cells:
+        idx = cells.layer.to_numpy()
+    else:
+        # fallback to subregion; this requires that the mini_frequencies file uses subregions,
+        # and not layer names
+        idx = cells.subregion.to_numpy()
+
+    mfreqs_cells = mini_frequencies.loc[idx]
 
     _assign_property(cells, "exc_mini_frequency", mfreqs_cells.exc_mini_frequency.to_numpy())
     _assign_property(cells, "inh_mini_frequency", mfreqs_cells.inh_mini_frequency.to_numpy())
