@@ -127,7 +127,13 @@ def assign_emodels(cells, morphdb):
         L.warning("'%s' property would be overwritten", ME_COMBO)
         del df[ME_COMBO]
 
-    JOIN_COLS = ['morphology', 'layer', 'mtype', 'etype']
+    if 'layer' in df:
+        JOIN_COLS = ['morphology', 'layer', 'mtype', 'etype']
+    elif 'subregion' in df:
+        JOIN_COLS = ['morphology', 'subregion', 'mtype', 'etype']
+        morphdb = morphdb.rename(columns={'layer': 'subregion'})
+    else:
+        raise BrainBuilderError("Missing `layer` and `subregion` in cells dataframe")
 
     df = df.join(morphdb.set_index(JOIN_COLS)[ME_COMBO], on=JOIN_COLS)
 

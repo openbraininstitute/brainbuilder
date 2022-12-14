@@ -56,7 +56,7 @@ def provide_me_info(cells_path,
 
     def usecols(name):
         """Pick the needed columns."""
-        return name not in ('morph_name', 'layer', 'fullmtype', 'etype')
+        return name not in ('morph_name', 'layer', 'subregion', 'fullmtype', 'etype')
 
     if mecombo_info_path is not None:
         mecombo_info = pd.read_csv(mecombo_info_path, sep=r'\s+', usecols=usecols)

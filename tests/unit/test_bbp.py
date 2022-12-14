@@ -225,3 +225,21 @@ def test_assign_emodels_raises():
             ('morph-A', 1, 'mtype-A', 'etype-A1', 'me_combo-A1'),
         ], columns=['morphology', 'layer', 'mtype', 'etype', 'me_combo'])
         bbp.assign_emodels(cells, morphdb)
+
+def test_assign_emodels_subregion_fallback():
+    cells = CellCollection()
+    cells.properties = pd.DataFrame([
+        ('morph-A', 'subregion-A', 'mtype-A', 'etype-A', 'prop-A'),
+        ('morph-B', 'subregion-B', 'mtype-B', 'etype-B', 'prop-B'),
+    ], columns=['morphology', 'subregion', 'mtype', 'etype', 'prop'])
+    morphdb = pd.DataFrame([
+        ('morph-A', 'subregion-A', 'mtype-A', 'etype-A', 'me_combo-A'),
+        ('morph-B', 'subregion-B', 'mtype-B', 'etype-B', 'me_combo-B'),
+    ], columns=['morphology', 'layer', 'mtype', 'etype', 'me_combo'])
+    actual = bbp.assign_emodels(cells, morphdb).properties
+    expected = pd.DataFrame([
+        ('morph-A', 'subregion-A', 'mtype-A', 'etype-A', 'prop-A', 'me_combo-A'),
+        ('morph-B', 'subregion-B', 'mtype-B', 'etype-B', 'prop-B', 'me_combo-B'),
+    ], columns=['morphology', 'subregion', 'mtype', 'etype', 'prop', 'me_combo'])
+    assert_frame_equal(actual, expected, check_like=True)
+

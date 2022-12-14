@@ -6,6 +6,7 @@ coverage.xml
 build
 .tox
 .idea
+.vscode
 venv
 tmptestdir
 dist

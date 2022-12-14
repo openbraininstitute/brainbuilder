@@ -169,19 +169,6 @@ def _assign_subregions(cells, brain_regions, region_map):
     subregion_index_to_acronym = region_map.as_dataframe()["acronym"]
     _assign_property(cells, "subregion", subregion_index_to_acronym[subregion_index].to_numpy())
 
-    if "layer" in cells.columns and any(
-        cells["layer"].notnull() & (cells["layer"] != cells["subregion"])
-    ):
-        inconsistent_cells = cells[
-            cells["layer"].notnull() & (cells["layer"] != cells["subregion"])
-        ]
-        raise BrainBuilderError(
-            (
-                "`layer` property is not consistent with the ",
-                f"`subregion` property: {inconsistent_cells}",
-            )
-        )
-
 
 def _assign_property(cells, prop, values):
     if prop in cells:
