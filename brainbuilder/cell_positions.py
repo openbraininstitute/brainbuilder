@@ -1,8 +1,12 @@
 """ Algorithms to create cell positions. """
+import logging
 
 import numpy as np
 
 from brainbuilder import poisson_disc_sampling
+
+
+L = logging.getLogger(__name__)
 
 
 def _assert_cubic_voxels(voxel_data):
@@ -20,7 +24,6 @@ def _get_cell_count(density, density_factor):
     voxel_mm3 = density.voxel_volume / 1e9  # voxel volume is in um^3
     cell_count_per_voxel = density.raw * density_factor * voxel_mm3
     cell_count = int(np.round(np.sum(cell_count_per_voxel)))
-    assert cell_count > 0
 
     return cell_count_per_voxel, cell_count
 
@@ -81,6 +84,10 @@ def _create_cell_positions_uniform(density, density_factor):
     '''
     cell_count_per_voxel, cell_count = _get_cell_count(density, density_factor)
 
+    if cell_count == 0:
+        L.warning("Density resulted in zero cell counts.")
+        return np.empty((0, 3), dtype=np.float32)
+
     voxel_ijk = np.nonzero(cell_count_per_voxel > 0)
     voxel_idx = np.arange(len(voxel_ijk[0]))
 
@@ -116,6 +123,10 @@ def _create_cell_positions_poisson_disc(density, density_factor):
     '''
     # pylint: disable=assignment-from-no-return
     cell_count_per_voxel, cell_count = _get_cell_count(density, density_factor)
+
+    if cell_count == 0:
+        L.warning("Density resulted in zero cell counts.")
+        return np.empty((0, 3), dtype=np.float32)
 
     _assert_cubic_voxels(density)
     voxel_size = np.abs(density.voxel_dimensions[0])
@@ -177,4 +188,5 @@ def create_cell_positions(density, density_factor=1.0, method='basic', seed=None
 
     position_generators = {'basic': _create_cell_positions_uniform,
                            'poisson_disc': _create_cell_positions_poisson_disc}
+
     return position_generators[method](density, density_factor)

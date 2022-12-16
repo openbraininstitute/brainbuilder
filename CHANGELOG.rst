@@ -2,6 +2,7 @@ Changelog
 =========
 
 ## 0.18.2
+  * Relax zero cell count assertion to a warning in `place`.
   * Remove `assign_emodels2`; was a work around for the NCX project
   * be more relaxed about matching `layer` and `subregion`
   * for emodel assignment, try `layer` first, and fall back to `subregion` columns

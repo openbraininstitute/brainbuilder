@@ -100,6 +100,20 @@ def test_create_cell_positions_negative_density():
         test_module.create_cell_positions(density)
 
 
+def test_create_cell_positions__zero_counts__basic():
+    """Test that algorithm outputs an (0, 3) array when counts are zero."""
+    density = VoxelData(np.zeros((3, 3, 3)), voxel_dimensions=(10, 10, 10))
+    result = test_module.create_cell_positions(density)
+    assert result.shape == (0, 3) and result.dtype == np.float32
+
+
+def test_create_cell_positions__zero_counts__poisson_disc():
+    """Test that algorithm outputs an (0, 3) array when counts are zero."""
+    density = VoxelData(np.zeros((3, 3, 3)), voxel_dimensions=(10, 10, 10))
+    result = test_module.create_cell_positions(density, method="poisson_disc")
+    assert result.shape == (0, 3) and result.dtype == np.float32
+
+
 def test_get_bbox_indices_nonzero_entries():
     data = np.array([[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
                      [[0, 0, 0, 0], [0, 0, 1, 1], [0, 0, 1, 0]],
