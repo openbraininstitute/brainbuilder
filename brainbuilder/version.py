@@ -1,4 +1,4 @@
 """Brainbuilder version."""
 
-VERSION = '0.18.3.dev0'
+VERSION = '0.18.3'
 __version__ = VERSION
