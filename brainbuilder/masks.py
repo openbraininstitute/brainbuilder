@@ -40,10 +40,10 @@ def triangular_mask(shape, v0, v1, v2):
     Returns:
         A numpy boolean array of the given shape
     '''
-    mask = np.ones(shape, dtype=np.bool)
+    mask = np.ones(shape, dtype=bool)
     idx = np.nonzero(mask)
     aidx = np.array(idx).transpose()
-    r = np.zeros(aidx.shape[0], dtype=np.bool)  # pylint: disable=unsubscriptable-object
+    r = np.zeros(aidx.shape[0], dtype=bool)  # pylint: disable=unsubscriptable-object
 
     # TODO make is_in_triangle take arrays of points so we don't need to do one by one
     for i, p in enumerate(aidx):
@@ -72,7 +72,7 @@ def regular_convex_polygon_mask(shape, radius, vertex_count):
     center = (np.array(shape) - 1) * 0.5
     points += center
 
-    mask = np.zeros(shape, dtype=np.bool)
+    mask = np.zeros(shape, dtype=bool)
     point_idx = np.arange(vertex_count + 1)
 
     for i0, i1 in zip(point_idx[:-1], point_idx[1:]):
