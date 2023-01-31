@@ -19,11 +19,13 @@ BASE_REQUIRES = [
     'lxml>=3.3',
     'numpy>=1.9',
     'pandas>=1.0.0',
+    'pyyaml>=5.3.1',
     'scipy>=0.13',
     'tqdm>=4.0',
     'joblib>=1.0.1',
 ] + [
     'bluepy>=2.1',
+    'bluepysnap>=0.13.2,!=1.0.0,!=1.0.1',
     'libsonata>=0.1.6',
     'morphio>=3,<4',
     'voxcell>=3.1.1',

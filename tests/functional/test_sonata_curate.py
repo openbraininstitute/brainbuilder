@@ -60,8 +60,8 @@ def test_hippocampus(tmp_path):
             {
                 "nodes_file": "nodes.h5",
                 "populations": {
-                    "hippocampus_neurons": {},
-                    "hippocampus_projections": {},
+                    "hippocampus_neurons": {"type": "biophysical"},
+                    "hippocampus_projections": {"type": "virtual"},
                 },
             }
         ],
@@ -72,13 +72,13 @@ def test_hippocampus(tmp_path):
             {
                 "edges_file": "edges.h5",
                 "populations": {
-                    "hippocampus_neurons__hippocampus_neurons__chemical": {},
-                    "hippocampus_projections__hippocampus_neurons__chemical": {},
+                    "hippocampus_neurons__hippocampus_neurons__chemical": {"type": "chemical"},
+                    "hippocampus_projections__hippocampus_neurons__chemical": {"type": "chemical"},
                 },
             }
         ],
         output_path=sonata_config_file,
     )
-    errors = validate(sonata_config_file, bbp_check=True)
+    errors = validate(str(sonata_config_file), skip_slow=False)
     errors = [str(err) for err in errors if err.level == Error.FATAL]
     assert errors == []

@@ -35,7 +35,7 @@ def _add_me_info(cells, mecombo_info):
                                     f"the e-model release")
 
         mecombo_params = mecombo_info.loc[me_combos]
-        for prop, column in mecombo_params.iteritems():
+        for prop, column in mecombo_params.items():
             values = column.values
             if prop == 'emodel':
                 values = [('hoc:' + v) for v in values]
@@ -183,8 +183,6 @@ def _parse_targets(target_files):
     This function basically repeats the implementation of targets for bluepy<2.4.1. As of 2.4.1
     the implementation is optimized to reduce memory. That's why the unoptimized implementation
     is kept here for conversion purposes only.
-    This function does not check for duplicating of targets because it expects `Circuit`
-    constructor to take care of it.
     """
     def _parse_target_file(filepath):
         """ Parse .target file, return generator of `Target`s. """

@@ -235,7 +235,7 @@ def _write_nrn(output, index1, index2, mapping, properties, pre_synaptic_ids):
                 continue
 
             if r1_start > r1_end:
-                raise Exception(f'Start index ({r1_start}) > than end index ({r1_end})')
+                raise RuntimeError(f'Start index ({r1_start}) > than end index ({r1_end})')
 
             assert r1_start == r1_end - 1, 'With postsynaptic sorting, should only have 1 row'
 

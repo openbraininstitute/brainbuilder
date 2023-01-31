@@ -50,17 +50,18 @@ def morphologies(output, circuit_config, population_name):
         raise BrainBuilderError(f'{population_name} missing from {circuit.nodes.population_names}')
 
     population = circuit.nodes[population_name]
+    population_config = population.config
     morph_paths = list(population.get(properties='morphology').unique())
 
-    if 'morphologies_dir' in population.config:
-        source = Path(population.config['morphologies_dir'])
+    if 'morphologies_dir' in population_config:
+        source = Path(population_config['morphologies_dir'])
         dest = output / source.name
         missing = _copy_files_with_extension(source, dest, morph_paths, 'swc')
         if missing:
             L.warning(_format_missing(missing))
 
-    if 'alternate_morphologies' in population.config:
-        alt_morphs = population.config['alternate_morphologies']
+    if 'alternate_morphologies' in population_config:
+        alt_morphs = population_config['alternate_morphologies']
         for extension, name in EXTENSIONS_MAPPING.items():
             if name in alt_morphs:
                 source = Path(alt_morphs[name])
