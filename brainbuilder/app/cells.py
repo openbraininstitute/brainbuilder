@@ -122,6 +122,16 @@ def _load_density(value, mask, atlas):
     if np.any(np.isnan(result)):
         raise BrainBuilderError("NaN density values within region mask")
 
+    # Densities smaller than 1e-7 per mm3 correspond to less than 1 cell for the whole brain.
+    # For example, mouse brain volume is ~600 mm3 and human brain ~1260000 mm3.
+    # Allowing extremely small numbers introduces noise into the placement and should be ideally
+    # addressed at the density generation stage. However, given that this is not always the case,
+    # the near zero values will be zeroed to ensure the correct behavior of the algorithm.
+    mask = np.isclose(result, 0.0, atol=1e-7, rtol=0.0) & (result != 0.0)
+    if mask.any():
+        L.warning("{mask.sum()} Near zero values smaller than 1e-7 found and wil be zeroed.")
+        result[mask] = 0.0
+
     return result
 
 

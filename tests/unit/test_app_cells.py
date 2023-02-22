@@ -33,3 +33,37 @@ def test_load_density__dangerously_low_densities():
         _, count = _get_cell_count(loaded_density, 1.0)
 
         assert count == 13073813
+
+
+def test_load_density__near_zero_values_are_ignored():
+    """Test that values smaller than 1e-7 are ignored."""
+
+    
+    shape = (3, 3, 3)
+    voxel_dimensions = np.array([25, 25, 25])
+
+    with tempfile.NamedTemporaryFile(suffix=".nrrd") as tfile:
+
+        filepath = tfile.name
+
+        raw = np.zeros(shape, dtype=np.float64)
+
+        raw[:, 0, :] = -0.001
+        raw[:, 1, :] = 1e-8
+        raw[:, 2, :] = 10.
+
+        density = voxcell.VoxelData(raw=raw, voxel_dimensions=voxel_dimensions)
+        density.save_nrrd(filepath)
+
+        mask = np.ones_like(shape, dtype=bool)
+        result = test_module._load_density(filepath, mask, atlas=None)
+
+        # Non close to zero negative and positive values remain
+        assert np.count_nonzero(result < 0.0) == 9
+        assert np.count_nonzero(result > 0.0) == 9
+
+        # Close to zero values are zeroed
+        assert np.count_nonzero(result == 1e-8) == 0
+
+        # Sanity check for the remaining entries
+        assert np.count_nonzero(result) == 18
