@@ -6,6 +6,7 @@ import morphio
 import numpy as np
 import voxcell
 
+from bluepysnap.schemas import schemas
 
 L = logging.getLogger(__name__)
 
@@ -348,3 +349,109 @@ def check_morphology_invariants(h5_morph_dir, morph_names):
             have_unifurcations.add(name)
 
     return incorrect_ordering, have_unifurcations
+
+
+def _update_dtype(parent_h5, name, target_dtype):
+    """Update dtype of the `parent_h5[name]` h5py dataset to `target_dtype`."""
+    h5 = parent_h5[name]
+    attrs = dict(h5.attrs)
+    L.debug("convert_dtype: %s: %s -> %s", h5.name, h5.dtype, target_dtype)
+    new = np.asarray(h5[:], dtype=target_dtype)
+    del parent_h5[name]
+    parent_h5[name] = new
+
+    for k, v in attrs.items():
+        parent_h5[name].attrs[k] = v
+
+    return (parent_h5[name].name, target_dtype)
+
+
+def update_node_dtypes(h5_file, population_name, population_type):
+    """Update the datatypes of the attributes within a node population to the SONATA spec.
+
+    Args:
+        h5_file(path): to h5 file containing nodes
+        population_name(str): name of the population to modify
+        population_type(str): type (ex: biophysical) of the node population
+
+    Returns:
+        dict of names -> dtype of converted attributes
+    """
+    converted = []
+    property_types, dynamics_params = schemas.nodes_schema_types(population_type)
+    with h5py.File(h5_file, 'r+') as h5f:
+        group = h5f['nodes'][population_name]['0']
+        library = set()
+        if "@library" in group:
+            library = set(group["@library"])
+
+        for attribute_name in group.keys():
+            if attribute_name in ("@library", "dynamics_params", ):
+                continue
+            if attribute_name not in property_types:
+                L.info("Unknown property '%s', leaving alone", attribute_name)
+                continue
+
+            target_dtype = property_types[attribute_name]
+            if target_dtype == str:
+                continue
+
+            if attribute_name in library:
+                parent = group["@library"]
+            else:
+                parent = group
+
+            if target_dtype != parent[attribute_name].dtype:
+                converted.append(_update_dtype(parent, attribute_name, target_dtype))
+
+        if "dynamics_params" in group:
+            parent = group["dynamics_params"]
+            for param in parent.keys():
+                if param not in dynamics_params:
+                    continue
+
+                target_dtype = dynamics_params[param]
+                if target_dtype != parent[param].dtype:
+                    converted.append(_update_dtype(parent, param, target_dtype))
+
+    return dict(converted)
+
+
+def update_edge_dtypes(h5_file, population_name, population_type, virtual):
+    """Update the datatypes of the attributes within an edge population to the SONATA spec.
+
+    Args:
+        h5_file(path): to h5 file containing nodes
+        population_name(str): name of the population to modify
+        population_type(str): type (ex: biophysical) of the node population
+        virtual(bool): Whether the population is virtual
+
+    Returns:
+        dict of names -> dtype of converted attributes
+    """
+    property_types = schemas.edges_schema_types(population_type, virtual=virtual)
+    converted = []
+    with h5py.File(h5_file, 'r+') as h5f:
+        group = h5f['edges'][population_name]
+
+        for name, expected in (('source_node_id', np.uint64,),
+                               ('target_node_id', np.uint64, ),
+                               ('edge_type_id', np.int64, ),):
+            if group[name].dtype != expected:
+                converted.append(_update_dtype(group, name, expected))
+
+        group = group['0']
+
+        for attribute_name in group.keys():
+            if attribute_name not in property_types:
+                L.info("Unknown property '%s', leaving alone", attribute_name)
+                continue
+
+            target_dtype = property_types[attribute_name]
+            if target_dtype == str:
+                continue
+
+            if target_dtype != group[attribute_name].dtype:
+                converted.append(_update_dtype(group, attribute_name, target_dtype))
+
+    return dict(converted)

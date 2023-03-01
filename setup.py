@@ -25,7 +25,7 @@ BASE_REQUIRES = [
     'joblib>=1.0.1',
 ] + [
     'bluepy>=2.1',
-    'bluepysnap>=0.13.2,!=1.0.0,!=1.0.1',
+    'bluepysnap>=1.0.3',
     'libsonata>=0.1.6',
     'morphio>=3,<4',
     'voxcell>=3.1.1',

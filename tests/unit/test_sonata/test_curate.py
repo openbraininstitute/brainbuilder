@@ -19,8 +19,12 @@ EDGES_FILE = DATA_PATH / 'edges.h5'
 
 
 @contextmanager
-def _copy_file(file):
-    with TemporaryDirectory() as tmpdir:
+def _copy_file(file, tmpdir=None):
+    if tmpdir is None:
+        with TemporaryDirectory() as tmpdir:
+            shutil.copy2(str(file), tmpdir)
+            yield Path(tmpdir) / file.name
+    else:
         shutil.copy2(str(file), tmpdir)
         yield Path(tmpdir) / file.name
 
@@ -29,11 +33,11 @@ def test_get_popualtion_names():
     assert ['not-default'] == curate.get_population_names(NODES_FILE)
     assert ['not-default'] == curate.get_population_names(EDGES_FILE)
 
-    with _copy_file(NODES_FILE) as edges_copy_file:
-        with h5py.File(edges_copy_file, 'r+') as h5f:
+    with _copy_file(NODES_FILE) as nodes_copy_file:
+        with h5py.File(nodes_copy_file, 'r+') as h5f:
             del h5f['/nodes']
         with pytest.raises(AssertionError):
-            curate.get_population_names(edges_copy_file)
+            curate.get_population_names(nodes_copy_file)
 
     with _copy_file(EDGES_FILE) as edges_copy_file:
         with h5py.File(edges_copy_file, 'r+') as h5f:
@@ -190,3 +194,34 @@ def test_check_morphology_invariants():
     incorrect_ordering, have_unifurcations =  curate.check_morphology_invariants(DATA_PATH, morph_names)
     assert incorrect_ordering == {'wrong-order-with-unifurcations'}
     assert have_unifurcations == {'wrong-order-with-unifurcations'}
+
+
+def test__update_dtype(tmp_path):
+    with h5py.File(tmp_path / 'test__update_dtype.h5', 'w') as h5:
+        dset = h5.create_dataset("ints", (100,), dtype='i8')
+        dset.attrs['foo'] = 'bar'
+        dset.attrs['bar'] = 'baz'
+        name, dtype = curate._update_dtype(h5, "ints", np.float32)
+        assert name == '/ints'
+        assert dtype == np.float32
+        assert h5['ints'].dtype == np.float32
+        assert {'foo': 'bar', 'bar': 'baz'} == dict(h5['ints'].attrs)
+
+
+def test_update_node_dtypes(tmp_path):
+    with _copy_file(NODES_FILE, tmp_path) as nodes_copy_file:
+        with h5py.File(nodes_copy_file, 'r+') as h5:
+            data = h5['/nodes/not-default/0/dynamics_params/holding_current'].astype(int)
+            del h5['/nodes/not-default/0/dynamics_params/holding_current']
+            h5.create_dataset('/nodes/not-default/0/dynamics_params/holding_current', data=data)
+        converted = curate.update_node_dtypes(nodes_copy_file, "not-default", "biophysical")
+        assert converted['/nodes/not-default/0/x'] == np.float32  # was np.float64
+        assert converted['/nodes/not-default/0/rotation_angle_xaxis'] == np.float32  # was np.float64
+        assert converted['/nodes/not-default/0/dynamics_params/holding_current'] == np.float32
+
+
+def test_update_edge_dtypes(tmp_path):
+    with _copy_file(EDGES_FILE, tmp_path) as edges_copy_file:
+        converted = curate.update_edge_dtypes(edges_copy_file, "not-default", "chemical", virtual=False)
+        assert converted['/edges/not-default/0/efferent_surface_z'] == np.float32
+        assert converted['/edges/not-default/edge_type_id'] == np.int64

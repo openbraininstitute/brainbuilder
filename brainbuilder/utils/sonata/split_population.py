@@ -516,13 +516,7 @@ def _gather_layout_from_networks(networks):
 
 def _get_storage_path(edge):
     """Return the storage path."""
-    try:
-        # with bluepysnap>=1.0
-        return edge.h5_filepath
-    except AttributeError:
-        # with bluepysnap<1.0
-        # pylint: disable=protected-access
-        return edge._edge_storage._h5_filepath
+    return edge.h5_filepath
 
 
 def _write_subcircuit_biological(output,
