@@ -1,7 +1,5 @@
-import json
 import numpy as np
 from pathlib import Path
-import tempfile
 from unittest.mock import Mock
 import voxcell
 import pandas as pd
@@ -47,27 +45,25 @@ def test__add_me_info():
         convert._add_me_info(cells, mecombo_info)
 
 
-def test_provide_me_info():
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp_dir = Path(tmp_dir)
-        df = pd.DataFrame({'a': [1, 2]})
-        input_cells = voxcell.CellCollection()
-        input_cells.add_properties(df)
-        input_cells_path = tmp_dir / 'input_cells.h5'
-        output_cells_path = tmp_dir / 'output_cells.h5'
-        input_cells.save(input_cells_path)
-        convert.provide_me_info(input_cells_path, output_cells_path)
-        output_cells = voxcell.CellCollection.load(output_cells_path)
-        output_cells_df = output_cells.as_dataframe()
-        expected_df = pd.DataFrame({
-            'a': [1, 2],
-            'model_type': ['biophysical', 'biophysical']},
-            index=output_cells_df.index)
-        assert_frame_equal(output_cells_df, expected_df,
-                           check_like=True)  # ignore column ordering
+def test_provide_me_info(tmp_path):
+    df = pd.DataFrame({'a': [1, 2]})
+    input_cells = voxcell.CellCollection()
+    input_cells.add_properties(df)
+    input_cells_path = tmp_path / 'input_cells.h5'
+    output_cells_path = tmp_path / 'output_cells.h5'
+    input_cells.save(input_cells_path)
+    convert.provide_me_info(input_cells_path, output_cells_path)
+    output_cells = voxcell.CellCollection.load(output_cells_path)
+    output_cells_df = output_cells.as_dataframe()
+    expected_df = pd.DataFrame({
+        'a': [1, 2],
+        'model_type': ['biophysical', 'biophysical']},
+        index=output_cells_df.index)
+    assert_frame_equal(output_cells_df, expected_df,
+                       check_like=True)  # ignore column ordering
 
 
-def test_write_node_set_from_targets():
+def test_write_node_set_from_targets(tmp_path):
     target_path = Path('./tests/unit/data/')
     cells_path = './tests/unit/data/circuit.mvd2'
 
@@ -78,11 +74,10 @@ def test_write_node_set_from_targets():
     keys_with_node_ids = {'Just_testing'}
     keys_without_node_ids = all_keys - keys_with_node_ids
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        out_file = Path(tmp_dir) / 'node_sets.json'
-        target_files = [str(target_path / 'start.target'),  str(target_path / 'user.target'), ]
-        convert.write_node_set_from_targets(target_files, out_file, cells_path)
-        data = load_json(out_file)
+    out_file = tmp_path / 'node_sets.json'
+    target_files = [str(target_path / 'start.target'),  str(target_path / 'user.target'), ]
+    convert.write_node_set_from_targets(target_files, out_file, cells_path)
+    data = load_json(out_file)
 
     assert set(data.keys()) == all_keys
     assert 'node_id' in data['Just_testing']

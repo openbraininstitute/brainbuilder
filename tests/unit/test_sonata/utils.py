@@ -1,21 +1,9 @@
 import subprocess
-import tempfile
-import shutil
-from contextlib import contextmanager
 from pathlib import Path
 
 from numpy.testing import assert_equal
 
 from brainbuilder.utils import load_json
-
-
-@contextmanager
-def tempdir(prefix):
-    temp_dir = tempfile.mkdtemp(prefix=prefix)
-    try:
-        yield temp_dir
-    finally:
-        shutil.rmtree(temp_dir)
 
 
 def assert_h5_dirs_equal(actual_dir, expected_dir, pattern='*.h5'):

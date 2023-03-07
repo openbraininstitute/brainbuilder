@@ -49,7 +49,7 @@ def test_generate_random_point_in_empty_cell():
     assert grid.grid[grid_point] == -1
 
 
-def test_generate_random_point_in_empty_cell():
+def test_generate_random_point_in_empty_cell2():
     domain = np.array([[0, 0, 0], [100, 200, 500]])
     grid = test_module.Grid(domain, 100)
     # no empty cells

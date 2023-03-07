@@ -117,7 +117,7 @@ def make_network_config_bbp(
             represented in the config as `$COMPONENTS_DIR`. If not set then it equals to
             `$BASE_DIR`.
 
-    .. _SONATA: https://bbpteam.epfl.ch/documentation/projects/circuit-documentation/latest/sonata_config.html
+    .. _SONATA: https://sonata-extension.readthedocs.io/en/latest/sonata_config.html
     """
     jsonschema.validate(instance=nodes, schema=nodes_schema)
     jsonschema.validate(instance=edges, schema=edges_schema)

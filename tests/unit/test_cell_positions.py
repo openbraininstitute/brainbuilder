@@ -47,7 +47,6 @@ def test_create_equidistributed_cell_positions_1():
 
 def test_create_equidistributed_cell_positions_2():
     density = VoxelData(1000 * np.ones((3, 3, 3)), voxel_dimensions=(100, 100, 100))
-    method = 'poisson_disc'
     max_expected_nb_points = 5
 
     result = test_module.create_cell_positions(density, density_factor=0.2,
@@ -96,7 +95,7 @@ def test_create_cell_positions_black_grey():
 def test_create_cell_positions_negative_density():
     density = VoxelData(np.ones((3, 3, 3)), voxel_dimensions=(100, 100, 100))
     density.raw[1, 1, 1] = -1.
-    with raises(Exception) as e:
+    with raises(Exception):
         test_module.create_cell_positions(density)
 
 

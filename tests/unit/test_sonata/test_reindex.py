@@ -11,7 +11,6 @@ from numpy.testing import assert_allclose
 
 from brainbuilder.utils.sonata import reindex
 from brainbuilder.utils.sonata.reindex import FIRST_POINT_ID, PARENT_GROUP_ID
-import utils
 
 
 TEST_DATA_PATH = Path(__file__).parent.parent / 'data'
@@ -230,88 +229,87 @@ def test__apply_to_edges():
     assert_allclose(edges_orig['source_node_id'], edges['source_node_id'])
 
 
-def test_reindex():
-    with utils.tempdir('test_reindex') as tmp:
-        temp_dir = os.path.join(tmp, 'reindex')
-        morphs_path = str(DATA_PATH / 'morphs')
-        h5_updates = reindex.generate_h5_updates(morphs_path)
-        assert len(h5_updates) == 2
+def test_reindex(tmp_path):
+    temp_dir = os.path.join(tmp_path, 'reindex')
+    morphs_path = str(DATA_PATH / 'morphs')
+    h5_updates = reindex.generate_h5_updates(morphs_path)
+    assert len(h5_updates) == 2
 
-        #{'two_child_unmerged.h5':
-        # {'new_parents': [2, 3, 5, 7, 8], 'new_segment_offset': {2: 3, 3: 5, 5: 1, 7: 1, 8: 2}},
-        # 'three_child_unmerged.h5':
-        # {'new_parents': [2, 4, 6, 9, 11], 'new_segment_offset': {2: 1, 4: 1, 6: 1, 9: 1, 11: 1}}}
+    #{'two_child_unmerged.h5':
+    # {'new_parents': [2, 3, 5, 7, 8], 'new_segment_offset': {2: 3, 3: 5, 5: 1, 7: 1, 8: 2}},
+    # 'three_child_unmerged.h5':
+    # {'new_parents': [2, 4, 6, 9, 11], 'new_segment_offset': {2: 1, 4: 1, 6: 1, 9: 1, 11: 1}}}
 
-        new_morph_path = os.path.join(temp_dir, 'morphs')
-        reindex.write_new_h5_morphs(h5_updates, morphs_path, new_morph_path)
-        for path in ('three_child_merged.h5',
-                     'three_child_unmerged.h5',
-                     'two_child_merged.h5',
-                     'two_child_unmerged.h5',
-                     ):
-            assert os.path.exists(os.path.join(new_morph_path, path))
+    new_morph_path = os.path.join(temp_dir, 'morphs')
+    reindex.write_new_h5_morphs(h5_updates, morphs_path, new_morph_path)
+    for path in ('three_child_merged.h5',
+                 'three_child_unmerged.h5',
+                 'two_child_merged.h5',
+                 'two_child_unmerged.h5',
+                 ):
+        assert os.path.exists(os.path.join(new_morph_path, path))
 
-        #TODO: h5diff three_child_merged.h5 three_child_unmerged.h5
+    #TODO: h5diff three_child_merged.h5 three_child_unmerged.h5
 
-        edge = os.path.join(temp_dir, 'edges.h5')
-        shutil.copy(str(DATA_PATH / 'edges.h5'), edge)
-        morphologies = pd.Series(['two_child_unmerged', 'two_child_unmerged', 'three_child_unmerged'],
-                           #id:         0                   1                     2
-                                 name='morphology')
-        population = 'default'
+    edge = os.path.join(temp_dir, 'edges.h5')
+    shutil.copy(str(DATA_PATH / 'edges.h5'), edge)
+    morphologies = pd.Series(['two_child_unmerged', 'two_child_unmerged', 'three_child_unmerged'],
+                       #id:         0                   1                     2
+                             name='morphology')
+    population = 'default'
 
-        reindex.apply_edge_updates(morphologies, edge, h5_updates, population)
+    reindex.apply_edge_updates(morphologies, edge, h5_updates, population)
 
-        '''
-        Looking at results of new_parents:
+    '''
+    Looking at results of new_parents:
 
-            position id  afferent_section_id
-                          old   new
-            --------------------------------
-            [ 0 ]     0    8     3 = 8 - (1 + 4) (# of parents deleted + 1)
-            [ 2 ]     0    5     2 = 5 - (1 + 2)  # of parents deleted element count in new_parents
-            [ 4 ]     2    11    6 = 11 - (1 + 4)   before old section
-            [ 5 ]     2    6     3 = 6 - (1 + 2)
-            [ 6 ]     2    7     4 = 7 - (1 + 2)
-            [ 8 ]     0    3     1 = 3 - (1 + 1)
-            [ 9 ]     0    7     3 = 7 - (1 + 3)
-            [ 10 ]    0    5     2 = 5 - (1 + 2)
+        position id  afferent_section_id
+                      old   new
+        --------------------------------
+        [ 0 ]     0    8     3 = 8 - (1 + 4) (# of parents deleted + 1)
+        [ 2 ]     0    5     2 = 5 - (1 + 2)  # of parents deleted element count in new_parents
+        [ 4 ]     2    11    6 = 11 - (1 + 4)   before old section
+        [ 5 ]     2    6     3 = 6 - (1 + 2)
+        [ 6 ]     2    7     4 = 7 - (1 + 2)
+        [ 8 ]     0    3     1 = 3 - (1 + 1)
+        [ 9 ]     0    7     3 = 7 - (1 + 3)
+        [ 10 ]    0    5     2 = 5 - (1 + 2)
 
-        Looking at results of new_segment_offset:
-            position  id   sec   afferent_segment_id
-                           old   old   new
-            ----------------------------------
-            [ 0 ]      0     8   0     2
-            [ 2 ]      0     5   0     1
-            [ 4 ]      2     11  0     1
-            [ 5 ]      2     6   0     1
-            [ 6 ]      2     7   0     0 # not merged with parent, just shifted because a previous section was deleted
-            [ 8 ]      0     3   0     5
-            [ 9 ]      0     7   0     1
-            [ 10 ]     0     5   0     1
-        '''
-        with h5py.File(edge, 'r') as h5:
-            assert (list(h5['edges/default/0/afferent_section_id'][[0, 2, 4, 5, 6, 8, 9, 10]]) ==
-                [3, 2, 6, 3, 4, 1, 3, 2])
-            assert (list(h5['edges/default/0/afferent_segment_id'][[0, 2, 4, 5, 6, 8, 9, 10]]) ==
-                [2, 1, 1, 1, 0, 5, 1, 1])
+    Looking at results of new_segment_offset:
+        position  id   sec   afferent_segment_id
+                       old   old   new
+        ----------------------------------
+        [ 0 ]      0     8   0     2
+        [ 2 ]      0     5   0     1
+        [ 4 ]      2     11  0     1
+        [ 5 ]      2     6   0     1
+        [ 6 ]      2     7   0     0 # not merged with parent, shifted b/c a prev. section deleted
+        [ 8 ]      0     3   0     5
+        [ 9 ]      0     7   0     1
+        [ 10 ]     0     5   0     1
+    '''
+    with h5py.File(edge, 'r') as h5:
+        assert (list(h5['edges/default/0/afferent_section_id'][[0, 2, 4, 5, 6, 8, 9, 10]]) ==
+            [3, 2, 6, 3, 4, 1, 3, 2])
+        assert (list(h5['edges/default/0/afferent_segment_id'][[0, 2, 4, 5, 6, 8, 9, 10]]) ==
+            [2, 1, 1, 1, 0, 5, 1, 1])
 
-        reindex.write_sonata_pos(new_morph_path, morphologies, population, [edge, ])
+    reindex.write_sonata_pos(new_morph_path, morphologies, population, [edge, ])
 
-        '''
-        position  id afferent_section_pos afferent_section_pos
-        --------------------------------------------------------------
-        [ 0 ]      0     0.5             0.785714
-        [ 1 ]      0     0.5             0.291667
-        [ 2 ]      0     0.5             0.875
-        [ 3 ]      0     0.285714        0.166667
-        [ 4 ]      2     0.333333        0.666667
-        [ 5 ]      2     0.666667        0.833333
-        [ 10 ]     0     0               0.75
-        [ 11 ]     0     1               0.583333
-        '''
+    '''
+    position  id afferent_section_pos afferent_section_pos
+    --------------------------------------------------------------
+    [ 0 ]      0     0.5             0.785714
+    [ 1 ]      0     0.5             0.291667
+    [ 2 ]      0     0.5             0.875
+    [ 3 ]      0     0.285714        0.166667
+    [ 4 ]      2     0.333333        0.666667
+    [ 5 ]      2     0.666667        0.833333
+    [ 10 ]     0     0               0.75
+    [ 11 ]     0     1               0.583333
+    '''
 
-        with h5py.File(edge, 'r') as h5:
-            assert_allclose(h5['edges/default/0/afferent_section_pos'][[0, 1, 2, 3, 4, 5, 10, 11]],
-                            [0.785714, 0.291667, 0.875, 0.166667, 0.666667, 0.833333, 0.75, 0.583333],
-                            rtol=1e-5)
+    with h5py.File(edge, 'r') as h5:
+        assert_allclose(h5['edges/default/0/afferent_section_pos'][[0, 1, 2, 3, 4, 5, 10, 11]],
+                        [0.785714, 0.291667, 0.875, 0.166667, 0.666667, 0.833333, 0.75, 0.583333],
+                        rtol=1e-5)
