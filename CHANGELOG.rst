@@ -1,6 +1,17 @@
 Changelog
 =========
 
+## 0.18.4
+  * Zero close to zero values (NSETM-2128)
+  * Add curation facilities to update dtypes of a circuit (NSETM-2124)
+  * Fix implicit dependencies and tests with snap 1.0 (NSETM-2123)
+  * Use pytest-basetemp-permissions plugin (NSETM-2125)
+  * Use pytest tmp_path fixture for tests, add ruff
+  * Update for python 3.10
+
+## 0.18.3
+  * Use bool instead of np.bool.
+
 ## 0.18.2
   * Relax zero cell count assertion to a warning in `place`.
   * Remove `assign_emodels2`; was a work around for the NCX project
