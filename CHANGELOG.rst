@@ -8,6 +8,7 @@ Changelog
   * Use pytest-basetemp-permissions plugin (NSETM-2125)
   * Use pytest tmp_path fixture for tests, add ruff
   * Update for python 3.10
+  * teach `target node_sets --full-hierarchy`, which includes, from leaf to root, all the region names as node_sets
 
 ## 0.18.3
   * Use bool instead of np.bool.
