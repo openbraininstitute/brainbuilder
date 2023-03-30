@@ -6,7 +6,7 @@ import logging
 import click
 
 from bluepy import Circuit
-from voxcell import CellCollection, ROIMask
+from voxcell import ROIMask
 from voxcell.nexus.voxelbrain import Atlas
 
 from brainbuilder.exceptions import BrainBuilderError
@@ -176,7 +176,7 @@ def node_sets(cells_path,
 
             result[name] = query
 
-    cells = CellCollection.load(cells_path).as_dataframe()
+    cells = Circuit({'cells': cells_path}).cells
 
     result['All'] = {"population": population}
     _add_node_sets({
@@ -186,10 +186,11 @@ def node_sets(cells_path,
     _add_node_sets({
         val: {prop: val}
         for prop in ['mtype', 'etype', ]
-        for val in cells[prop].unique()
+        for val in cells.get(properties=prop).unique()
     })
 
-    occupied_regions = {val: {'region': val} for val in cells['region'].unique()}
+    occupied_regions = {val: {'region': val}
+                        for val in cells.get(properties='region').unique()}
     _add_node_sets(occupied_regions)
 
     if full_hierarchy:
@@ -198,11 +199,13 @@ def node_sets(cells_path,
 
     if targets is not None:
         query_based, atlas_based = _load_targets(targets)
+
         if query_based is not None:
             _add_node_sets(query_based)
+
         if atlas_based is not None:
             atlas = _load_atlas(atlas, atlas_cache)
-            xyz = cells[list("xyz")]
+            xyz = cells.get(properties=list("xyz"))
             for name, dset in atlas_based.items():
                 mask = atlas.load_data(dset, cls=ROIMask).lookup(xyz.to_numpy())
                 ids = xyz.index[mask] - 1
