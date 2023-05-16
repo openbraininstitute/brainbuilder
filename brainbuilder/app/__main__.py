@@ -5,7 +5,7 @@ Collection of tools for circuit building.
 import logging
 import click
 
-from brainbuilder.app import cells, mvd3, nrn, sonata, subcellular, syn2, targets, atlases
+from brainbuilder.app import cells, mvd3, nrn, sonata, syn2, targets, atlases
 from brainbuilder.version import VERSION
 
 
@@ -17,7 +17,6 @@ def main():
         'mvd3': mvd3.app,
         'nrn': nrn.app,
         'sonata': sonata.app,
-        'subcellular': subcellular.app,
         'syn2': syn2.app,
         'targets': targets.app,
         'atlases': atlases.app,

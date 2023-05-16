@@ -1,6 +1,9 @@
 Changelog
 =========
 
+## 0.18.5
+  * Remove subcellular querier (BRBLD-97)
+
 ## 0.18.4
   * Zero close to zero values (NSETM-2128)
   * Add curation facilities to update dtypes of a circuit (NSETM-2124)

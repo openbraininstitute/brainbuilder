@@ -31,13 +31,6 @@ BASE_REQUIRES = [
     'voxcell>=3.1.1',
 ]
 
-SUBCELLULAR_REQUIRES = [
-    'attrs<20',   # to use entity-management<1.0, need to use old attrs
-    'entity-management>=0.1.11,<1.0',
-    'subcellular-querier>=0.0.3',
-    'tables>=3.4',
-]
-
 setup(
     name='brainbuilder',
     author='NSE Team',
@@ -50,8 +43,7 @@ setup(
     license='BBP-internal-confidential',
     install_requires=BASE_REQUIRES,
     extras_require={
-        'all': SUBCELLULAR_REQUIRES,
-        'subcellular': SUBCELLULAR_REQUIRES,
+        'all': [],  # for compatibility
         'reindex': [],  # for compatibility
     },
     packages=find_packages(),

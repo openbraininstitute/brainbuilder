@@ -61,14 +61,6 @@ For the commands starting with _update-_, read more in :ref:`SONATA: Single Chil
 For the commands dealing with circuit splitting, read more in :ref:`SONATA: Split Circuit`
 
 
-Genes / proteins assignment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The following subcommands can be used with: ``brainbuilder subcellular``
-
-* ``assign``  Assign subcellular data
-
-
 Tools for working with SYN2
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

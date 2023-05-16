@@ -11,7 +11,6 @@ API Documentation
     cell_positions
     exceptions
     masks
-    subcellular
     utils.bbp
     utils.sonata.convert
     utils.sonata.curate
