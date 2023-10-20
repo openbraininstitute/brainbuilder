@@ -1,6 +1,9 @@
 Changelog
 =========
 
+## 0.18.6
+  * Make circuit splitting compatible with snap 2.0
+
 ## 0.18.5
   * Remove subcellular querier (BRBLD-97)
 

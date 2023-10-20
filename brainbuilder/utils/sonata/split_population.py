@@ -848,12 +848,17 @@ def split_subcircuit(output, node_set_name, circuit_config_path, do_virtual, cre
     node_pop_to_paths, edge_pop_to_paths = _gather_layout_from_networks(
         circuit.config['networks'])
 
-    split_populations = dict(tuple(circuit
-                                   .nodes
-                                   .get(node_set_name)
-                                   .reset_index()
-                                   .set_index('node_ids')
-                                   .groupby('population')))
+    # TODO: remove backward compatibility with snap 1.0, when the dependency can be updated.
+    #  In snap 2.0 it's possible to simplify:
+    #    pop.get(pop.ids(node_set_name, raise_missing_property=False))
+    #  with:
+    #    pop.get(node_set_name, raise_missing_property=False)
+    split_populations = {
+        pop_name: pop.get(pop.ids(node_set_name, raise_missing_property=False))
+        for pop_name, pop in circuit.nodes.items()
+    }
+    split_populations = {pop_name: df for pop_name, df in split_populations.items() if not df.empty}
+
     id_mapping = _get_node_id_mapping(split_populations)
 
     # TODO: should function `_write_subcircuit_biological`,
