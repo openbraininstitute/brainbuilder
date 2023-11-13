@@ -3,7 +3,7 @@ import re
 import shutil
 from pathlib import Path
 
-from bluepysnap.circuit_validation import Error, validate
+from bluepysnap.circuit_validation import validate
 
 from brainbuilder.utils.sonata import curate
 from brainbuilder.utils.sonata.write_config import write_network_config
@@ -122,13 +122,10 @@ def test_hippocampus(tmp_path):
         'efferent_surface_y',
         'efferent_surface_z',
         'spine_length',
-        }
+    }
 
     errors = []
-    for err in validate(sonata_config_file, skip_slow=False):
-        if err.level != Error.FATAL:
-            continue
-
+    for err in validate(str(sonata_config_file), skip_slow=False, only_errors=True):
         filtered_line = []
         lines = err.message.splitlines()
         for line in lines:

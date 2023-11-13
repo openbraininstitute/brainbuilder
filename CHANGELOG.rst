@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## 0.18.7
+  * Fix functional tests with snap 2.0
+  * Silence nptyping DeprecationWarnings
+
 ## 0.18.6
   * Make circuit splitting compatible with snap 2.0
 
