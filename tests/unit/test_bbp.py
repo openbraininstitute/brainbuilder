@@ -74,7 +74,7 @@ def test_load_mecombo_emodel_as_extneurondb():
     actual = bbp.load_extneurondb(DATA_PATH / 'mecombo_emodel.dat')
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
-        'layer': [1, 2],
+        'layer': ["1", "2"],
         'mtype': ["L1_DAC", "L23_PC"],
         'etype': ["bNAC", "dNAC"],
         'me_combo': ["emodel-a", "emodel-b"],
@@ -91,7 +91,7 @@ def test_load_mecombo_emodel():
     actual = bbp.load_mecombo_emodel(DATA_PATH / 'mecombo_emodel.dat')
     expected = pd.DataFrame({
         'morphology': ["morph-a", "morph-b"],
-        'layer': [1, 2],
+        'layer': ["1", "2"],
         'mtype': ["L1_DAC", "L23_PC"],
         'etype': ["bNAC", "dNAC"],
         'emodel': ["emodel-a", "emodel-b"],

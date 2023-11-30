@@ -62,6 +62,14 @@ def write_query_targets(query_based, circuit, output, allow_empty=False):
         bbp.write_target(output, name, gids=gids)
 
 
+def _enforce_layer_to_str(data):
+    for key, value in data.items():
+        if isinstance(value, dict):
+            _enforce_layer_to_str(value)
+        elif key == 'layer':
+            data[key] = str(data[key])
+
+
 def _load_targets(filepath):
     """
     Load target definition YAML, e.g.:
@@ -78,6 +86,7 @@ def _load_targets(filepath):
             cylinder: '{S1HL-cylinder}'
     """
     content = load_yaml(filepath)['targets']
+    _enforce_layer_to_str(content)
 
     return (
         content.get('query_based'),

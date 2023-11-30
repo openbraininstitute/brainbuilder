@@ -22,10 +22,16 @@ MECOMBO_EMODEL_COLUMNS = (NEURONDB_COLUMNS +
 L = logging.getLogger(__name__)
 
 
-def _load_tsv(file, columns, format_name):
+def _load_tsv(file, columns, format_name, dtype=None):
     try:
         return pd.read_csv(
-            file, sep=r'\s+', names=columns, usecols=range(len(columns)), na_filter=False)
+            file,
+            sep=r'\s+',
+            names=columns,
+            usecols=list(range(len(columns))),
+            na_filter=False,
+            dtype=dtype,
+        )
     except ParserError as e:
         raise ValueError(f'Invalid {format_name} format of {file}') from e
 
@@ -41,7 +47,7 @@ def load_neurondb(file):
     Returns:
         pd.DataFrame
     """
-    return _load_tsv(file, NEURONDB_COLUMNS, 'NeuronDB')
+    return _load_tsv(file, NEURONDB_COLUMNS, 'NeuronDB', dtype={'layer': str})
 
 
 def load_extneurondb(file):
@@ -58,7 +64,7 @@ def load_extneurondb(file):
     Returns:
         pd.DataFrame
     """
-    return _load_tsv(file, EXTNEURONDB_COLUMNS, 'ExtNeuronDB')
+    return _load_tsv(file, EXTNEURONDB_COLUMNS, 'ExtNeuronDB', dtype={'layer': str})
 
 
 def load_mecombo_emodel(file):
@@ -75,7 +81,7 @@ def load_mecombo_emodel(file):
     Returns:
         pd.DataFrame
     """
-    return _load_tsv(file, MECOMBO_EMODEL_COLUMNS, 'mecombo_emodel')
+    return _load_tsv(file, MECOMBO_EMODEL_COLUMNS, 'mecombo_emodel', dtype={'layer': str})
 
 
 def load_cell_composition(filepath):
@@ -88,7 +94,21 @@ def load_cell_composition(filepath):
 
     if not (content['version'].startswith('v2') and 'neurons' in content):
         raise ValueError(f'Use cell composition file of version 2 in {filepath}, see {doc_url}')
+
+    for neuron_conf in content['neurons']:
+        _check_traits(neuron_conf['traits'])
+
     return content
+
+
+def _check_traits(traits):
+    if missing := {'mtype', 'etype'}.difference(traits):
+        raise BrainBuilderError(
+            f"Missing properties {sorted(missing)} for group {traits}"
+        )
+    if 'layer' in traits:
+        # enforce layer to be a string [NSETM-2261]
+        traits['layer'] = str(traits['layer'])
 
 
 def gid2str(gid):

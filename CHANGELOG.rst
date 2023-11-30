@@ -1,6 +1,9 @@
 Changelog
 =========
 
+## 0.19.0
+  * Enforce layer to be a string (NSETM-2261)
+
 ## 0.18.7
   * Fix functional tests with snap 2.0
   * Silence nptyping DeprecationWarnings

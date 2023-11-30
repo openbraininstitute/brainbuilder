@@ -5,6 +5,8 @@ from numpy.testing import assert_equal
 
 from brainbuilder.utils import load_json
 
+TEST_DATA_PATH = Path(__file__).parent.parent / "data"
+
 
 def assert_h5_dirs_equal(actual_dir, expected_dir, pattern='*.h5'):
     """Verify that the H5 files contained in the given directories have the same content.

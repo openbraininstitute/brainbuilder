@@ -83,7 +83,7 @@ def load_mini_frequencies(filepath):
     """
     Load mini frequencies from a TSV file.
     """
-    return pd.read_csv(filepath, sep=r'\s+', index_col="layer")
+    return pd.read_csv(filepath, sep=r'\s+', index_col="layer", dtype={'layer': str})
 
 
 def _load_density(value, mask, atlas):
@@ -135,17 +135,7 @@ def _load_density(value, mask, atlas):
     return result
 
 
-def _check_traits(traits):
-    missing = {'mtype', 'etype'}.difference(traits)
-    if missing:
-        raise BrainBuilderError(
-            f"Missing properties {list(missing)} for group {traits}"
-        )
-
-
 def _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement):
-    _check_traits(conf['traits'])
-
     region_mask = atlas.get_region_mask(conf['region'], with_descendants=True, memcache=True)
     if root_mask is not None:
         region_mask.raw &= root_mask.raw

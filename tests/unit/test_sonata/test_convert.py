@@ -1,15 +1,16 @@
-import numpy as np
 from pathlib import Path
 from unittest.mock import Mock
-import voxcell
+
+import numpy as np
 import pandas as pd
-
 import pytest
+import voxcell
 from pandas.testing import assert_frame_equal
+from utils import TEST_DATA_PATH
 
+from brainbuilder.exceptions import BrainBuilderError
 from brainbuilder.utils import load_json
 from brainbuilder.utils.sonata import convert
-from brainbuilder.exceptions import BrainBuilderError
 
 
 def test__add_me_info():
@@ -64,8 +65,8 @@ def test_provide_me_info(tmp_path):
 
 
 def test_write_node_set_from_targets(tmp_path):
-    target_path = Path('./tests/unit/data/')
-    cells_path = './tests/unit/data/circuit.mvd2'
+    target_files = [str(TEST_DATA_PATH / 'start.target'), str(TEST_DATA_PATH / 'user.target')]
+    cells_path = str(TEST_DATA_PATH / 'circuit.mvd2')
 
     all_keys = {'All', 'Excitatory', 'Inhibitory', 'Just_testing', 'L1_DLAC', 'L23_PC', 'L4_NBC',
                 'L5_TTPC1', 'L6_LBC', 'Layer1', 'Layer2', 'Layer4', 'Layer5', 'Layer6', 'Mosaic',
@@ -75,7 +76,6 @@ def test_write_node_set_from_targets(tmp_path):
     keys_without_node_ids = all_keys - keys_with_node_ids
 
     out_file = tmp_path / 'node_sets.json'
-    target_files = [str(target_path / 'start.target'),  str(target_path / 'user.target'), ]
     convert.write_node_set_from_targets(target_files, out_file, cells_path)
     data = load_json(out_file)
 
