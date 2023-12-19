@@ -1,11 +1,12 @@
 """ Utilities for random sampling. """
 
 import json
+
 import scipy.stats
 
 
 def _get_value(mapping, keys):
-    """ Return the value of the first key from `keys` found in `mapping`. """
+    """Return the value of the first key from `keys` found in `mapping`."""
     for k in keys:
         if k in mapping:
             return mapping[k]
@@ -26,19 +27,19 @@ def parse_distr(value):
     if isinstance(value, str):
         value = json.loads(value)
     func, params = value
-    if func in ('norm', 'normal'):
-        loc = _get_value(params, ('mean', 'loc'))
-        scale = _get_value(params, ('sd', 'scale'))
+    if func in ("norm", "normal"):
+        loc = _get_value(params, ("mean", "loc"))
+        scale = _get_value(params, ("sd", "scale"))
         return scipy.stats.norm(loc=loc, scale=scale)
-    elif func in ('truncnorm', 'truncnormal'):
-        loc = _get_value(params, ('mean', 'loc'))
-        scale = _get_value(params, ('sd', 'scale'))
-        a = _get_value(params, ('a', 'low'))
-        b = _get_value(params, ('b', 'high'))
+    elif func in ("truncnorm", "truncnormal"):
+        loc = _get_value(params, ("mean", "loc"))
+        scale = _get_value(params, ("sd", "scale"))
+        a = _get_value(params, ("a", "low"))
+        b = _get_value(params, ("b", "high"))
         return scipy.stats.truncnorm(a=a, b=b, loc=loc, scale=scale)
-    elif func in ('unif', 'uniform'):
-        a = _get_value(params, ('a', 'low'))
-        b = _get_value(params, ('b', 'high'))
+    elif func in ("unif", "uniform"):
+        a = _get_value(params, ("a", "low"))
+        b = _get_value(params, ("b", "high"))
         loc = min(a, b)
         scale = max(a, b) - loc
         return scipy.stats.uniform(loc=loc, scale=scale)

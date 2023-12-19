@@ -1,19 +1,18 @@
 """Tool for artificial atlas building."""
-import os
-import logging
 import itertools
+import logging
+import os
 from collections import OrderedDict
 from pathlib import Path
 
 import click
 import numpy as np
-
-from voxcell import math_utils, VoxelData
+from voxcell import VoxelData, math_utils
 
 from brainbuilder.masks import regular_convex_polygon_mask_from_side
 from brainbuilder.utils import dump_json
 
-L = logging.getLogger('brainbuilder')
+L = logging.getLogger("brainbuilder")
 
 
 def _align_thickness(thickness, voxel_side):
@@ -40,7 +39,7 @@ def _build_2D_mosaic(width, hex_side, voxel_side):
 
     hex_center = {
         0: [
-            [0, 0]
+            [0, 0],
         ],
         1: [
             [1, 1],
@@ -50,7 +49,7 @@ def _build_2D_mosaic(width, hex_side, voxel_side):
             [0, 4],
             [1, 5],
             [2, 4],
-        ]
+        ],
     }[width]
 
     shift = np.array(hex_center) * (3 * w // 4, h // 2)
@@ -58,7 +57,7 @@ def _build_2D_mosaic(width, hex_side, voxel_side):
     shape = np.max(shift, axis=0) + (w, h)
     mosaic = np.full(shape, -1, dtype=np.int16)
     for column_label, (dx, dz) in enumerate(shift):
-        mosaic[dx:dx + w, dz:dz + h][hexagon] = column_label
+        mosaic[dx : dx + w, dz : dz + h][hexagon] = column_label
 
     offset = -0.5 * np.array([w, h]) * voxel_side
     return mosaic, offset
@@ -72,9 +71,7 @@ def _build_column_brain_regions(width, hex_side, layers, voxel_side):
 
     columns = np.unique(mosaic_2D[mosaic_2D >= 0])
 
-    region_ids = OrderedDict(
-        ((column_label, None), k) for k, column_label in enumerate(columns, 1)
-    )
+    region_ids = OrderedDict(((column_label, None), k) for k, column_label in enumerate(columns, 1))
 
     for name, thickness in layers.items():
         pattern = np.zeros_like(mosaic_2D, dtype=np.uint16)
@@ -82,14 +79,9 @@ def _build_column_brain_regions(width, hex_side, layers, voxel_side):
             region_id = max(region_ids.values()) + 1
             region_ids[(column_label, name)] = region_id
             pattern[mosaic_2D == column_label] = region_id
-        mosaic_3d_layers.append(
-            np.repeat([pattern], thickness // voxel_side, axis=0)
-        )
+        mosaic_3d_layers.append(np.repeat([pattern], thickness // voxel_side, axis=0))
 
-    mosaic_3D = np.swapaxes(
-        np.vstack(mosaic_3d_layers),
-        0, 1
-    )
+    mosaic_3D = np.swapaxes(np.vstack(mosaic_3d_layers), 0, 1)
     offset_3D = np.array([offset_2D[0], 0, offset_2D[1]])
 
     brain_regions = VoxelData(mosaic_3D, 3 * (voxel_side,), offset_3D).compact()
@@ -97,9 +89,9 @@ def _build_column_brain_regions(width, hex_side, layers, voxel_side):
     # Add zero-voxel margin for better rendering
     margin = 1
     brain_regions = VoxelData(
-        np.pad(brain_regions.raw, margin, 'constant', constant_values=0),
+        np.pad(brain_regions.raw, margin, "constant", constant_values=0),
         brain_regions.voxel_dimensions,
-        brain_regions.offset - margin * brain_regions.voxel_dimensions
+        brain_regions.offset - margin * brain_regions.voxel_dimensions,
     )
 
     return brain_regions, region_ids
@@ -108,8 +100,9 @@ def _build_column_brain_regions(width, hex_side, layers, voxel_side):
 def _build_hyperrectangle_brain_regions(x, z, layers, voxel_side):
     """Build hyperrectangle 'brain_regions' VoxelData."""
     tot_y = sum(layers.values())
-    raw = np.zeros((int(x // voxel_side), int(tot_y // voxel_side), int(z // voxel_side)),
-                   dtype=np.int32)
+    raw = np.zeros(
+        (int(x // voxel_side), int(tot_y // voxel_side), int(z // voxel_side)), dtype=np.int32
+    )
 
     region_id = OrderedDict()
     cumulative = 0
@@ -125,9 +118,9 @@ def _build_hyperrectangle_brain_regions(x, z, layers, voxel_side):
     # Add zero-voxel margin for better rendering
     margin = 1
     brain_regions = VoxelData(
-        np.pad(brain_regions.raw, margin, 'constant', constant_values=0),
+        np.pad(brain_regions.raw, margin, "constant", constant_values=0),
         brain_regions.voxel_dimensions,
-        brain_regions.offset - margin * brain_regions.voxel_dimensions
+        brain_regions.offset - margin * brain_regions.voxel_dimensions,
     )
     return brain_regions, region_id
 
@@ -167,7 +160,7 @@ def _build_y(brain_regions):
 
 
 def _add_layers_atlases(datasets, layers, brain_regions):
-    """ Update the layer dataset with layer profiles """
+    """Update the layer dataset with layer profiles"""
 
     def _pairwise(iterable):
         """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
@@ -175,18 +168,18 @@ def _add_layers_atlases(datasets, layers, brain_regions):
         next(b, None)
         return zip(a, b)
 
-    thickness_cumsum = [0.] + list(np.cumsum(list(layers.values())))
+    thickness_cumsum = [0.0] + list(np.cumsum(list(layers.values())))
     boundaries = np.array(list(_pairwise(thickness_cumsum)))
     for (name, _), bounds in zip(layers.items(), boundaries):
-        datasets.update({'[PH]' + name: _build_layer_profile(brain_regions, bounds)})
+        datasets.update({"[PH]" + name: _build_layer_profile(brain_regions, bounds)})
 
 
 def _dump_atlases(brain_regions, layers, output_dir):
     """Dump mandatory circuit building atlases."""
     datasets = {
-        'brain_regions': brain_regions,
-        'orientation': _build_orientation(brain_regions),
-        '[PH]y': _build_y(brain_regions),
+        "brain_regions": brain_regions,
+        "orientation": _build_orientation(brain_regions),
+        "[PH]y": _build_y(brain_regions),
     }
     _add_layers_atlases(datasets, layers, brain_regions)
     for name, data in datasets.items():
@@ -195,63 +188,86 @@ def _dump_atlases(brain_regions, layers, output_dir):
 
 
 def _column_hierarchy(column_label, layers, region_ids):
-    """ Build 'hierarchy' dict for single hypercolumn. """
-    return OrderedDict([
-        ('id', region_ids[(column_label, None)]),
-        ('acronym', f"mc{column_label}_Column"),
-        ('name', f"hypercolumn {column_label}"),
-        ('children', [OrderedDict([
-            ('id', region_ids[(column_label, layer)]),
-            ('acronym', f'mc{column_label};{layer}'),
-            ('name', f"hypercolumn {column_label}, {layer}")
-        ]) for layer in layers])
-    ])
+    """Build 'hierarchy' dict for single hypercolumn."""
+    return OrderedDict(
+        [
+            ("id", region_ids[(column_label, None)]),
+            ("acronym", f"mc{column_label}_Column"),
+            ("name", f"hypercolumn {column_label}"),
+            (
+                "children",
+                [
+                    OrderedDict(
+                        [
+                            ("id", region_ids[(column_label, layer)]),
+                            ("acronym", f"mc{column_label};{layer}"),
+                            ("name", f"hypercolumn {column_label}, {layer}"),
+                        ]
+                    )
+                    for layer in layers
+                ],
+            ),
+        ]
+    )
 
 
 def _mosaic_hierarchy(width, layers, region_ids):
-    """ Build 'hierarchy' dict for 'mosaic' atlas. """
+    """Build 'hierarchy' dict for 'mosaic' atlas."""
     columns = sorted(set(col for col, _ in region_ids))
-    return OrderedDict([
-        ('id', 65535),
-        ('acronym', f"O{width}"),
-        ('name', f"O{width} mosaic"),
-        ('children', [_column_hierarchy(c, layers, region_ids) for c in columns])
-    ])
+    return OrderedDict(
+        [
+            ("id", 65535),
+            ("acronym", f"O{width}"),
+            ("name", f"O{width} mosaic"),
+            ("children", [_column_hierarchy(c, layers, region_ids) for c in columns]),
+        ]
+    )
 
 
 def _hyperrectangle_hierarchy(region_ids):
-    """ Build 'hierarchy' dict for 'Hyperrectangle' atlas. """
+    """Build 'hierarchy' dict for 'Hyperrectangle' atlas."""
 
     def _layer_hierarchy(layer_name, layer_id):
-        """ Build 'hierarchy' dict for hyperrectangle layer """
-        return OrderedDict([
-            ('id', layer_id),
-            ('acronym', layer_name),
-            ('name', f"Hyperrectangle layer{layer_id}, {layer_name}"),
-        ])
+        """Build 'hierarchy' dict for hyperrectangle layer"""
+        return OrderedDict(
+            [
+                ("id", layer_id),
+                ("acronym", layer_name),
+                ("name", f"Hyperrectangle layer{layer_id}, {layer_name}"),
+            ]
+        )
 
-    return OrderedDict([
-        ('id', 65535),
-        ('acronym', "H"),
-        ('name', "Hyperrectangle"),
-        ('children', [_layer_hierarchy(name, region_id) for name, region_id in region_ids.items()])
-    ])
+    return OrderedDict(
+        [
+            ("id", 65535),
+            ("acronym", "H"),
+            ("name", "Hyperrectangle"),
+            (
+                "children",
+                [_layer_hierarchy(name, region_id) for name, region_id in region_ids.items()],
+            ),
+        ]
+    )
 
 
 def _normalize_hierarchy(hierarchy):
-    """ Sort keys in hierarchy dict. """
-    result = OrderedDict((key, hierarchy[key]) for key in ['id', 'acronym', 'name'])
-    if 'children' in hierarchy:
-        result['children'] = [_normalize_hierarchy(c) for c in hierarchy['children']]
+    """Sort keys in hierarchy dict."""
+    result = OrderedDict((key, hierarchy[key]) for key in ["id", "acronym", "name"])
+    if "children" in hierarchy:
+        result["children"] = [_normalize_hierarchy(c) for c in hierarchy["children"]]
     return result
 
 
 @click.group()
-@click.option('-n', '--layer-names',
-              help="Layer's names as they appear going from 'bottom' to 'top'", required=True)
-@click.option('-t', '--thickness', help="Layer thickness (um)", required=True)
-@click.option('-d', '--voxel-side', type=float, help="Voxel side (um)", required=True)
-@click.option('-o', '--output-dir', help="Path to output folder", required=True)
+@click.option(
+    "-n",
+    "--layer-names",
+    help="Layer's names as they appear going from 'bottom' to 'top'",
+    required=True,
+)
+@click.option("-t", "--thickness", help="Layer thickness (um)", required=True)
+@click.option("-d", "--voxel-side", type=float, help="Voxel side (um)", required=True)
+@click.option("-o", "--output-dir", help="Path to output folder", required=True)
 @click.pass_context
 def app(ctx, layer_names, thickness, voxel_side, output_dir):
     """Building Synthetic Atlases."""
@@ -277,14 +293,14 @@ def app(ctx, layer_names, thickness, voxel_side, output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    ctx.obj['voxel_side'] = voxel_side
-    ctx.obj['output_dir'] = output_dir
-    ctx.obj['layers'] = layers
+    ctx.obj["voxel_side"] = voxel_side
+    ctx.obj["output_dir"] = output_dir
+    ctx.obj["layers"] = layers
 
 
 @app.command()
-@click.option('-w', '--width', type=int, help="Mosaic width (0 for single column)", default=0)
-@click.option('-a', '--hex-side', type=float, help="Hexagon side (um)", required=True)
+@click.option("-w", "--width", type=int, help="Mosaic width (0 for single column)", default=0)
+@click.option("-a", "--hex-side", type=float, help="Hexagon side (um)", required=True)
 @click.pass_context
 def column(ctx, width, hex_side):
     """Build synthetic hexagonal column atlas."""
@@ -307,10 +323,12 @@ def column(ctx, width, hex_side):
 
 
 @app.command()
-@click.option('-x', '--x-length', type=float, help="Atlas length in the x direction (um)",
-              required=True)
-@click.option('-z', '--z-length', type=float, help="Atlas length in the z direction (um)",
-              required=True)
+@click.option(
+    "-x", "--x-length", type=float, help="Atlas length in the x direction (um)", required=True
+)
+@click.option(
+    "-z", "--z-length", type=float, help="Atlas length in the z direction (um)", required=True
+)
 @click.pass_context
 def hyperrectangle(ctx, x_length, z_length):
     """Build synthetic hyperrectangle atlas."""
@@ -319,8 +337,9 @@ def hyperrectangle(ctx, x_length, z_length):
     output_dir = ctx.obj["output_dir"]
     layers = ctx.obj["layers"]
 
-    brain_regions, region_ids = _build_hyperrectangle_brain_regions(x_length, z_length,
-                                                                    layers, voxel_side)
+    brain_regions, region_ids = _build_hyperrectangle_brain_regions(
+        x_length, z_length, layers, voxel_side
+    )
 
     _dump_atlases(brain_regions, layers, output_dir)
 

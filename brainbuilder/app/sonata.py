@@ -3,18 +3,17 @@
 import glob
 import os
 import sys
-
 from pathlib import Path
 
 import click
 
-from brainbuilder.app._utils import REQUIRED_PATH_DIR, REQUIRED_PATH
-from brainbuilder.utils import load_json, dump_json
+from brainbuilder.app._utils import REQUIRED_PATH, REQUIRED_PATH_DIR
+from brainbuilder.utils import dump_json, load_json
 
 
 @click.group()
 def app():
-    """ Tools for working with SONATA """
+    """Tools for working with SONATA"""
 
 
 @app.command()
@@ -27,7 +26,7 @@ def from_mvd3(mvd3, output, model_type, mecombo_info, population):
     """Convert MVD3 to SONATA nodes"""
     from brainbuilder.utils.sonata import convert
 
-    assert mvd3.endswith('.mvd3'), mvd3 + ' must end with ".mvd3" suffix'
+    assert mvd3.endswith(".mvd3"), mvd3 + ' must end with ".mvd3" suffix'
     convert.provide_me_info(mvd3, output, model_type, mecombo_info, population)
 
 
@@ -52,12 +51,13 @@ def provide_me_info(cells_path, output, model_type, mecombo_info):
 def from_syn2(syn2, population, source, target, output):
     """Convert SYN2 to SONATA edges"""
     from brainbuilder.utils.sonata.convert import write_edges_from_syn2
+
     write_edges_from_syn2(
         syn2_path=syn2,
         population=population,
         source=source,
         target=target,
-        out_h5_path=output
+        out_h5_path=output,
     )
 
 
@@ -65,7 +65,8 @@ def from_syn2(syn2, population, source, target, output):
 @click.option("--base-dir", help="Path to base directory", required=True)
 @click.option("--morph-dir", help="Morphologies directory (relative to BASE_DIR)", required=True)
 @click.option(
-    "--emodel-dir", help="Cell electrical models directory (relative to BASE_DIR)", required=True)
+    "--emodel-dir", help="Cell electrical models directory (relative to BASE_DIR)", required=True
+)
 @click.option("--nodes-dir", help="Node files directory (relative to BASE_DIR)", required=True)
 @click.option(
     "--nodes",
@@ -73,7 +74,7 @@ def from_syn2(syn2, population, source, target, output):
         "Nodes file(s) (';'-separated). For each file, the populations must be specified "
         "in the format 'path:pop1,pop2...'"
     ),
-    required=True
+    required=True,
 )
 @click.option("--node-sets", help="Node sets file (JSON)", required=True)
 @click.option("--edges-dir", help="Edge files directory (relative to BASE_DIR)", required=True)
@@ -88,12 +89,21 @@ def from_syn2(syn2, population, source, target, output):
 )
 @click.option("-o", "--output", help="Path to output file (JSON)", required=True)
 def network_config(
-    base_dir, morph_dir, emodel_dir, nodes_dir, nodes,
-    node_sets, edges_dir, edges_suffix, edges, output
+    base_dir,
+    morph_dir,
+    emodel_dir,
+    nodes_dir,
+    nodes,
+    node_sets,
+    edges_dir,
+    edges_suffix,
+    edges,
+    output,
 ):
     """Write SONATA network config"""
     # pylint: disable=too-many-arguments
     from brainbuilder.utils.sonata.write_config import write_network_config
+
     write_network_config(
         base_dir=base_dir,
         morph_dir=morph_dir,
@@ -104,13 +114,16 @@ def network_config(
         edges_dir=edges_dir,
         edges_suffix=edges_suffix,
         edges=edges.split(";"),
-        output_path=output
+        output_path=output,
     )
 
 
 @app.command()
-@click.option("--input-dir", type=REQUIRED_PATH_DIR,
-              help="Path to the input directory containing the targets files")
+@click.option(
+    "--input-dir",
+    type=REQUIRED_PATH_DIR,
+    help="Path to the input directory containing the targets files",
+)
 @click.option("--target-file", multiple=True, type=REQUIRED_PATH, help="Path to target file")
 @click.option("-c", "--cells-path", help="Path to cells file", required=True)
 @click.option("-o", "--output", help="Path to output the .json file", required=True)
@@ -124,19 +137,19 @@ def node_set_from_targets(input_dir, target_file, cells_path, output):
     target_files = set(target_file)
 
     if input_dir is not None:
-        target_files = target_files | set(glob.glob(f'{input_dir}/*.target'))
+        target_files = target_files | set(glob.glob(f"{input_dir}/*.target"))
 
     if target_files:
         write_node_set_from_targets(target_files, output, cells_path)
     else:
-        click.secho("No target files specified; output won't exist", fg='red')
+        click.secho("No target files specified; output won't exist", fg="red")
 
 
 @app.command()
-@click.option("--h5-morphs", required=True, type=REQUIRED_PATH_DIR,
-              help="Path to h5 morphology directory")
-@click.option("--morphdb", required=True, type=REQUIRED_PATH,
-              help="Path to extNeuronDB.dat")
+@click.option(
+    "--h5-morphs", required=True, type=REQUIRED_PATH_DIR, help="Path to h5 morphology directory"
+)
+@click.option("--morphdb", required=True, type=REQUIRED_PATH, help="Path to extNeuronDB.dat")
 def check_morphologies(h5_morphs, morphdb):
     """Make sure the h5 morphology files pass the required SONATA invariants"""
     from brainbuilder.utils import bbp
@@ -144,84 +157,87 @@ def check_morphologies(h5_morphs, morphdb):
 
     morphs = bbp.load_extneurondb(morphdb).morphology.to_list()
     with click.progressbar(morphs) as morphs:
-        incorrect_ordering, have_unifurcations = check_morphology_invariants(Path(h5_morphs),
-                                                                             morphs)
+        incorrect_ordering, have_unifurcations = check_morphology_invariants(
+            Path(h5_morphs), morphs
+        )
 
     if incorrect_ordering:
-        click.secho(f"The following morphs have incorrect ordering: {incorrect_ordering}",
-                    fg='red')
+        click.secho(f"The following morphs have incorrect ordering: {incorrect_ordering}", fg="red")
 
     if have_unifurcations:
-        click.secho(f"The following morphs have unifurcations: {have_unifurcations}",
-                    fg='red')
+        click.secho(f"The following morphs have unifurcations: {have_unifurcations}", fg="red")
 
     if not incorrect_ordering and not have_unifurcations:
-        click.secho("morphologies appear correct",
-                    fg='green')
+        click.secho("morphologies appear correct", fg="green")
 
-    sys.exit(int(len(have_unifurcations) > 0 or
-                 len(incorrect_ordering) > 0))
+    sys.exit(int(len(have_unifurcations) > 0 or len(incorrect_ordering) > 0))
 
 
 @app.command()
-@click.option("--h5-morphs", required=True, type=REQUIRED_PATH_DIR,
-              help="Path to h5 morphology directory")
-@click.option("-o", "--output", required=True,
-              help="Path to output directory for HDF5 morphologies")
+@click.option(
+    "--h5-morphs", required=True, type=REQUIRED_PATH_DIR, help="Path to h5 morphology directory"
+)
+@click.option(
+    "-o", "--output", required=True, help="Path to output directory for HDF5 morphologies"
+)
 def update_morphologies(h5_morphs, output):
     """Update h5 morphologies"""
     from brainbuilder.utils.sonata import reindex
-    assert not os.path.exists(output), 'output directory must not already exist'
+
+    assert not os.path.exists(output), "output directory must not already exist"
 
     h5_updates = reindex.generate_h5_updates(h5_morphs)
 
     reindex.write_new_h5_morphs(h5_updates, h5_morphs, output)
 
-    h5_updates_path = Path(output) / 'h5_updates.json'
+    h5_updates_path = Path(output) / "h5_updates.json"
     dump_json(h5_updates_path, h5_updates)
 
-    click.echo(f'h5_updates output to {h5_updates_path}')
+    click.echo(f"h5_updates output to {h5_updates_path}")
 
 
 @app.command()
-@click.option("--h5-updates", required=True, type=REQUIRED_PATH,
-              help="h5_updates.json produced by update_morphologies")
-@click.option("--nodes", required=True, type=REQUIRED_PATH,
-              help="Node file")
-@click.option("--population", default="default", show_default=True,
-              help="Population name")
+@click.option(
+    "--h5-updates",
+    required=True,
+    type=REQUIRED_PATH,
+    help="h5_updates.json produced by update_morphologies",
+)
+@click.option("--nodes", required=True, type=REQUIRED_PATH, help="Node file")
+@click.option("--population", default="default", show_default=True, help="Population name")
 @click.argument("edges", nargs=-1, required=True)
 def update_edge_population(h5_updates, nodes, population, edges):
-    '''Given h5_updates from removing single children, update synapses'''
-    from brainbuilder.utils.sonata import reindex
+    """Given h5_updates from removing single children, update synapses"""
     from voxcell import CellCollection
+
+    from brainbuilder.utils.sonata import reindex
 
     h5_updates = load_json(h5_updates)
 
     for v in h5_updates.values():
-        v['new_parents'] = [int(k) for k in v['new_parents']]
-        v['new_segment_offset'] = {int(k): vv for k, vv in v['new_segment_offset'].items()}
+        v["new_parents"] = [int(k) for k in v["new_parents"]]
+        v["new_segment_offset"] = {int(k): vv for k, vv in v["new_segment_offset"].items()}
 
-    morphologies = CellCollection.load(nodes).as_dataframe()['morphology']
+    morphologies = CellCollection.load(nodes).as_dataframe()["morphology"]
     morphologies.index = morphologies.index - 1
     for edge in edges:
         reindex.apply_edge_updates(morphologies, edge, h5_updates, population)
 
 
 @app.command()
-@click.option("--morph-path", required=True, type=REQUIRED_PATH_DIR,
-              help="path to h5 morphology files")
-@click.option("--population", default="default", show_default=True,
-              help="Population name")
-@click.option("--nodes", required=True, type=REQUIRED_PATH,
-              help="Node file")
+@click.option(
+    "--morph-path", required=True, type=REQUIRED_PATH_DIR, help="path to h5 morphology files"
+)
+@click.option("--population", default="default", show_default=True, help="Population name")
+@click.option("--nodes", required=True, type=REQUIRED_PATH, help="Node file")
 @click.argument("edges", nargs=-1, required=True)
 def update_edge_pos(morph_path, population, nodes, edges):
-    '''Using: section_id, segment_id and offset, create the sonata *_section_pos'''
-    from brainbuilder.utils.sonata import reindex
+    """Using: section_id, segment_id and offset, create the sonata *_section_pos"""
     from voxcell import CellCollection
 
-    morphologies = CellCollection.load(nodes).as_dataframe()['morphology']
+    from brainbuilder.utils.sonata import reindex
+
+    morphologies = CellCollection.load(nodes).as_dataframe()["morphology"]
     morphologies.index = morphologies.index - 1
     reindex.write_sonata_pos(morph_path, morphologies, population, edges)
 
@@ -232,53 +248,71 @@ def update_edge_pos(morph_path, population, nodes, edges):
 @click.option("--edges", required=True, type=REQUIRED_PATH, help="Input edge file")
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
 def split_population(attribute, nodes, edges, output):
-    '''Split a single Node and Edges file into multiple nodes and edges based on attribute'''
+    """Split a single Node and Edges file into multiple nodes and edges based on attribute"""
     from brainbuilder.utils.sonata import split_population as module
+
     module.split_population(output, attribute, nodes, edges)
 
 
 @app.command()
 @click.option("--nodeset", required=True, help="Name of nodeset")
-@click.option("--nodeset-path", required=True, type=REQUIRED_PATH,
-              help="path to node_sets.json file")
+@click.option(
+    "--nodeset-path", required=True, type=REQUIRED_PATH, help="path to node_sets.json file"
+)
 @click.option("--nodes", required=True, type=REQUIRED_PATH, help="Input node file")
 @click.option("--edges", required=True, type=REQUIRED_PATH, help="Input edge file")
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
 def simple_split_subcircuit(nodeset, nodeset_path, nodes, edges, output):
-    '''Split a subcircuit out from a SONATA circuit based on node_set'''
+    """Split a subcircuit out from a SONATA circuit based on node_set"""
     from brainbuilder.utils.sonata import split_population as module
+
     module.simple_split_subcircuit(output, nodeset, nodeset_path, nodes, edges)
 
 
 @app.command()
 @click.option("--nodeset", required=True, help="Name of nodeset")
 @click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
-@click.option('--include-virtual/--no-include-virtual', default=False,
-              help='Extract virtual nodes that project into the extracted subcircuit')
-@click.option('--create-external/--no-create-external', default=False,
-              help='Extract external connections; ones that are non-virtual, but sourced from'
-              'outside the extracted subcircuit - they become virtual nodes')
+@click.option(
+    "--include-virtual/--no-include-virtual",
+    default=False,
+    help="Extract virtual nodes that project into the extracted subcircuit",
+)
+@click.option(
+    "--create-external/--no-create-external",
+    default=False,
+    help="Extract external connections; ones that are non-virtual, but sourced from"
+    "outside the extracted subcircuit - they become virtual nodes",
+)
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
 def split_subcircuit(nodeset, circuit, include_virtual, create_external, output):
-    '''Split a subcircuit out from a SONATA circuit based on node_set'''
+    """Split a subcircuit out from a SONATA circuit based on node_set"""
     from brainbuilder.utils.sonata import split_population as module
+
     module.split_subcircuit(
         output,
         node_set_name=nodeset,
         circuit_config_path=circuit,
         do_virtual=include_virtual,
-        create_external=create_external)
+        create_external=create_external,
+    )
 
-    click.echo(click.style(f'Please remember to update {output}/circuit_config.json '
-                           'to reflect the location of all necessary files', fg='green'))
+    click.echo(
+        click.style(
+            f"Please remember to update {output}/circuit_config.json "
+            "to reflect the location of all necessary files",
+            fg="green",
+        )
+    )
 
 
 @app.command()
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
 @click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
-@click.option("--population-name", required=True,
-              help="Name of population to clip out morphologies")
+@click.option(
+    "--population-name", required=True, help="Name of population to clip out morphologies"
+)
 def clip_morphologies(output, circuit, population_name):
-    '''Clip (ie: copy) morphologies actually used by a population into the `output` directory'''
+    """Clip (ie: copy) morphologies actually used by a population into the `output` directory"""
     from brainbuilder.utils.sonata import clip
+
     clip.morphologies(output, circuit, population_name)

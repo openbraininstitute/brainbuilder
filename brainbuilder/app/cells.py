@@ -38,13 +38,11 @@ Based on:
 """
 import logging
 import numbers
-
 from collections.abc import Mapping
 
 import click
 import numpy as np
 import pandas as pd
-
 from voxcell import (
     CellCollection,
     ROIMask,
@@ -55,18 +53,17 @@ from voxcell import (
 from voxcell.nexus.voxelbrain import Atlas
 
 from brainbuilder import BrainBuilderError
+from brainbuilder.app._utils import REQUIRED_PATH
 from brainbuilder.cell_positions import create_cell_positions
 from brainbuilder.utils import bbp, deprecate, load_yaml
-
-from brainbuilder.app._utils import REQUIRED_PATH
 from brainbuilder.utils.bbp import load_cell_composition
 
-L = logging.getLogger('brainbuilder')
+L = logging.getLogger("brainbuilder")
 
 
 @click.group()
 def app():
-    """ Building CellCollection """
+    """Building CellCollection"""
 
 
 def load_mtype_taxonomy(filepath):
@@ -76,31 +73,31 @@ def load_mtype_taxonomy(filepath):
     TODO: link to spec
     """
     # TODO: validate
-    return pd.read_csv(filepath, sep=r'\s+', index_col='mtype')
+    return pd.read_csv(filepath, sep=r"\s+", index_col="mtype")
 
 
 def load_mini_frequencies(filepath):
     """
     Load mini frequencies from a TSV file.
     """
-    return pd.read_csv(filepath, sep=r'\s+', index_col="layer", dtype={'layer': str})
+    return pd.read_csv(filepath, sep=r"\s+", index_col="layer", dtype={"layer": str})
 
 
 def _load_density(value, mask, atlas):
-    """ Load density as 3D numpy array.
+    """Load density as 3D numpy array.
 
-        Args:
-            value: one of
-                - float value (constant density per `mask`)
-                - path to NRRD file (load from file, filter by `mask`)
-                - dataset in `atlas` (load from atlas, filter by `mask`)
-            mask: 0/1 3D mask
-            atlas: Atlas to use for loading atlas datasets
+    Args:
+        value: one of
+            - float value (constant density per `mask`)
+            - path to NRRD file (load from file, filter by `mask`)
+            - dataset in `atlas` (load from atlas, filter by `mask`)
+        mask: 0/1 3D mask
+        atlas: Atlas to use for loading atlas datasets
 
-        `value` of form '{name}' is recognized as atlas dataset 'name'.
+    `value` of form '{name}' is recognized as atlas dataset 'name'.
 
-        Returns:
-            3D float32 numpy array of same shape as `mask`.
+    Returns:
+        3D float32 numpy array of same shape as `mask`.
     """
     if isinstance(value, numbers.Number):
         result = np.zeros_like(mask, dtype=np.float64)
@@ -136,20 +133,18 @@ def _load_density(value, mask, atlas):
 
 
 def _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement):
-    region_mask = atlas.get_region_mask(conf['region'], with_descendants=True, memcache=True)
+    region_mask = atlas.get_region_mask(conf["region"], with_descendants=True, memcache=True)
     if root_mask is not None:
         region_mask.raw &= root_mask.raw
     if not np.any(region_mask.raw):
         raise BrainBuilderError(f"Empty region mask for region: '{conf['region']}'")
 
-    density = region_mask.with_data(
-        _load_density(conf['density'], region_mask.raw, atlas)
-    )
+    density = region_mask.with_data(_load_density(conf["density"], region_mask.raw, atlas))
 
     pos = create_cell_positions(density, density_factor=density_factor, method=soma_placement)
-    result = pd.DataFrame(pos, columns=['x', 'y', 'z'])
+    result = pd.DataFrame(pos, columns=["x", "y", "z"])
 
-    for prop, value in conf['traits'].items():
+    for prop, value in conf["traits"].items():
         if isinstance(value, Mapping):
             values, probs = zip(*value.items())
             if not np.allclose(np.sum(probs), 1.0):
@@ -159,7 +154,7 @@ def _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement):
         else:
             result[prop] = value
 
-    L.info("%s... [%d cells]", conf['traits'], len(result))
+    L.info("%s... [%d cells]", conf["traits"], len(result))
     return result
 
 
@@ -177,16 +172,16 @@ def _assign_property(cells, prop, values):
 
 
 def _assign_mtype_traits(cells, mtype_taxonomy):
-    traits = mtype_taxonomy.loc[cells['mtype']]
-    _assign_property(cells, 'morph_class', traits['mClass'].values)
-    _assign_property(cells, 'synapse_class', traits['sClass'].values)
+    traits = mtype_taxonomy.loc[cells["mtype"]]
+    _assign_property(cells, "morph_class", traits["mClass"].values)
+    _assign_property(cells, "synapse_class", traits["sClass"].values)
 
 
 def _assign_mini_frequencies(cells, mini_frequencies):
     """
     Add the mini_frequency column to `cells`.
     """
-    if 'layer' in cells:
+    if "layer" in cells:
         idx = cells.layer.to_numpy()
     else:
         # fallback to subregion; this requires that the mini_frequencies file uses subregions,
@@ -200,15 +195,15 @@ def _assign_mini_frequencies(cells, mini_frequencies):
 
 
 def _assign_atlas_property(cells, prop, atlas, dset):
-    xyz = cells[['x', 'y', 'z']].values
-    if dset == 'FAST-HEMISPHERE':
+    xyz = cells[["x", "y", "z"]].values
+    if dset == "FAST-HEMISPHERE":
         # TODO: remove as soon as "slow" way of assigning hemisphere
         # (with a volumetric dataset) is available
-        deprecate.warn('`FAST-HEMISPHERE` is deprecated, use a volumetric dataset')
-        values = np.where(xyz[:, 2] < 5700, 'left', 'right')
-    elif prop == 'hemisphere':
+        deprecate.warn("`FAST-HEMISPHERE` is deprecated, use a volumetric dataset")
+        values = np.where(xyz[:, 2] < 5700, "left", "right")
+    elif prop == "hemisphere":
         values = values_to_hemisphere(atlas.load_data(dset).lookup(xyz))
-    elif dset.startswith('~'):
+    elif dset.startswith("~"):
         dset = dset[1:]
         values = values_to_region_attribute(
             atlas.load_data(dset).lookup(xyz),
@@ -228,12 +223,13 @@ def _place(
     atlas_url,
     mini_frequencies_path=None,
     atlas_cache=None,
-    region=None, mask_dset=None,
-    soma_placement='basic',
+    region=None,
+    mask_dset=None,
+    soma_placement="basic",
     density_factor=1.0,
     atlas_properties=None,
     sort_by=None,
-    append_hemisphere=False
+    append_hemisphere=False,
 ):
     # pylint: disable=too-many-arguments, too-many-locals
     atlas = Atlas.open(atlas_url, cache_dir=atlas_cache)
@@ -242,7 +238,7 @@ def _place(
     mtype_taxonomy = load_mtype_taxonomy(mtype_taxonomy_path)
 
     # Cache frequently used atlas data
-    atlas.load_data('brain_regions', memcache=True)
+    atlas.load_data("brain_regions", memcache=True)
     atlas.load_region_map(memcache=True)
 
     if mask_dset is None:
@@ -260,7 +256,7 @@ def _place(
     L.info("Creating cell groups...")
     groups = [
         _create_cell_group(conf, atlas, root_mask, density_factor, soma_placement)
-        for conf in recipe['neurons']
+        for conf in recipe["neurons"]
     ]
 
     L.info("Merging into single CellCollection...")
@@ -272,7 +268,7 @@ def _place(
     _assign_subregions(
         result,
         atlas.load_data("brain_regions"),
-        atlas.load_region_map()
+        atlas.load_region_map(),
     )
 
     L.info("Assigning 'morph_class' / 'synapse_class'...")
@@ -288,7 +284,7 @@ def _place(
         _assign_atlas_property(result, prop, atlas, dset)
 
     if append_hemisphere:
-        result['region'] = result['region'] + '@' + result['hemisphere']
+        result["region"] = result["region"] + "@" + result["hemisphere"]
 
     if sort_by:
         L.info("Sorting CellCollection...")
@@ -307,8 +303,12 @@ def _place(
 
 @app.command(short_help="Initialize cell collection")
 @click.option("--population-name", help="Name of population to create", required=True)
-@click.option("-o", "--output", required=True,
-              help="Path to output. Use .mvd3 file extension for MVD3, otherwise SONATA is used")
+@click.option(
+    "-o",
+    "--output",
+    required=True,
+    help="Path to output. Use .mvd3 file extension for MVD3, otherwise SONATA is used",
+)
 def init(population_name, output):
     """Initialize a cell collection (ie: SONATA node file) with the specified population name"""
     cells = CellCollection(population_name)
@@ -320,33 +320,50 @@ def init(population_name, output):
 @click.option("--mtype-taxonomy", help="Path to mtype taxonomy TSV", required=True)
 @click.option("--atlas", help="Atlas URL / path", required=True)
 @click.option(
-    "--mini-frequencies", help="Path to the mini frequencies TSV", default=None, show_default=True)
+    "--mini-frequencies", help="Path to the mini frequencies TSV", default=None, show_default=True
+)
 @click.option("--atlas-cache", help="Path to atlas cache folder", default=None, show_default=True)
 @click.option("--region", help="Region name filter", default=None, show_default=True)
 @click.option("--mask", help="Dataset with volumetric mask filter", default=None, show_default=True)
 @click.option("--density-factor", help="Density factor", type=float, default=1.0, show_default=True)
-@click.option("--soma-placement", help="Soma placement method", default='basic', show_default=True)
+@click.option("--soma-placement", help="Soma placement method", default="basic", show_default=True)
 @click.option(
-    "--atlas-property", type=(str, str), multiple=True, help="Property based on atlas dataset")
+    "--atlas-property", type=(str, str), multiple=True, help="Property based on atlas dataset"
+)
 @click.option("--sort-by", help="Sort by properties (comma-separated)", default=None)
 @click.option(
-    "--append-hemisphere", is_flag=True, help="Append hemisphere to region name", default=False)
+    "--append-hemisphere", is_flag=True, help="Append hemisphere to region name", default=False
+)
 @click.option("--seed", help="Pseudo-random generator seed", type=int, default=0, show_default=True)
-@click.option("-o", "--output", help="Path to output MVD3 or SONATA. Use .mvd3 file extension for"
-                                     " MVD3, otherwise SONATA is used", required=True)
-@click.option("--input", "input_path", default=None, help="Existing cells which are extended with"
-                                                          "the new positioned cells")
+@click.option(
+    "-o",
+    "--output",
+    help="Path to output MVD3 or SONATA. Use .mvd3 file extension for"
+    " MVD3, otherwise SONATA is used",
+    required=True,
+)
+@click.option(
+    "--input",
+    "input_path",
+    default=None,
+    help="Existing cells which are extended with" "the new positioned cells",
+)
 def place(
     composition,
     mtype_taxonomy,
     atlas,
     mini_frequencies,
-    atlas_cache, region, mask,
-    density_factor, soma_placement,
-    atlas_property, sort_by, append_hemisphere,
+    atlas_cache,
+    region,
+    mask,
+    density_factor,
+    soma_placement,
+    atlas_property,
+    sort_by,
+    append_hemisphere,
     seed,
     output,
-    input_path
+    input_path,
 ):
     """Places new cells into an existing cells or creates new cells if no existing were provided."""
 
@@ -363,12 +380,13 @@ def place(
         atlas,
         mini_frequencies_path=mini_frequencies,
         atlas_cache=atlas_cache,
-        region=region, mask_dset=mask,
+        region=region,
+        mask_dset=mask,
         density_factor=density_factor,
         soma_placement=soma_placement,
         atlas_properties=atlas_property,
         sort_by=sort_by,
-        append_hemisphere=append_hemisphere
+        append_hemisphere=append_hemisphere,
     )
 
     L.info("Export to %s", output)
@@ -379,10 +397,15 @@ def place(
 @click.argument("cells-path")
 @click.option("--morphdb", help="Path to extNeuronDB.dat", required=True)
 @click.option("--seed", type=int, help="Pseudo-random generator seed", default=0)
-@click.option("-o", "--output", help="Path to output MVD3 or SONATA. Use .mvd3 file extension for"
-                                     " MVD3, otherwise SONATA is used", required=True)
+@click.option(
+    "-o",
+    "--output",
+    help="Path to output MVD3 or SONATA. Use .mvd3 file extension for"
+    " MVD3, otherwise SONATA is used",
+    required=True,
+)
 def assign_emodels(cells_path, morphdb, seed, output):
-    """ Assign 'me_combo' property """
+    """Assign 'me_combo' property"""
     np.random.seed(seed)
 
     cells = CellCollection.load(cells_path)
@@ -392,54 +415,54 @@ def assign_emodels(cells_path, morphdb, seed, output):
     result.save(output)
 
 
-@app.command(short_help='Generate cell positions and save them together with orientations,'
-                        ' region annotations and cell types')
-@click.option(
-    '--annotation-path',
-    type=REQUIRED_PATH,
-    required=True,
-    help='Path to the whole mouse brain annotation file (nrrd).',
+@app.command(
+    short_help="Generate cell positions and save them together with orientations,"
+    " region annotations and cell types"
 )
 @click.option(
-    '--orientation-path',
+    "--annotation-path",
     type=REQUIRED_PATH,
     required=True,
-    help='Path to the whole mouse brain orientation file (nrrd). '
-    'Quaternion field whose underlying array is of type float and of shape (W, H, D, 4) where '
-    'quaternions under the format [w, x, y, z]. The value w is the real part of the quaternion '
-    'while xi + yj + zk is the imaginary part. The direction vector of a cell is assumed to be '
-    'given by q.rotate([0, 1, 0]) where q is the quaternion assigned to the cell voxel.',
+    help="Path to the whole mouse brain annotation file (nrrd).",
 )
 @click.option(
-    '--config-path',
+    "--orientation-path",
+    type=REQUIRED_PATH,
+    required=True,
+    help="Path to the whole mouse brain orientation file (nrrd). "
+    "Quaternion field whose underlying array is of type float and of shape (W, H, D, 4) where "
+    "quaternions under the format [w, x, y, z]. The value w is the real part of the quaternion "
+    "while xi + yj + zk is the imaginary part. The direction vector of a cell is assumed to be "
+    "given by q.rotate([0, 1, 0]) where q is the quaternion assigned to the cell voxel.",
+)
+@click.option(
+    "--config-path",
     type=REQUIRED_PATH,
     required=True,
     help=(
-        'Path to the densities configuration file (yaml).'
-        ' This file indicates which cell densities are used to generate cell positions.'
-        ' It contains the paths to the density volumes (a.k.a as density fields).'
-        '\n'
-        ' Configuration example:'
-        ' inputDensityVolumePath:'
+        "Path to the densities configuration file (yaml)."
+        " This file indicates which cell densities are used to generate cell positions."
+        " It contains the paths to the density volumes (a.k.a as density fields)."
+        "\n"
+        " Configuration example:"
+        " inputDensityVolumePath:"
         '   inhibitory neuron: "inhibitory_neuron_density.nrrd"'
         '   excitatory neuron: "excitatory_neuron_density.nrrd"'
         '   oligodendrocyte: "oligodendrocyte_density.nrrd"'
         '   astrocyte: "astrocyte_density.nrrd"'
         '   microglia: "microglia_density.nrrd"'
-        '\n'
-        'A density file holds an array of type double and of shape (W, H, D) '
-        'with non-negative entries. A density value is a number of cells per voxel.'
+        "\n"
+        "A density file holds an array of type double and of shape (W, H, D) "
+        "with non-negative entries. A density value is a number of cells per voxel."
     ),
 )
 @click.option(
-    '--output-path',
+    "--output-path",
     type=click.Path(file_okay=False, dir_okay=False, resolve_path=True),
     required=True,
-    help='Path where to write the cell positions and orientations (a single sonata .h5 file).',
+    help="Path where to write the cell positions and orientations (a single sonata .h5 file).",
 )
-def positions_and_orientations(
-    annotation_path, orientation_path, config_path, output_path
-):
+def positions_and_orientations(annotation_path, orientation_path, config_path, output_path):
     """Generate 3D cell positions and store the corresponding cell orientations.\n
 
     See https://bbpteam.epfl.ch/project/issues/browse/BBPP82-499 for the full context.
@@ -546,19 +569,19 @@ def positions_and_orientations(
         cell_type_literals = cell_collection.get('/nodes/atlas_cells/0/@library/cell_type')
     """
     # pylint: disable=too-many-arguments, too-many-locals
-    L.info('Loading density configuration file %s ...', config_path)
+    L.info("Loading density configuration file %s ...", config_path)
     config = load_yaml(config_path)
-    L.info('Loading annotation file %s ...', annotation_path)
+    L.info("Loading annotation file %s ...", annotation_path)
     annotation = VoxelData.load_nrrd(annotation_path)
-    L.info('Loading orientation file %s ...', orientation_path)
+    L.info("Loading orientation file %s ...", orientation_path)
     orientation = VoxelData.load_nrrd(orientation_path)
 
     assert np.allclose(
         annotation.offset, orientation.offset
-    ), 'The annotation and orientation files have different offsets.'
+    ), "The annotation and orientation files have different offsets."
     assert np.allclose(
         annotation.voxel_dimensions, orientation.voxel_dimensions
-    ), 'The annotation and orientation files have different voxel dimensions.'
+    ), "The annotation and orientation files have different voxel dimensions."
 
     # The columns to be populated
     positions = []
@@ -566,22 +589,20 @@ def positions_and_orientations(
     region_ids = []
     cell_types = []
 
-    for (cell_type, density_path) in config['inputDensityVolumePath'].items():
-        L.info('Loading density file %s ...', density_path)
+    for cell_type, density_path in config["inputDensityVolumePath"].items():
+        L.info("Loading density file %s ...", density_path)
         density_voxel_data = VoxelData.load_nrrd(density_path)
         if not np.allclose(density_voxel_data.offset, annotation.offset):
             raise BrainBuilderError(
-                f'The input density file {density_path} and the input annotation file '
-                f'{annotation_path} have different offsets: '
-                f'{density_voxel_data.offset} != {annotation.offset}'
+                f"The input density file {density_path} and the input annotation file "
+                f"{annotation_path} have different offsets: "
+                f"{density_voxel_data.offset} != {annotation.offset}"
             )
-        if not np.allclose(
-            density_voxel_data.voxel_dimensions, annotation.voxel_dimensions
-        ):
+        if not np.allclose(density_voxel_data.voxel_dimensions, annotation.voxel_dimensions):
             raise BrainBuilderError(
-                f'The input density file {density_path} and the input annotation file '
-                f'{annotation_path} have different voxel dimensions: '
-                f'{density_voxel_data.voxel_dimensions} != {annotation.voxel_dimensions}'
+                f"The input density file {density_path} and the input annotation file "
+                f"{annotation_path} have different voxel dimensions: "
+                f"{density_voxel_data.voxel_dimensions} != {annotation.voxel_dimensions}"
             )
 
         # Microglia cell density can take negative values, see
@@ -592,9 +613,10 @@ def positions_and_orientations(
         negative_mask = density_voxel_data.raw < 0.0
         if np.any(negative_mask):
             L.warning(
-                'Negative density values in %s summing up to %f. Zeroing negative values.',
+                "Negative density values in %s summing up to %f. Zeroing negative values.",
                 density_path,
-                np.sum(density_voxel_data.raw[negative_mask]))
+                np.sum(density_voxel_data.raw[negative_mask]),
+            )
             density_voxel_data.raw[negative_mask] = 0.0
 
         L.info('Creating cell positions for the cell type "%s" ...', cell_type)
@@ -609,34 +631,34 @@ def positions_and_orientations(
         cell_types += [cell_type] * len(voxel_indices[0])
 
     L.info(
-        'Creation of the cell collection dataframe.'
-        ' \n Setting positions, orientations, region ids and cell types ...'
+        "Creation of the cell collection dataframe."
+        " \n Setting positions, orientations, region ids and cell types ..."
     )
     datasets = np.hstack(
         [
             np.asarray(np.concatenate(positions), dtype=np.float32),
-            np.asarray(np.concatenate(orientations), dtype=np.float32)
+            np.asarray(np.concatenate(orientations), dtype=np.float32),
         ]
     )
     df = pd.DataFrame(
         datasets,
         columns=[
-            'x',
-            'y',
-            'z',
+            "x",
+            "y",
+            "z",
             # We assume quaternions to be under the form [w, x, y, z]
-            'orientation_w',
-            'orientation_x',
-            'orientation_y',
-            'orientation_z',
+            "orientation_w",
+            "orientation_x",
+            "orientation_y",
+            "orientation_z",
         ],
     )
-    df['region_id'] = np.concatenate(region_ids)
-    df['cell_type'] = cell_types
+    df["region_id"] = np.concatenate(region_ids)
+    df["cell_type"] = cell_types
     df.index = 1 + np.arange(len(df))  # CellCollection has a 1-based index
-    L.info('Building a voxcell.CellCollection ...')
+    L.info("Building a voxcell.CellCollection ...")
     cells = CellCollection.from_dataframe(df)
-    cells.population_name = 'atlas_cells'
+    cells.population_name = "atlas_cells"
 
-    L.info('Saving %s to sonata format ...', output_path)
+    L.info("Saving %s to sonata format ...", output_path)
     cells.save_sonata(output_path)

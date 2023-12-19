@@ -4,7 +4,8 @@ Test assignment of mini frequencies to the circuit MVD3.
 from pathlib import Path
 
 import pandas as pd
-from brainbuilder.app.cells import load_mini_frequencies, _assign_mini_frequencies
+
+from brainbuilder.app.cells import _assign_mini_frequencies, load_mini_frequencies
 
 DATA_PATH = Path(Path(__file__).parent, "data")
 
@@ -28,21 +29,27 @@ def test_mini_frequencies_assignment():
     """
     Mini frequencies must be assigned to cells.
     """
-    cells = pd.DataFrame(data={
-        "subregion": ["plf", "IF", "im", "6b"],
-        })
+    cells = pd.DataFrame(
+        data={
+            "subregion": ["plf", "IF", "im", "6b"],
+        }
+    )
 
-    mini_freqs = pd.DataFrame(data={
-        "exc_mini_frequency": [0.63, 0.26, 0.122, 0.072],
-        "inh_mini_frequency": [0.012, 0.012, 0.012, 0.012],
+    mini_freqs = pd.DataFrame(
+        data={
+            "exc_mini_frequency": [0.63, 0.26, 0.122, 0.072],
+            "inh_mini_frequency": [0.012, 0.012, 0.012, 0.012],
         },
-        index=["plf", "IF", "im", "6b"])
+        index=["plf", "IF", "im", "6b"],
+    )
     _assign_mini_frequencies(cells, mini_freqs)
 
-    expected = pd.DataFrame(data={
-        "subregion": ["plf", "IF", "im", "6b"],
-        "exc_mini_frequency": [0.63, 0.26, 0.122, 0.072],
-        "inh_mini_frequency": [0.012, 0.012, 0.012, 0.012],
-        })
+    expected = pd.DataFrame(
+        data={
+            "subregion": ["plf", "IF", "im", "6b"],
+            "exc_mini_frequency": [0.63, 0.26, 0.122, 0.072],
+            "inh_mini_frequency": [0.012, 0.012, 0.012, 0.012],
+        }
+    )
 
     pd.testing.assert_frame_equal(cells, expected)

@@ -2,4 +2,4 @@
 
 
 class BrainBuilderError(Exception):
-    """ Base class for brainbuilder exceptions. """
+    """Base class for brainbuilder exceptions."""

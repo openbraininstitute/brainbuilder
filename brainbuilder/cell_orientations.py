@@ -1,8 +1,8 @@
 """ Helper methods for cell orientations. """
 
 import numpy as np
-
 from voxcell.math_utils import angles_to_matrices
+
 from brainbuilder.utils.random import parse_distr
 
 
@@ -20,7 +20,7 @@ def apply_rotation(A, angles, axis):
         (i.e., [A[k] * ROTATE(angles[k], axis) for k in 0..N-1])
     """
     rotations = angles_to_matrices(angles, axis=axis)
-    return np.einsum('...ij,...jk->...ik', A, rotations)
+    return np.einsum("...ij,...jk->...ik", A, rotations)
 
 
 def apply_random_rotation(A, axis, distr):

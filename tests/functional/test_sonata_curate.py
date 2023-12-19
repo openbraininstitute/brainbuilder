@@ -44,8 +44,10 @@ def test_hippocampus(tmp_path):
     proj_source_nodes_file = curate.create_projection_source_nodes(
         proj_edges_file, original_dir, source_nodes_name, fix_offset=True
     )
-    start, _ = curate.get_source_nodes_range(proj_edges_file, edge_population_name='default')
-    curate.correct_source_nodes_offset(proj_edges_file, edge_population_name='default', offset=start)
+    start, _ = curate.get_source_nodes_range(proj_edges_file, edge_population_name="default")
+    curate.correct_source_nodes_offset(
+        proj_edges_file, edge_population_name="default", offset=start
+    )
 
     curate.rewire_edge_population(proj_edges_file, proj_source_nodes_file, nodes_file, syn_type)
 
@@ -56,17 +58,25 @@ def test_hippocampus(tmp_path):
     curate.merge_h5_files([edges_file, proj_edges_file], "edges", curated_dir / "edges.h5")
 
     # update dtypes
-    curate.update_node_dtypes(curated_dir / "nodes.h5", population_name=target_nodes_name, population_type="biophysical")
-    curate.update_node_dtypes(curated_dir / "nodes.h5", population_name=source_nodes_name, population_type="biophysical")
+    curate.update_node_dtypes(
+        curated_dir / "nodes.h5", population_name=target_nodes_name, population_type="biophysical"
+    )
+    curate.update_node_dtypes(
+        curated_dir / "nodes.h5", population_name=source_nodes_name, population_type="biophysical"
+    )
 
-    curate.update_edge_dtypes(curated_dir / "edges.h5",
-                              population_name="hippocampus_neurons__hippocampus_neurons__chemical",
-                              population_type=syn_type,
-                              virtual=False)
-    curate.update_edge_dtypes(curated_dir / "edges.h5",
-                              population_name="hippocampus_projections__hippocampus_neurons__chemical",
-                              population_type=syn_type,
-                              virtual=True)
+    curate.update_edge_dtypes(
+        curated_dir / "edges.h5",
+        population_name="hippocampus_neurons__hippocampus_neurons__chemical",
+        population_type=syn_type,
+        virtual=False,
+    )
+    curate.update_edge_dtypes(
+        curated_dir / "edges.h5",
+        population_name="hippocampus_projections__hippocampus_neurons__chemical",
+        population_type=syn_type,
+        virtual=True,
+    )
 
     sonata_config_file = curated_dir / "circuit_config.json"
     curated_dir = curated_dir.resolve()
@@ -102,26 +112,26 @@ def test_hippocampus(tmp_path):
     # the hippocampus circuit used in the tests is missing the following
     # 'mandatory' elements, but we're not going to add them
     allowed_missing_hippocampus_attributes = {
-        'afferent_section_id',
-        'afferent_section_pos',
-        'afferent_section_type',
-        'afferent_segment_id',
-        'afferent_segment_offset',
-        'afferent_surface_x',
-        'afferent_surface_y',
-        'afferent_surface_z',
-        'efferent_center_x',
-        'efferent_center_y',
-        'efferent_center_z',
-        'efferent_section_id',
-        'efferent_section_pos',
-        'efferent_section_type',
-        'efferent_segment_id',
-        'efferent_segment_offset',
-        'efferent_surface_x',
-        'efferent_surface_y',
-        'efferent_surface_z',
-        'spine_length',
+        "afferent_section_id",
+        "afferent_section_pos",
+        "afferent_section_type",
+        "afferent_segment_id",
+        "afferent_segment_offset",
+        "afferent_surface_x",
+        "afferent_surface_y",
+        "afferent_surface_z",
+        "efferent_center_x",
+        "efferent_center_y",
+        "efferent_center_z",
+        "efferent_section_id",
+        "efferent_section_pos",
+        "efferent_section_type",
+        "efferent_segment_id",
+        "efferent_segment_offset",
+        "efferent_surface_x",
+        "efferent_surface_y",
+        "efferent_surface_z",
+        "spine_length",
     }
 
     errors = []
@@ -138,6 +148,6 @@ def test_hippocampus(tmp_path):
             # we don't *actually* have an error
             continue
 
-        errors.append('\n'.join(filtered_line))
+        errors.append("\n".join(filtered_line))
 
     assert errors == []

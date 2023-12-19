@@ -1,4 +1,4 @@
-'''compatibility functions with existing BBP formats'''
+"""compatibility functions with existing BBP formats"""
 
 import logging
 
@@ -7,17 +7,18 @@ import lxml.etree
 import numpy as np
 import pandas as pd
 from pandas.errors import ParserError
-
 from voxcell import CellCollection
 
 from brainbuilder.exceptions import BrainBuilderError
 from brainbuilder.utils import load_yaml
 
-NEURONDB_COLUMNS = ['morphology', 'layer', 'mtype']
-EXTNEURONDB_COLUMNS = NEURONDB_COLUMNS + ['etype', 'me_combo']
-MECOMBO_EMODEL_COLUMNS = (NEURONDB_COLUMNS +
-                          [EXTNEURONDB_COLUMNS[-2], 'emodel', EXTNEURONDB_COLUMNS[-1]] +
-                          ['threshold_current', 'holding_current'])
+NEURONDB_COLUMNS = ["morphology", "layer", "mtype"]
+EXTNEURONDB_COLUMNS = NEURONDB_COLUMNS + ["etype", "me_combo"]
+MECOMBO_EMODEL_COLUMNS = (
+    NEURONDB_COLUMNS
+    + [EXTNEURONDB_COLUMNS[-2], "emodel", EXTNEURONDB_COLUMNS[-1]]
+    + ["threshold_current", "holding_current"]
+)
 
 L = logging.getLogger(__name__)
 
@@ -26,14 +27,14 @@ def _load_tsv(file, columns, format_name, dtype=None):
     try:
         return pd.read_csv(
             file,
-            sep=r'\s+',
+            sep=r"\s+",
             names=columns,
             usecols=list(range(len(columns))),
             na_filter=False,
             dtype=dtype,
         )
     except ParserError as e:
-        raise ValueError(f'Invalid {format_name} format of {file}') from e
+        raise ValueError(f"Invalid {format_name} format of {file}") from e
 
 
 def load_neurondb(file):
@@ -47,7 +48,7 @@ def load_neurondb(file):
     Returns:
         pd.DataFrame
     """
-    return _load_tsv(file, NEURONDB_COLUMNS, 'NeuronDB', dtype={'layer': str})
+    return _load_tsv(file, NEURONDB_COLUMNS, "NeuronDB", dtype={"layer": str})
 
 
 def load_extneurondb(file):
@@ -64,7 +65,7 @@ def load_extneurondb(file):
     Returns:
         pd.DataFrame
     """
-    return _load_tsv(file, EXTNEURONDB_COLUMNS, 'ExtNeuronDB', dtype={'layer': str})
+    return _load_tsv(file, EXTNEURONDB_COLUMNS, "ExtNeuronDB", dtype={"layer": str})
 
 
 def load_mecombo_emodel(file):
@@ -81,7 +82,7 @@ def load_mecombo_emodel(file):
     Returns:
         pd.DataFrame
     """
-    return _load_tsv(file, MECOMBO_EMODEL_COLUMNS, 'mecombo_emodel', dtype={'layer': str})
+    return _load_tsv(file, MECOMBO_EMODEL_COLUMNS, "mecombo_emodel", dtype={"layer": str})
 
 
 def load_cell_composition(filepath):
@@ -89,35 +90,33 @@ def load_cell_composition(filepath):
 
     https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html#cell-composition-yaml
     """
-    doc_url = 'https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html#cell-composition-yaml'  # noqa
+    doc_url = "https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html#cell-composition-yaml"  # noqa
     content = load_yaml(filepath)
 
-    if not (content['version'].startswith('v2') and 'neurons' in content):
-        raise ValueError(f'Use cell composition file of version 2 in {filepath}, see {doc_url}')
+    if not (content["version"].startswith("v2") and "neurons" in content):
+        raise ValueError(f"Use cell composition file of version 2 in {filepath}, see {doc_url}")
 
-    for neuron_conf in content['neurons']:
-        _check_traits(neuron_conf['traits'])
+    for neuron_conf in content["neurons"]:
+        _check_traits(neuron_conf["traits"])
 
     return content
 
 
 def _check_traits(traits):
-    if missing := {'mtype', 'etype'}.difference(traits):
-        raise BrainBuilderError(
-            f"Missing properties {sorted(missing)} for group {traits}"
-        )
-    if 'layer' in traits:
+    if missing := {"mtype", "etype"}.difference(traits):
+        raise BrainBuilderError(f"Missing properties {sorted(missing)} for group {traits}")
+    if "layer" in traits:
         # enforce layer to be a string [NSETM-2261]
-        traits['layer'] = str(traits['layer'])
+        traits["layer"] = str(traits["layer"])
 
 
 def gid2str(gid):
-    """ 42 -> 'a42' """
+    """42 -> 'a42'"""
     return f"a{gid}"
 
 
 def write_target(f, name, gids=None, include_targets=None):
-    """ Append contents to .target file. """
+    """Append contents to .target file."""
     f.write(f"\nTarget Cell {name}\n{{\n")
     if gids is not None:
         f.write("  ")
@@ -131,7 +130,7 @@ def write_target(f, name, gids=None, include_targets=None):
 
 
 def write_property_targets(f, cells, prop, mapping=None):
-    """ Append targets based on 'prop' cell property to .target file. """
+    """Append targets based on 'prop' cell property to .target file."""
     for value, gids in sorted(cells.groupby(prop).groups.items()):
         if mapping is not None:
             value = mapping(value)
@@ -139,19 +138,19 @@ def write_property_targets(f, cells, prop, mapping=None):
 
 
 def assign_emodels(cells, morphdb):
-    """ Assign electrical models to CellCollection based MorphDB. """
+    """Assign electrical models to CellCollection based MorphDB."""
     df = cells.as_dataframe()
 
-    ME_COMBO = 'me_combo'
+    ME_COMBO = "me_combo"
     if ME_COMBO in df:
         L.warning("'%s' property would be overwritten", ME_COMBO)
         del df[ME_COMBO]
 
-    if 'layer' in df:
-        JOIN_COLS = ['morphology', 'layer', 'mtype', 'etype']
-    elif 'subregion' in df:
-        JOIN_COLS = ['morphology', 'subregion', 'mtype', 'etype']
-        morphdb = morphdb.rename(columns={'layer': 'subregion'})
+    if "layer" in df:
+        JOIN_COLS = ["morphology", "layer", "mtype", "etype"]
+    elif "subregion" in df:
+        JOIN_COLS = ["morphology", "subregion", "mtype", "etype"]
+        morphdb = morphdb.rename(columns={"layer": "subregion"})
     else:
         raise BrainBuilderError("Missing `layer` and `subregion` in cells dataframe")
 
@@ -163,7 +162,7 @@ def assign_emodels(cells, morphdb):
 
     # choose 'me_combo' randomly if several are available
     df = df.sample(frac=1)
-    df = df[~df.index.duplicated(keep='first')]
+    df = df[~df.index.duplicated(keep="first")]
 
     df = df.sort_index()
 
@@ -174,34 +173,34 @@ def assign_emodels(cells, morphdb):
 
 
 def _parse_recipe(recipe_filename):
-    '''parse a BBP recipe and return the corresponding etree'''
+    """parse a BBP recipe and return the corresponding etree"""
     parser = lxml.etree.XMLParser(resolve_entities=False)
     return lxml.etree.parse(recipe_filename, parser=parser)
 
 
 def _get_recipe_mtypes(recipe_path):
-    """ List of mtypes in the order they appear in builder recipe. """
+    """List of mtypes in the order they appear in builder recipe."""
     result = []
     recipe = _parse_recipe(recipe_path)
-    for elem in recipe.iterfind('/NeuronTypes/Layer/StructuralType'):
-        mtype = elem.attrib['id']
+    for elem in recipe.iterfind("/NeuronTypes/Layer/StructuralType"):
+        mtype = elem.attrib["id"]
         if mtype not in result:
             result.append(mtype)
     return result
 
 
 def reorder_mtypes(mvd3_path, recipe_path):
-    """ Re-order /library/mtypes to align with builder recipe. """
+    """Re-order /library/mtypes to align with builder recipe."""
     recipe_mtypes = _get_recipe_mtypes(recipe_path)
-    with h5py.File(mvd3_path, 'a') as h5f:
-        mvd3_mtypes = h5f.pop('/library/mtype')[:]
+    with h5py.File(mvd3_path, "a") as h5f:
+        mvd3_mtypes = h5f.pop("/library/mtype")[:]
         mapping = np.zeros(len(mvd3_mtypes), dtype=np.uint8)
         for k, mtype in enumerate(mvd3_mtypes):
             mapping[k] = recipe_mtypes.index(mtype)
 
-        mvd3_mtype_index = h5f.pop('/cells/properties/mtype')[:]
+        mvd3_mtype_index = h5f.pop("/cells/properties/mtype")[:]
         dt = h5py.special_dtype(vlen=str)
-        h5f['/cells/properties/mtype'] = mapping[mvd3_mtype_index]
+        h5f["/cells/properties/mtype"] = mapping[mvd3_mtype_index]
         h5f.create_dataset(
-            '/library/mtype', data=np.asarray(recipe_mtypes).astype(object), dtype=dt
+            "/library/mtype", data=np.asarray(recipe_mtypes).astype(object), dtype=dt
         )

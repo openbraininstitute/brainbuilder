@@ -1,5 +1,4 @@
 import numpy as np
-
 import voxcell
 
 from brainbuilder.app import cells as test_module
@@ -11,7 +10,7 @@ def test_load_density__dangerously_low_densities(tmp_path):
 
     shape = (10, 10, 10)
     voxel_dimensions = np.array([25, 25, 25])
-    filepath = tmp_path / 'test_load_density__dangerously_low_densities.nrrd'
+    filepath = tmp_path / "test_load_density__dangerously_low_densities.nrrd"
     raw = np.full(shape, dtype=np.float64, fill_value=2.04160691e02)
 
     raw[1, :, 1] = 8.36723867e10
@@ -33,12 +32,12 @@ def test_load_density__near_zero_values_are_ignored(tmp_path):
     shape = (3, 3, 3)
     voxel_dimensions = np.array([25, 25, 25])
 
-    filepath = tmp_path / 'test_load_density__near_zero_values_are_ignored.nrrd'
+    filepath = tmp_path / "test_load_density__near_zero_values_are_ignored.nrrd"
     raw = np.zeros(shape, dtype=np.float64)
 
     raw[:, 0, :] = -0.001
     raw[:, 1, :] = 1e-8
-    raw[:, 2, :] = 10.
+    raw[:, 2, :] = 10.0
 
     density = voxcell.VoxelData(raw=raw, voxel_dimensions=voxel_dimensions)
     density.save_nrrd(filepath)

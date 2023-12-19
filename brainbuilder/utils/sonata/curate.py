@@ -5,7 +5,6 @@ import h5py
 import morphio
 import numpy as np
 import voxcell
-
 from bluepysnap.schemas import schemas
 
 L = logging.getLogger(__name__)
@@ -20,9 +19,9 @@ def get_population_names(h5_file):
     Returns:
         list: list of population names
     """
-    with h5py.File(h5_file, 'r') as h5f:
-        assert ('nodes' in h5f) ^ ('edges' in h5f), f'"edges" or "nodes" must be presented in {h5f}'
-        return list(h5f['nodes']) if 'nodes' in h5f else list(h5f['edges'])
+    with h5py.File(h5_file, "r") as h5f:
+        assert ("nodes" in h5f) ^ ("edges" in h5f), f'"edges" or "nodes" must be presented in {h5f}'
+        return list(h5f["nodes"]) if "nodes" in h5f else list(h5f["edges"])
 
 
 def get_population_name(h5_file, population_name=None):
@@ -39,8 +38,9 @@ def get_population_name(h5_file, population_name=None):
     """
     names = get_population_names(h5_file)
     if population_name is None:
-        assert len(names) == 1, \
-            f'{h5_file} must have a single population only, if one is not specified'
+        assert (
+            len(names) == 1
+        ), f"{h5_file} must have a single population only, if one is not specified"
         return names[0]
     elif population_name not in names:
         raise ValueError(f'"{population_name}" population does not exist in {h5_file}')
@@ -56,18 +56,20 @@ def _rename_population(file, root, new_name, old_name=None):
         new_name (str): new population name
         old_name (str): old population name
     """
-    with h5py.File(file, 'r+') as h5f:
+    with h5py.File(file, "r+") as h5f:
         population_names = list(h5f[root])
         if len(population_names) == 0:
-            raise ValueError(f'No populations in {file}')
+            raise ValueError(f"No populations in {file}")
         if old_name is None:
             if len(population_names) > 1:
-                raise ValueError(f'Multiple populations:{population_names} in {file},'
-                                 f'specify the exact one to rename.')
+                raise ValueError(
+                    f"Multiple populations:{population_names} in {file},"
+                    f"specify the exact one to rename."
+                )
             old_name = population_names[0]
         elif old_name not in population_names:
-            raise ValueError(f'No {old_name} population in {file}')
-        h5f.move(f'/{root}/{old_name}', f'/{root}/{new_name}')
+            raise ValueError(f"No {old_name} population in {file}")
+        h5f.move(f"/{root}/{old_name}", f"/{root}/{new_name}")
 
 
 def rename_node_population(nodes_file, new_name, old_name=None):
@@ -78,8 +80,8 @@ def rename_node_population(nodes_file, new_name, old_name=None):
         new_name (str): new population name
         old_name (str): old population name
     """
-    L.debug('renaming node population: %s to %s', old_name, new_name)
-    _rename_population(nodes_file, 'nodes', new_name, old_name)
+    L.debug("renaming node population: %s to %s", old_name, new_name)
+    _rename_population(nodes_file, "nodes", new_name, old_name)
 
 
 def rename_edge_population(edges_file, new_name, old_name=None):
@@ -90,8 +92,8 @@ def rename_edge_population(edges_file, new_name, old_name=None):
         new_name (str): new population name
         old_name (str): old population name
     """
-    L.debug('renaming edge population: %s to %s', old_name, new_name)
-    _rename_population(edges_file, 'edges', new_name, old_name)
+    L.debug("renaming edge population: %s to %s", old_name, new_name)
+    _rename_population(edges_file, "edges", new_name, old_name)
 
 
 def add_edge_type_id(edges_file, population_name):
@@ -101,13 +103,14 @@ def add_edge_type_id(edges_file, population_name):
         edges_file (str/Path): SONATA edges file
         population_name (str): edge population name
     """
-    with h5py.File(edges_file, 'r+') as h5f:
-        group = h5f[f'edges/{population_name}']
-        var = list(group['0'])[0]
-        size = group['0'][f'{var}'].size
-        if 'edge_type_id' not in group:
+    with h5py.File(edges_file, "r+") as h5f:
+        group = h5f[f"edges/{population_name}"]
+        var = list(group["0"])[0]
+        size = group["0"][f"{var}"].size
+        if "edge_type_id" not in group:
             group.create_dataset(
-                'edge_type_id', data=np.full((size,), fill_value=-1, dtype=np.int32))
+                "edge_type_id", data=np.full((size,), fill_value=-1, dtype=np.int32)
+            )
 
 
 def set_group_attribute(file, root, population, group, attr_name, attr_value, overwrite=False):
@@ -123,10 +126,10 @@ def set_group_attribute(file, root, population, group, attr_name, attr_value, ov
             will be used to store it.
     """
     # pylint: disable=too-many-locals
-    group_path = f'{root}/{population}/{group}'
+    group_path = f"{root}/{population}/{group}"
     L.debug('_set_group_attribute of "%s" %s -> (%s)', group_path, attr_name, attr_value)
-    with h5py.File(file, 'r+') as h5f:
-        assert group_path in h5f, f'no such path {group_path} in {file}'
+    with h5py.File(file, "r+") as h5f:
+        assert group_path in h5f, f"no such path {group_path} in {file}"
         group_h5 = h5f[group_path]
         any_ds = None
         for key in group_h5:
@@ -134,14 +137,17 @@ def set_group_attribute(file, root, population, group, attr_name, attr_value, ov
                 any_ds = group_h5[key]
         count = len(any_ds)
         if isinstance(attr_value, str):
-            if '@library' not in group_h5:
-                group_h5.create_group('@library')
-            lib = group_h5['@library']
+            if "@library" not in group_h5:
+                group_h5.create_group("@library")
+            lib = group_h5["@library"]
             if attr_name in lib and overwrite:
                 del lib[attr_name]
             str_dt = h5py.special_dtype(vlen=str)
             lib.create_dataset(
-                attr_name, data=np.array([attr_value, ], dtype=object), dtype=str_dt)
+                attr_name,
+                data=np.array([attr_value], dtype=object),
+                dtype=str_dt,
+            )
             attr_value = 0
         # TODO: should we check the number of unique values before creating an @library style
         #  lookup?
@@ -153,9 +159,14 @@ def set_group_attribute(file, root, population, group, attr_name, attr_value, ov
 
 
 def rewire_edge_population(
-        edges_file, source_nodes_file, target_nodes_file,
-        syn_type, edge_population_name=None,
-        source_nodes_population_name=None, target_nodes_population_name=None):
+    edges_file,
+    source_nodes_file,
+    target_nodes_file,
+    syn_type,
+    edge_population_name=None,
+    source_nodes_population_name=None,
+    target_nodes_population_name=None,
+):
     """Renames edge population according to the rule:
 
     New name = {source_nodes_population_name}__{target_nodes_population_name}__{syn_type}.
@@ -176,19 +187,21 @@ def rewire_edge_population(
             the first population is taken.
     """
     source_nodes_population_name = get_population_name(
-        source_nodes_file, source_nodes_population_name)
+        source_nodes_file, source_nodes_population_name
+    )
     target_nodes_population_name = get_population_name(
-        target_nodes_file, target_nodes_population_name)
+        target_nodes_file, target_nodes_population_name
+    )
     edge_population_name = get_population_name(edges_file, edge_population_name)
-    with h5py.File(edges_file, 'r+') as h5f:
+    with h5py.File(edges_file, "r+") as h5f:
         new_name = (
-            f'/edges/{source_nodes_population_name}__{target_nodes_population_name}__{syn_type}'
+            f"/edges/{source_nodes_population_name}__{target_nodes_population_name}__{syn_type}"
         )
-        L.debug('rewire_edge_population: %s', new_name)
-        h5f.move(f'/edges/{edge_population_name}', new_name)
+        L.debug("rewire_edge_population: %s", new_name)
+        h5f.move(f"/edges/{edge_population_name}", new_name)
 
-        h5f[new_name]['source_node_id'].attrs['node_population'] = source_nodes_population_name
-        h5f[new_name]['target_node_id'].attrs['node_population'] = target_nodes_population_name
+        h5f[new_name]["source_node_id"].attrs["node_population"] = source_nodes_population_name
+        h5f[new_name]["target_node_id"].attrs["node_population"] = target_nodes_population_name
         return new_name
 
 
@@ -203,13 +216,13 @@ def _create_source_nodes(population_name, size, output_dir):
     Returns:
         Path: filepath to created nodes
     """
-    L.debug('_create_source_nodes: %s(%d)', population_name, size)
+    L.debug("_create_source_nodes: %s(%d)", population_name, size)
     cells = voxcell.CellCollection()
-    cells.properties['model_type'] = ['virtual'] * size
+    cells.properties["model_type"] = ["virtual"] * size
     # '' stands for NULL value in SONATA https://github.com/AllenInstitute/sonata/issues/122
-    cells.properties['model_template'] = [''] * size
+    cells.properties["model_template"] = [""] * size
     cells.population_name = population_name
-    output = output_dir / f'nodes_{population_name}.h5'
+    output = output_dir / f"nodes_{population_name}.h5"
     cells.save(output)
     return output
 
@@ -222,22 +235,22 @@ def correct_source_nodes_offset(edges_file, edge_population_name, offset):
         edge_population_name (str): edges population name
         offset (int): correction offset
     """
-    L.debug('correct_source_nodes_offset: %s(%d)', edge_population_name, offset)
-    with h5py.File(edges_file, 'r+') as h5f:
-        population = h5f['edges'][edge_population_name]
-        ids = population['source_node_id'][:] - offset
-        source_nodes_name = population['source_node_id'].attrs['node_population']
-        del population['source_node_id']
-        population['source_node_id'] = ids
-        population['source_node_id'].attrs['node_population'] = source_nodes_name
+    L.debug("correct_source_nodes_offset: %s(%d)", edge_population_name, offset)
+    with h5py.File(edges_file, "r+") as h5f:
+        population = h5f["edges"][edge_population_name]
+        ids = population["source_node_id"][:] - offset
+        source_nodes_name = population["source_node_id"].attrs["node_population"]
+        del population["source_node_id"]
+        population["source_node_id"] = ids
+        population["source_node_id"].attrs["node_population"] = source_nodes_name
 
         # need to re-number the virtual edge ids
-        idx = population['indices/source_to_target/node_id_to_ranges'][offset:]
-        del population['indices/source_to_target/node_id_to_ranges']
-        population['indices/source_to_target/node_id_to_ranges'] = idx
+        idx = population["indices/source_to_target/node_id_to_ranges"][offset:]
+        del population["indices/source_to_target/node_id_to_ranges"]
+        population["indices/source_to_target/node_id_to_ranges"] = idx
 
 
-def get_source_nodes_range(edges_file, edge_population_name='default'):
+def get_source_nodes_range(edges_file, edge_population_name="default"):
     """Given edge population, gets size of its source node population.
 
     Args:
@@ -247,19 +260,20 @@ def get_source_nodes_range(edges_file, edge_population_name='default'):
     Returns:
         (int, int, ): start index, end index
     """
-    with h5py.File(edges_file, 'r') as h5f:
-        source_node_id = h5f[f'/edges/{edge_population_name}/source_node_id'][:]
+    with h5py.File(edges_file, "r") as h5f:
+        source_node_id = h5f[f"/edges/{edge_population_name}/source_node_id"][:]
         start = int(np.min(source_node_id))
         end = int(np.max(source_node_id))
 
     return start, end
 
 
-def create_projection_source_nodes(projection_file,
-                                   source_nodes_dir,
-                                   source_nodes_population_name,
-                                   fix_offset
-                                   ):
+def create_projection_source_nodes(
+    projection_file,
+    source_nodes_dir,
+    source_nodes_population_name,
+    fix_offset,
+):
     """Create source nodes file for projection file.
 
     Args:
@@ -273,7 +287,7 @@ def create_projection_source_nodes(projection_file,
         Path: path to created source nodes file.
     """
     names = get_population_names(projection_file)
-    assert len(names) == 1, f'{projection_file} has multiple populations but must have only one'
+    assert len(names) == 1, f"{projection_file} has multiple populations but must have only one"
     proj_population_name = next(iter(names))
     start, end = get_source_nodes_range(projection_file, proj_population_name)
 
@@ -281,9 +295,12 @@ def create_projection_source_nodes(projection_file,
         size = end - start + 1
     else:
         if start != 0:
-            L.warning("%s:%s's node_ids don't start from 0 "
-                      "use correct_source_nodes_offset() to fix if required",
-                      projection_file, proj_population_name)
+            L.warning(
+                "%s:%s's node_ids don't start from 0 "
+                "use correct_source_nodes_offset() to fix if required",
+                projection_file,
+                proj_population_name,
+            )
         size = end + 1
 
     source_nodes_file = _create_source_nodes(source_nodes_population_name, size, source_nodes_dir)
@@ -303,45 +320,46 @@ def merge_h5_files(files, root, output_file):
     """
     if isinstance(files, (list, tuple)):
         files = {file: None for file in files}
-    with h5py.File(output_file, 'w') as out_h5f:
-        out_h5f.create_group(f'{root}')
+    with h5py.File(output_file, "w") as out_h5f:
+        out_h5f.create_group(f"{root}")
         for file, population_names in files.items():
-            with h5py.File(file, 'r') as h5f:
+            with h5py.File(file, "r") as h5f:
                 if population_names is None:
                     population_names = list(h5f[root])
                 for name in population_names:
-                    h5f.copy(f'{root}/{name}/', out_h5f[f'{root}'])
+                    h5f.copy(f"{root}/{name}/", out_h5f[f"{root}"])
 
 
 def _has_sonata_ordering(morph):
-    '''check if morph has correct ordering
+    """check if morph has correct ordering
 
     https://github.com/AllenInstitute/sonata/blob/master/docs/SONATA_DEVELOPER_GUIDE.md
     The soma is always section 0.
     The rest of the sections are first grouped by section type in this order:
         1 = axon, 2 = basal and 3 = apical.
-    '''
-    REQUIRED_ORDER = {morphio.SectionType.axon: 0,
-                      morphio.SectionType.basal_dendrite: 1,
-                      morphio.SectionType.apical_dendrite: 2,
-                      }
+    """
+    REQUIRED_ORDER = {
+        morphio.SectionType.axon: 0,
+        morphio.SectionType.basal_dendrite: 1,
+        morphio.SectionType.apical_dendrite: 2,
+    }
     section_types = [s.type for s in morph.root_sections]
     ordered = sorted(section_types, key=lambda s: REQUIRED_ORDER[s])
     return ordered == section_types
 
 
 def _has_unifurcations(morph):
-    '''check if `morph` has unifurcations'''
+    """check if `morph` has unifurcations"""
     return any(len(section.children) == 1 for section in morph.iter())
 
 
 def check_morphology_invariants(h5_morph_dir, morph_names):
-    '''check if morphologies follow the SONATA spec and have no unifurcations'''
+    """check if morphologies follow the SONATA spec and have no unifurcations"""
 
     incorrect_ordering = set()
     have_unifurcations = set()
     for name in morph_names:
-        morph = morphio.Morphology(h5_morph_dir / (name + '.h5'))
+        morph = morphio.Morphology(h5_morph_dir / (name + ".h5"))
         if not _has_sonata_ordering(morph):
             incorrect_ordering.add(name)
 
@@ -379,14 +397,14 @@ def update_node_dtypes(h5_file, population_name, population_type):
     """
     converted = []
     property_types, dynamics_params = schemas.nodes_schema_types(population_type)
-    with h5py.File(h5_file, 'r+') as h5f:
-        group = h5f['nodes'][population_name]['0']
+    with h5py.File(h5_file, "r+") as h5f:
+        group = h5f["nodes"][population_name]["0"]
         library = set()
         if "@library" in group:
             library = set(group["@library"])
 
         for attribute_name in group.keys():
-            if attribute_name in ("@library", "dynamics_params", ):
+            if attribute_name in ("@library", "dynamics_params"):
                 continue
             if attribute_name not in property_types:
                 L.info("Unknown property '%s', leaving alone", attribute_name)
@@ -431,16 +449,18 @@ def update_edge_dtypes(h5_file, population_name, population_type, virtual):
     """
     property_types = schemas.edges_schema_types(population_type, virtual=virtual)
     converted = []
-    with h5py.File(h5_file, 'r+') as h5f:
-        group = h5f['edges'][population_name]
+    with h5py.File(h5_file, "r+") as h5f:
+        group = h5f["edges"][population_name]
 
-        for name, expected in (('source_node_id', np.uint64,),
-                               ('target_node_id', np.uint64, ),
-                               ('edge_type_id', np.int64, ),):
+        for name, expected in (
+            ("source_node_id", np.uint64),
+            ("target_node_id", np.uint64),
+            ("edge_type_id", np.int64),
+        ):
             if group[name].dtype != expected:
                 converted.append(_update_dtype(group, name, expected))
 
-        group = group['0']
+        group = group["0"]
 
         for attribute_name in group.keys():
             if attribute_name not in property_types:

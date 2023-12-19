@@ -1,6 +1,9 @@
 Changelog
 =========
 
+## 0.19.1
+  * Apply black and isort
+
 ## 0.19.0
   * Enforce layer to be a string (NSETM-2261)
 

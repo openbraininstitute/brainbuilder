@@ -175,6 +175,7 @@ def write_network_config(
             list of paths to edges files in the format ``path:population1,population2,...``.
         output_path (str|Path): path to a file where to write the config.
     """
+
     # pylint: disable=too-many-arguments
     def _to_dict(s, key, default_filename, main_separator=":", populations_separator=","):
         path, _, populations = s.partition(main_separator)
