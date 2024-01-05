@@ -50,9 +50,9 @@ def provide_me_info(cells_path, output, model_type, mecombo_info):
 @click.option("-o", "--output", help="Path to output HDF5", required=True)
 def from_syn2(syn2, population, source, target, output):
     """Convert SYN2 to SONATA edges"""
-    from brainbuilder.utils.sonata.convert import write_edges_from_syn2
+    from brainbuilder.utils.sonata import convert
 
-    write_edges_from_syn2(
+    convert.write_edges_from_syn2(
         syn2_path=syn2,
         population=population,
         source=source,
@@ -102,9 +102,9 @@ def network_config(
 ):
     """Write SONATA network config"""
     # pylint: disable=too-many-arguments
-    from brainbuilder.utils.sonata.write_config import write_network_config
+    from brainbuilder.utils.sonata import write_config
 
-    write_network_config(
+    write_config.write_network_config(
         base_dir=base_dir,
         morph_dir=morph_dir,
         emodel_dir=emodel_dir,
@@ -132,7 +132,7 @@ def node_set_from_targets(input_dir, target_file, cells_path, output):
 
     Please check 'brainbuilder targets node-sets' also.
     """
-    from brainbuilder.utils.sonata.convert import write_node_set_from_targets
+    from brainbuilder.utils.sonata import convert
 
     target_files = set(target_file)
 
@@ -140,7 +140,7 @@ def node_set_from_targets(input_dir, target_file, cells_path, output):
         target_files = target_files | set(glob.glob(f"{input_dir}/*.target"))
 
     if target_files:
-        write_node_set_from_targets(target_files, output, cells_path)
+        convert.write_node_set_from_targets(target_files, output, cells_path)
     else:
         click.secho("No target files specified; output won't exist", fg="red")
 
@@ -153,11 +153,11 @@ def node_set_from_targets(input_dir, target_file, cells_path, output):
 def check_morphologies(h5_morphs, morphdb):
     """Make sure the h5 morphology files pass the required SONATA invariants"""
     from brainbuilder.utils import bbp
-    from brainbuilder.utils.sonata.curate import check_morphology_invariants
+    from brainbuilder.utils.sonata import curate
 
     morphs = bbp.load_extneurondb(morphdb).morphology.to_list()
     with click.progressbar(morphs) as morphs:
-        incorrect_ordering, have_unifurcations = check_morphology_invariants(
+        incorrect_ordering, have_unifurcations = curate.check_morphology_invariants(
             Path(h5_morphs), morphs
         )
 
