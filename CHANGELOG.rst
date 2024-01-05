@@ -1,11 +1,12 @@
 Changelog
 =========
 
-## 0.19.1
+## 0.20.0
   * Apply black and isort
   * Add ``--log-level`` option to the main CLI.
   * Include app in coverage calculation.
   * Add tests for app/sonata.
+  * Add sonata subsample-circuit command (NSETM-2272)
 
 ## 0.19.0
   * Enforce layer to be a string (NSETM-2261)

@@ -312,3 +312,25 @@ def test_clip_morphologies(mock_module, tmp_path):
         )
     assert result.exit_code == 0, f"Output:\n {result.output}"
     assert mock_module.morphologies.call_count == 1
+
+
+@patch("brainbuilder.utils.sonata.subsample", create=True)
+def test_subsample_circuit(mock_subsample, tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(tmp_path):
+        circuit_config = tmp_path / "circuit_config.json"
+        circuit_config.touch()
+        result = runner.invoke(
+            test_module.app,
+            [
+                "subsample-circuit",
+                "--output",
+                "output_dir",
+                "--circuit",
+                str(circuit_config),
+            ],
+        )
+    expected = "Subsampling done, you should check and complete the partial circuit config file"
+    assert result.output.strip() == expected
+    assert result.exit_code == 0
+    assert mock_subsample.subsample_circuit.call_count == 1

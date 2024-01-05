@@ -1,0 +1,24 @@
+{
+  "version": "2",
+  "manifest": {
+    "$BASE_DIR": "."
+  },
+  "networks": {
+    "nodes": [
+      {
+        "nodes_file": "$BASE_DIR/networks/nodes/default/nodes.h5",
+        "populations": {
+          "default": {}
+        }
+      }
+    ],
+    "edges": [
+      {
+        "edges_file": "$BASE_DIR/networks/edges/default/edges.h5",
+        "populations": {
+          "default": {}
+        }
+      }
+    ]
+  }
+}

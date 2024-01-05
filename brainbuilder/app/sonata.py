@@ -8,7 +8,11 @@ from pathlib import Path
 
 import click
 
-from brainbuilder.app._utils import REQUIRED_PATH, REQUIRED_PATH_DIR
+from brainbuilder.app._utils import (
+    REQUIRED_PATH,
+    REQUIRED_PATH_DIR,
+    REQUIRED_PATH_DIR_OR_NONEXISTENT,
+)
 from brainbuilder.utils import dump_json, load_json
 
 
@@ -317,3 +321,67 @@ def clip_morphologies(output, circuit, population_name):
     from brainbuilder.utils.sonata import clip
 
     clip.morphologies(output, circuit, population_name)
+
+
+@app.command()
+@click.option(
+    "-o",
+    "--output",
+    required=True,
+    type=REQUIRED_PATH_DIR_OR_NONEXISTENT,
+    help="Output directory, automatically deleted and re-created if it already exists",
+)
+@click.option(
+    "--circuit",
+    required=True,
+    type=REQUIRED_PATH,
+    help="Path to the existing circuit_config.json",
+)
+@click.option(
+    "--sampling-ratio",
+    type=click.FloatRange(min=0, max=1),
+    help="Sampling ratio between 0 and 1",
+    default=0.001,
+    show_default=True,
+)
+@click.option(
+    "--sampling-count",
+    type=click.IntRange(min=0),
+    help="Sampling count, alternative to sampling ratio",
+)
+@click.option(
+    "--seed",
+    type=click.IntRange(min=0),
+    help="RNG seed",
+    default=0,
+    show_default=True,
+)
+def subsample_circuit(output, circuit, sampling_ratio, sampling_count, seed):
+    """Subsample a given circuit, reducing the number of nodes and edges.
+
+    Please be aware of the following notes and limitations.
+
+    The sampling ratio or the sampling count specified as CLI arguments should be low enough
+    to allow the nodes and the edges to be loaded in memory.
+
+    The written circuit config is only a stub that should be completed with the missing data.
+
+    Each node and edge population are written to separate files, even when they were originally
+    contained in a single file.
+
+    The node_sets aren't updated, so they might be invalid if they contain numeric node ids.
+    """
+    from brainbuilder.utils.sonata import subsample as module
+
+    module.subsample_circuit(
+        output=output,
+        circuit_config=circuit,
+        sampling_ratio=sampling_ratio,
+        sampling_count=sampling_count,
+        node_populations=None,
+        seed=seed,
+    )
+    click.secho(
+        "Subsampling done, you should check and complete the partial circuit config file",
+        fg="green",
+    )
