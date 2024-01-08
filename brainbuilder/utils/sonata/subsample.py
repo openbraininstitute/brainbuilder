@@ -100,7 +100,7 @@ def _get_pop_sampling_count(
 
 def _subsample_nodes(circuit, node_populations, sampling_ratio, sampling_count):
     node_populations = node_populations or defaultdict(dict)
-    for node_population_name in circuit.nodes.population_names:
+    for node_population_name in node_populations or circuit.nodes.population_names:
         L.info("Processing node population %r", node_population_name)
         pop = circuit.nodes[node_population_name]
         pop_sampling_count = _get_pop_sampling_count(
@@ -282,6 +282,7 @@ def subsample_circuit(
         node_populations (dict|None): optional dict of node populations. Each dict can specify the
             desired sampling_ratio or sampling_count for that population. If the dict is empty,
             then the global values are used.
+            Example: {"default": {"sampling_ratio": 0.01}, "default2": {"sampling_count": 10}}
         seed (int): RNG seed.
     """
     np.random.seed(seed)

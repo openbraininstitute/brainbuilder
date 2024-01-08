@@ -13,7 +13,7 @@ from brainbuilder.app._utils import (
     REQUIRED_PATH_DIR,
     REQUIRED_PATH_DIR_OR_NONEXISTENT,
 )
-from brainbuilder.utils import dump_json, load_json
+from brainbuilder.utils import dump_json, load_json, load_yaml
 
 
 @click.group()
@@ -356,13 +356,26 @@ def clip_morphologies(output, circuit, population_name):
     help="Sampling count, alternative to sampling ratio",
 )
 @click.option(
+    "--node-populations",
+    type=REQUIRED_PATH,
+    help=(
+        "Path to the YAML file containing the sampling ratio or count for each node population. "
+        "It should contain a dict of dictionaries, one for each node population to be considered. "
+        "Each sub-dictionary can contain a key sampling_ratio or sampling_count, or can be empty. "
+        "If the dict is empty, then the global values are used. "
+        "If this parameter is passed, only the node populations defined in the dict are extracted."
+    ),
+)
+@click.option(
     "--seed",
     type=click.IntRange(min=0),
     help="RNG seed",
     default=0,
     show_default=True,
 )
-def subsample_circuit(output, delete, circuit, sampling_ratio, sampling_count, seed):
+def subsample_circuit(
+    output, delete, circuit, sampling_ratio, sampling_count, node_populations, seed
+):
     """Subsample a given circuit, reducing the number of nodes and edges.
 
     Please be aware of the following notes and limitations.
@@ -385,7 +398,7 @@ def subsample_circuit(output, delete, circuit, sampling_ratio, sampling_count, s
         circuit_config=circuit,
         sampling_ratio=sampling_ratio,
         sampling_count=sampling_count,
-        node_populations=None,
+        node_populations=load_yaml(node_populations) if node_populations else None,
         seed=seed,
     )
     click.secho(
