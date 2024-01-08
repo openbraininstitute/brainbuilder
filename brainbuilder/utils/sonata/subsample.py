@@ -2,8 +2,7 @@
 import logging
 import shutil
 import sys
-from collections import defaultdict
-from copy import deepcopy
+from collections import ChainMap, defaultdict
 from pathlib import Path
 
 import bluepysnap
@@ -13,7 +12,7 @@ import numpy as np
 import pandas as pd
 from voxcell import CellCollection
 
-from brainbuilder.utils import dump_json
+from brainbuilder.utils import dump_json, load_json
 
 L = logging.getLogger(__name__)
 
@@ -217,23 +216,33 @@ def _save_edge_population(
     )
 
 
-def _write_circuit_config(output_file, networks):
+def _write_circuit_config(output_file, networks, original_config):
     """Write a simple circuit-config.json for all the node/edge populations created."""
-
-    def _make_relative(path):
-        relpath = path.relative_to(output_file.parent)
-        return f"$BASE_DIR/{relpath}"
-
-    networks = deepcopy(networks)
-    for data in networks["nodes"]:
-        data["nodes_file"] = _make_relative(data["nodes_file"])
-    for data in networks["edges"]:
-        data["edges_file"] = _make_relative(data["edges_file"])
-    config_dict = {
-        "version": "2",
-        "manifest": {"$BASE_DIR": "."},
-        "networks": networks,
-    }
+    base = output_file.parent
+    config_dict = load_json(original_config)
+    config_dict.setdefault("manifest", {}).update(
+        {
+            "$BASE_DIR": ".",
+            "$NETWORK_NODES_DIR": f"$BASE_DIR/{networks['network_nodes_dir'].relative_to(base)}",
+            "$NETWORK_EDGES_DIR": f"$BASE_DIR/{networks['network_edges_dir'].relative_to(base)}",
+        }
+    )
+    nodes = ChainMap(*(edge_dict["populations"] for edge_dict in config_dict["networks"]["nodes"]))
+    edges = ChainMap(*(edge_dict["populations"] for edge_dict in config_dict["networks"]["edges"]))
+    config_dict["networks"]["nodes"] = [
+        {
+            "nodes_file": f"$NETWORK_NODES_DIR/{path.relative_to(networks['network_nodes_dir'])}",
+            "populations": {pop_name: nodes[pop_name]},
+        }
+        for pop_name, path in networks["nodes"].items()
+    ]
+    config_dict["networks"]["edges"] = [
+        {
+            "edges_file": f"$NETWORK_EDGES_DIR/{path.relative_to(networks['network_edges_dir'])}",
+            "populations": {pop_name: edges[pop_name]},
+        }
+        for pop_name, path in networks["edges"].items()
+    ]
     dump_json(output_file, config_dict)
     L.debug("Written circuit config %s", output_file)
 
@@ -269,22 +278,28 @@ def subsample_circuit(
     output = _check_output_dir(output, circuit_config)
     # map node_population_name -> pd.Series with index=sampled_node_ids and data=remapped_node_ids
     sampled_node_ids = {}
-    networks = {"nodes": [], "edges": []}
     circuit = bluepysnap.Circuit(str(circuit_config))
+    network_nodes_dir = output / "networks" / "nodes"
+    network_edges_dir = output / "networks" / "edges"
+    networks = {
+        "network_nodes_dir": network_nodes_dir,
+        "network_edges_dir": network_edges_dir,
+        "nodes": {},
+        "edges": {},
+    }
+
     for node_population_name, nodes_df in _subsample_nodes(
         circuit, node_populations, sampling_ratio, sampling_count
     ):
-        nodes_file = output / "networks" / "nodes" / node_population_name / "nodes.h5"
+        nodes_file = network_nodes_dir / node_population_name / "nodes.h5"
         _save_node_population(nodes_file, nodes_df, node_population_name)
-        networks["nodes"].append(
-            {"nodes_file": nodes_file, "populations": {node_population_name: {}}}
-        )
+        networks["nodes"][node_population_name] = nodes_file
         sampled_node_ids[node_population_name] = pd.Series(
             np.arange(len(nodes_df)), index=nodes_df.index
         )
 
     for edge_population_name, edges_df in _subsample_edges(circuit, sampled_node_ids):
-        edges_file = output / "networks" / "edges" / edge_population_name / "edges.h5"
+        edges_file = network_edges_dir / edge_population_name / "edges.h5"
         _save_edge_population(
             edges_file,
             edges_df,
@@ -292,9 +307,7 @@ def subsample_circuit(
             source_node_population_name=circuit.edges[edge_population_name].source.name,
             target_node_population_name=circuit.edges[edge_population_name].target.name,
         )
-        networks["edges"].append(
-            {"edges_file": edges_file, "populations": {edge_population_name: {}}}
-        )
+        networks["edges"][edge_population_name] = edges_file
 
-    _write_circuit_config(output / "circuit_config.json", networks)
+    _write_circuit_config(output / "circuit_config.json", networks, original_config=circuit_config)
     _write_mapping(output / "id_mapping.json", sampled_node_ids)
