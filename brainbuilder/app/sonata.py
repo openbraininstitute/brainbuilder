@@ -329,7 +329,13 @@ def clip_morphologies(output, circuit, population_name):
     "--output",
     required=True,
     type=REQUIRED_PATH_DIR_OR_NONEXISTENT,
-    help="Output directory, automatically deleted and re-created if it already exists",
+    help="Output directory, that should not already exist unless --delete is passed",
+)
+@click.option(
+    "--delete",
+    is_flag=True,
+    default=False,
+    help="If specified, automatically delete the output directory if it already exists",
 )
 @click.option(
     "--circuit",
@@ -356,7 +362,7 @@ def clip_morphologies(output, circuit, population_name):
     default=0,
     show_default=True,
 )
-def subsample_circuit(output, circuit, sampling_ratio, sampling_count, seed):
+def subsample_circuit(output, delete, circuit, sampling_ratio, sampling_count, seed):
     """Subsample a given circuit, reducing the number of nodes and edges.
 
     Please be aware of the following notes and limitations.
@@ -375,6 +381,7 @@ def subsample_circuit(output, circuit, sampling_ratio, sampling_count, seed):
 
     module.subsample_circuit(
         output=output,
+        delete=delete,
         circuit_config=circuit,
         sampling_ratio=sampling_ratio,
         sampling_count=sampling_count,

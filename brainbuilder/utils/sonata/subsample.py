@@ -31,15 +31,18 @@ def is_relative_to(first, second):
         return False
 
 
-def _check_output_dir(output, circuit_config):
+def _check_output_dir(output, delete, circuit_config):
     output = Path(output).resolve()
+    if output.exists() and not delete:
+        L.error("The output directory already exists. Use --delete if you really want to delete it")
+        sys.exit(1)
     if output == Path(circuit_config).parent.resolve():
         L.error("The output directory cannot contain the original circuit config")
         sys.exit(1)
     if is_relative_to(Path().resolve(), output):
         L.error("The output directory cannot be the working directory or a parent")
         sys.exit(1)
-    if output.is_dir():
+    if output.exists():
         L.info("Removing output directory %s", output)
         shutil.rmtree(output)
     output.mkdir(parents=True)
@@ -260,12 +263,19 @@ def _write_mapping(output_file, id_mapping):
 
 
 def subsample_circuit(
-    output, circuit_config, sampling_ratio, sampling_count=None, node_populations=None, seed=0
+    output,
+    delete,
+    circuit_config,
+    sampling_ratio,
+    sampling_count=None,
+    node_populations=None,
+    seed=0,
 ):
     """Apply subsampling to the given circuit.
 
     Args:
         output (str|Path): path to the output directory.
+        delete (bool): if True, delete the output directory if it already exists.
         circuit_config (str|Path): path to the input circuit config file.
         sampling_ratio (float): sampling ratio for nodes (from 0.0 to 1.0).
         sampling_count (int|None): number of nodes (if specified, sampling_ratio is ignored)
@@ -275,39 +285,37 @@ def subsample_circuit(
         seed (int): RNG seed.
     """
     np.random.seed(seed)
-    output = _check_output_dir(output, circuit_config)
+    output = _check_output_dir(output, delete, circuit_config)
     # map node_population_name -> pd.Series with index=sampled_node_ids and data=remapped_node_ids
     sampled_node_ids = {}
     circuit = bluepysnap.Circuit(str(circuit_config))
-    network_nodes_dir = output / "networks" / "nodes"
-    network_edges_dir = output / "networks" / "edges"
     networks = {
-        "network_nodes_dir": network_nodes_dir,
-        "network_edges_dir": network_edges_dir,
+        "network_nodes_dir": output / "networks" / "nodes",
+        "network_edges_dir": output / "networks" / "edges",
         "nodes": {},
         "edges": {},
     }
 
-    for node_population_name, nodes_df in _subsample_nodes(
+    for population_name, df in _subsample_nodes(
         circuit, node_populations, sampling_ratio, sampling_count
     ):
-        nodes_file = network_nodes_dir / node_population_name / "nodes.h5"
-        _save_node_population(nodes_file, nodes_df, node_population_name)
-        networks["nodes"][node_population_name] = nodes_file
-        sampled_node_ids[node_population_name] = pd.Series(
-            np.arange(len(nodes_df)), index=nodes_df.index
+        nodes_file = networks["network_nodes_dir"] / population_name / "nodes.h5"
+        _save_node_population(nodes_file, df, population_name)
+        networks["nodes"][population_name] = nodes_file
+        sampled_node_ids[population_name] = pd.Series(
+            np.arange(len(df)), index=df.index
         )
 
-    for edge_population_name, edges_df in _subsample_edges(circuit, sampled_node_ids):
-        edges_file = network_edges_dir / edge_population_name / "edges.h5"
+    for population_name, df in _subsample_edges(circuit, sampled_node_ids):
+        edges_file = networks["network_edges_dir"] / population_name / "edges.h5"
         _save_edge_population(
             edges_file,
-            edges_df,
-            edge_population_name,
-            source_node_population_name=circuit.edges[edge_population_name].source.name,
-            target_node_population_name=circuit.edges[edge_population_name].target.name,
+            df,
+            population_name,
+            source_node_population_name=circuit.edges[population_name].source.name,
+            target_node_population_name=circuit.edges[population_name].target.name,
         )
-        networks["edges"][edge_population_name] = edges_file
+        networks["edges"][population_name] = edges_file
 
     _write_circuit_config(output / "circuit_config.json", networks, original_config=circuit_config)
     _write_mapping(output / "id_mapping.json", sampled_node_ids)
