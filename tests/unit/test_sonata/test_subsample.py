@@ -9,6 +9,7 @@ def test_subsample_circuit(tmp_path):
     expected_dir = TEST_DATA_PATH / "sonata" / "subsample" / "expected"
     test_module.subsample_circuit(
         output=output,
+        delete=True,
         circuit_config=input_circuit_config,
         sampling_ratio=0.8,
         sampling_count=None,

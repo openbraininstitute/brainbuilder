@@ -303,9 +303,7 @@ def subsample_circuit(
         nodes_file = networks["network_nodes_dir"] / population_name / "nodes.h5"
         _save_node_population(nodes_file, df, population_name)
         networks["nodes"][population_name] = nodes_file
-        sampled_node_ids[population_name] = pd.Series(
-            np.arange(len(df)), index=df.index
-        )
+        sampled_node_ids[population_name] = pd.Series(np.arange(len(df)), index=df.index)
 
     for population_name, df in _subsample_edges(circuit, sampled_node_ids):
         edges_file = networks["network_edges_dir"] / population_name / "edges.h5"
