@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from voxcell import CellCollection
 
-from brainbuilder.utils import dump_json, load_json
+from brainbuilder.utils import dump_json, dump_yaml, load_json
 
 L = logging.getLogger(__name__)
 
@@ -103,17 +103,24 @@ def _subsample_nodes(circuit, node_populations, sampling_ratio, sampling_count):
     for node_population_name in node_populations or circuit.nodes.population_names:
         L.info("Processing node population %r", node_population_name)
         pop = circuit.nodes[node_population_name]
+        sampling_ids = node_populations[node_population_name].get("sampling_ids", [])
+        max_size = min(len(sampling_ids), pop.size) if sampling_ids else pop.size
         pop_sampling_count = _get_pop_sampling_count(
             pop_sampling_count=node_populations[node_population_name].get("sampling_count", 0),
             pop_sampling_ratio=node_populations[node_population_name].get("sampling_ratio", 0),
             sampling_count=sampling_count,
             sampling_ratio=sampling_ratio,
-            pop_size=pop.size,
+            pop_size=max_size,
         )
-        node_ids = pop.ids(sample=pop_sampling_count)
+        if sampling_ids:
+            L.info("Sampling %s/%s ids from sampling_ids", pop_sampling_count, len(sampling_ids))
+            node_ids = np.random.choice(sampling_ids, size=pop_sampling_count, replace=False)
+        else:
+            L.info("Sampling %s/%s ids from the node population", pop_sampling_count, pop.size)
+            node_ids = pop.ids(sample=pop_sampling_count)
         nodes_df = pop.get(node_ids)
         if len(nodes_df) > 0:
-            L.info("Selected %s/%s nodes", pop_sampling_count, pop.size)
+            L.info("Selected %s/%s nodes", len(nodes_df), pop.size)
             yield node_population_name, nodes_df
         else:
             L.info("Ignored because empty")
@@ -262,6 +269,18 @@ def _write_mapping(output_file, id_mapping):
     L.debug("Written id mapping %s", output_file)
 
 
+def _write_morphologies(output_file, morphologies):
+    """Write the list of morphologies to file."""
+    output_file.write_text("\n".join(sorted(morphologies)))
+    L.debug("Written morphologies %s", output_file)
+
+
+def _write_node_populations(output_file, node_populations):
+    """Write the node_populations to file."""
+    dump_yaml(output_file, node_populations or {})
+    L.debug("Written node_populations %s", output_file)
+
+
 def subsample_circuit(
     output,
     delete,
@@ -279,9 +298,13 @@ def subsample_circuit(
         circuit_config (str|Path): path to the input circuit config file.
         sampling_ratio (float): sampling ratio for nodes (from 0.0 to 1.0).
         sampling_count (int|None): number of nodes (if specified, sampling_ratio is ignored)
-        node_populations (dict|None): optional dict of node populations. Each dict can specify the
-            desired sampling_ratio or sampling_count for that population. If the dict is empty,
-            then the global values are used.
+        node_populations (dict|None): optional dict of node populations.
+            Each sub-dictionary can contain the keys sampling_ratio (float), sampling_count (int),
+            sampling_ids (list of int), or it can be empty.
+            If sampling_ids is specified, these ids are used for sampling, instead of directly
+            sampling the nodes ids.
+            If the dict is empty, then the global values are used.
+            Only the node populations defined in the dict are extracted.
             Example: {"default": {"sampling_ratio": 0.01}, "default2": {"sampling_count": 10}}
         seed (int): RNG seed.
     """
@@ -296,6 +319,7 @@ def subsample_circuit(
         "nodes": {},
         "edges": {},
     }
+    morphologies = set()
 
     for population_name, df in _subsample_nodes(
         circuit, node_populations, sampling_ratio, sampling_count
@@ -304,6 +328,7 @@ def subsample_circuit(
         _save_node_population(nodes_file, df, population_name)
         networks["nodes"][population_name] = nodes_file
         sampled_node_ids[population_name] = pd.Series(np.arange(len(df)), index=df.index)
+        morphologies.update(df["morphology"])
 
     for population_name, df in _subsample_edges(circuit, sampled_node_ids):
         edges_file = networks["network_edges_dir"] / population_name / "edges.h5"
@@ -318,3 +343,5 @@ def subsample_circuit(
 
     _write_circuit_config(output / "circuit_config.json", networks, original_config=circuit_config)
     _write_mapping(output / "id_mapping.json", sampled_node_ids)
+    _write_morphologies(output / "morphologies.txt", morphologies)
+    _write_node_populations(output / "node_populations.yaml", node_populations)

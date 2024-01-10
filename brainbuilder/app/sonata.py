@@ -361,7 +361,10 @@ def clip_morphologies(output, circuit, population_name):
     help=(
         "Path to the YAML file containing the sampling ratio or count for each node population. "
         "It should contain a dict of dictionaries, one for each node population to be considered. "
-        "Each sub-dictionary can contain a key sampling_ratio or sampling_count, or can be empty. "
+        "Each sub-dictionary can contain the keys sampling_ratio (float), sampling_count (int),"
+        "sampling_ids (list of int), or it can be empty. "
+        "If sampling_ids is specified, these ids are used for sampling, instead of directly "
+        "sampling the nodes ids. "
         "If the dict is empty, then the global values are used. "
         "If this parameter is passed, only the node populations defined in the dict are extracted."
     ),
