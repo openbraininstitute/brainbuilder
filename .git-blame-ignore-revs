@@ -1,3 +1,5 @@
 # .git-blame-ignore-revs
 # Apply black and isort
 e5af8c3ea24cc529bfcdb0058fe8e55e9d193dcf
+# Format with black 24.x
+502880e98c77cc3d2e31fe1506701f54d5fe4423
