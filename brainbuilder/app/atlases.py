@@ -1,4 +1,5 @@
 """Tool for artificial atlas building."""
+
 import itertools
 import logging
 import os

@@ -1,6 +1,7 @@
 """
 Test assignment of mini frequencies to the circuit MVD3.
 """
+
 from pathlib import Path
 
 import pandas as pd

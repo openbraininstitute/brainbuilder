@@ -1,4 +1,5 @@
 """Collection of functions to curate/edit SONATA circuits."""
+
 import logging
 
 import h5py

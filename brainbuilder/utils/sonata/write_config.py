@@ -1,4 +1,5 @@
 """SONATA configuration functions."""
+
 from collections import OrderedDict
 from functools import partial
 from pathlib import Path

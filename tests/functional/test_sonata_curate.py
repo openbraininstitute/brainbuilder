@@ -1,4 +1,5 @@
 """Application of `curate` functionality to existing Sonata circuits."""
+
 import re
 import shutil
 from pathlib import Path

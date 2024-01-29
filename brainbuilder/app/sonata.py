@@ -1,4 +1,5 @@
 """Tools for working with SONATA."""
+
 # pylint: disable=import-outside-toplevel
 import glob
 import os

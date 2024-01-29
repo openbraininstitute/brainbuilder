@@ -36,6 +36,7 @@ Based on:
  - the point neuron whole brain workflow
     (https://bbpcode.epfl.ch/code/#/admin/projects/bbpnr/genBrain)
 """
+
 import logging
 import numbers
 from collections.abc import Mapping

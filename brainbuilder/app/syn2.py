@@ -1,4 +1,5 @@
 """ Tools for working with SYN2 """
+
 import logging
 import os
 

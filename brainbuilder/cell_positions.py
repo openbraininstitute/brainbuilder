@@ -1,4 +1,5 @@
 """ Algorithms to create cell positions. """
+
 import logging
 
 import numpy as np

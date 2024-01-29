@@ -1,4 +1,5 @@
 """Target generation."""
+
 # pylint: disable=import-outside-toplevel
 import collections
 import logging

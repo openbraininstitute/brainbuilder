@@ -1,4 +1,5 @@
 """SONATA helpers to remove unnecessary (ie: clip) auxiliary files"""
+
 import logging
 import shutil
 from pathlib import Path

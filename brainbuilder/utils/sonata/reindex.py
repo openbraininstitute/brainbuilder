@@ -25,6 +25,7 @@ For synapses:
  - segment ID: collapsed sections result in the segment_id increasing by
    the count of the parent's section count
 """
+
 import glob
 import logging
 import os

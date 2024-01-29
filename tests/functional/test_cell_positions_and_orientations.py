@@ -1,4 +1,5 @@
 """test positions_and_orientations"""
+
 from unittest.mock import patch
 
 import h5py
@@ -191,9 +192,7 @@ def test_positions_and_orientations_invalid_input():
         dump_yaml("config.yaml", config)
         for cell_type, path in config["inputDensityVolumePath"].items():
             # the input densities are expressed in number of cells per voxel
-            VoxelData(input_[cell_type] * (1e9 / 25**3), voxel_dimensions=[25] * 3).save_nrrd(
-                path
-            )
+            VoxelData(input_[cell_type] * (1e9 / 25**3), voxel_dimensions=[25] * 3).save_nrrd(path)
         for input_voxel_data in ["annotation", "orientation"]:
             # Intentional mismatch of voxel dimensions: 10um != 25um
             VoxelData(input_[input_voxel_data], voxel_dimensions=[10] * 3).save_nrrd(
@@ -214,9 +213,7 @@ def test_positions_and_orientations_negative_density(L_warning_mock):
         dump_yaml("config.yaml", config)
         for cell_type, path in config["inputDensityVolumePath"].items():
             # the input densities are expressed in number of cells per voxel
-            VoxelData(input_[cell_type] * (1e9 / 25**3), voxel_dimensions=[25] * 3).save_nrrd(
-                path
-            )
+            VoxelData(input_[cell_type] * (1e9 / 25**3), voxel_dimensions=[25] * 3).save_nrrd(path)
         for input_voxel_data in ["annotation", "orientation"]:
             VoxelData(input_[input_voxel_data], voxel_dimensions=[25] * 3).save_nrrd(
                 input_voxel_data + ".nrrd"
