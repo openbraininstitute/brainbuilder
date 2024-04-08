@@ -1,4 +1,3 @@
-from pathlib import Path
 from unittest.mock import Mock
 
 import numpy as np
@@ -76,7 +75,7 @@ def test_provide_me_info(tmp_path):
 
 def test_write_node_set_from_targets(tmp_path):
     target_files = [str(TEST_DATA_PATH / "start.target"), str(TEST_DATA_PATH / "user.target")]
-    cells_path = str(TEST_DATA_PATH / "circuit.mvd2")
+    cells_path = str(TEST_DATA_PATH / "circuit_nodes.sonata")
 
     all_keys = {
         "All",

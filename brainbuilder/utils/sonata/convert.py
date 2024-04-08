@@ -241,8 +241,7 @@ def write_node_set_from_targets(target_files, output_file, cells_path):
         if target_name in mapping:
             return mapping[target_name]
         if re_layer.match(target_name):
-            # FIXME: layer should be a string in SONATA circuits
-            return {"layer": int(re_layer.match(target_name).group(1))}
+            return {"layer": str(re_layer.match(target_name).group(1))}
         if re_node_id.match(target_content[0]):
             # targets are built from a mvd3 file so indexing starts from 1 compare to 0 in SONATA
             return {"node_id": (cells.ids(target_name) - 1).tolist()}
