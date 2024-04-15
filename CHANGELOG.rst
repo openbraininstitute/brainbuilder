@@ -7,6 +7,8 @@ Changelog
   * Add ``--log-level`` option to the main CLI.
   * Include app in coverage calculation.
   * Add tests for app/sonata.
+  * when converting .target files to node_sets, warn that `population` should be
+    added when `node_id` are created.
 
 ## 0.19.0
   * Enforce layer to be a string (NSETM-2261)
