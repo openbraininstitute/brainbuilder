@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+import importlib
 from unittest.mock import Mock
 
 import numpy as np
@@ -10,6 +12,8 @@ from utils import TEST_DATA_PATH
 from brainbuilder.exceptions import BrainBuilderError
 from brainbuilder.utils import load_json
 from brainbuilder.utils.sonata import convert
+
+HAVE_BLUEPY = importlib.util.find_spec("bluepy") is not None
 
 
 def test__add_me_info():
@@ -73,6 +77,7 @@ def test_provide_me_info(tmp_path):
     assert_frame_equal(output_cells_df, expected_df, check_like=True)  # ignore column ordering
 
 
+@pytest.mark.skipif(not HAVE_BLUEPY, reason="BBP Bluepy not installed")
 def test_write_node_set_from_targets(tmp_path):
     target_files = [str(TEST_DATA_PATH / "start.target"), str(TEST_DATA_PATH / "user.target")]
     cells_path = str(TEST_DATA_PATH / "circuit_nodes.sonata")
