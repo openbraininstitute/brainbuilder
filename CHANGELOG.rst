@@ -2,6 +2,7 @@ Changelog
 =========
 
 ## 0.19.1
+  * Make ``update_edge_pos`` parallel, require ``--direction``
   * Apply black and isort
   * Add ``--log-level`` option to the main CLI.
   * Include app in coverage calculation.

@@ -336,7 +336,8 @@ def test_reindex(tmp_path):
             list(h5["edges/default/0/afferent_segment_id"][[0, 2, 4, 5, 6, 8, 9, 10]]) == expected
         )
 
-    reindex.write_sonata_pos(new_morph_path, morphologies, population, [edge])
+    morphologies = new_morph_path + "/" + morphologies + ".h5"
+    reindex.write_sonata_pos(morphologies, population, "afferent", edge)
 
     """
     position  id afferent_section_pos afferent_section_pos
@@ -357,3 +358,10 @@ def test_reindex(tmp_path):
             [0.785714, 0.291667, 0.875, 0.166667, 0.666667, 0.833333, 0.75, 0.583333],
             rtol=1e-5,
         )
+
+    reindex.write_section_types(morphologies, population, "afferent", edge)
+    reindex.write_section_types(morphologies, population, "efferent", edge)
+
+    with h5py.File(edge, "r") as h5:
+        assert all(h5["edges/default/0/afferent_section_type"][:] == 3)
+        assert all(h5["edges/default/0/efferent_section_type"][:] == 3)

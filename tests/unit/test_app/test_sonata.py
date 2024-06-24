@@ -203,6 +203,29 @@ def test_update_edge_pos(mock_module, mock_cell_collection, tmp_path):
                 str(morph_path),
                 "--nodes",
                 str(nodes),
+                "--direction",
+                "afferent",
+                "edges.h5",
+            ],
+        )
+    assert result.exit_code == 0, f"Output:\n {result.output}"
+    assert mock_module.write_sonata_pos.call_count == 1
+    assert mock_cell_collection.load.call_count == 1
+
+    # run same test with efferent
+    mock_module.write_sonata_pos.reset_mock()
+    mock_cell_collection.load.reset_mock()
+    runner = CliRunner()
+    with runner.isolated_filesystem(tmp_path):
+        result = runner.invoke(
+            test_module.update_edge_pos,
+            [
+                "--morph-path",
+                str(morph_path),
+                "--nodes",
+                str(nodes),
+                "--direction",
+                "efferent",
                 "edges.h5",
             ],
         )

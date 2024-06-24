@@ -45,16 +45,18 @@ Tools for working with SONATA
 
 The following subcommands can be used with: ``brainbuilder sonata``
 
-* ``from-mvd3``                   Convert MVD3 to SONATA nodes
-* ``from-syn2``                   Convert SYN2 to SONATA edges
-* ``network-config``              Write SONATA network config
-* ``update-morphologies``         Update h5 morphologies to not include single child parents
-* ``update-edge-population``      Given h5_updates from removing single child parents
-* ``update-edge-pos``             Using section_id, segment_id and offset, create `SONATA` position
-* ``simple-split-subcircuit``     Split a subset of nodes and edges out of node and edges files
-* ``split-subcircuit``            Based on a `circuit_config`; split out a nodeset
-* ``node-set-from-targets``       Convert .target files to node_sets
-* ``clip-morphologies``           Copy morphologies referenced by a population to a separate output directory
+* ``from-mvd3``                            Convert MVD3 to SONATA nodes
+* ``from-syn2``                            Convert SYN2 to SONATA edges
+* ``network-config``                       Write SONATA network config
+* ``update-morphologies``                  Update h5 morphologies to not include single child parents
+* ``update-edge-population``               Given h5_updates from removing single child parents
+* ``update-edge-pos``                      Using section_id, segment_id and offset, create `SONATA` position
+* ``simple-split-subcircuit``              Split a subset of nodes and edges out of node and edges files
+* ``split-subcircuit``                     Based on a `circuit_config`; split out a nodeset
+* ``node-set-from-targets``                Convert .target files to node_sets
+* ``clip-morphologies``                    Copy morphologies referenced by a population to a separate output directory
+* ``update-edge-section-types``            Update edge afferent/efferent section types using section_id
+* ``update-projection-efferent-edge-type`` Write projections' efferent section types as axons
 
 For the commands starting with _update-_, read more in :ref:`SONATA: Single Child Reindex`
 

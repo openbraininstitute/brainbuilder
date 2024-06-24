@@ -13,6 +13,18 @@ from brainbuilder.app._utils import REQUIRED_PATH, REQUIRED_PATH_DIR
 from brainbuilder.utils import dump_json, load_json
 
 
+def _get_morphs_with_full_path(nodes_path, morph_path):
+    from voxcell import CellCollection
+
+    # load morphs, extend them to have the full path to the h5 file
+    morph_path += "/" if not morph_path.endswith("/") else ""
+    morphologies = CellCollection.load(nodes_path).as_dataframe()["morphology"]
+    morphologies = morph_path + morphologies.astype(str) + ".h5"
+    morphologies.index -= 1
+
+    return morphologies
+
+
 @click.group()
 def app():
     """Tools for working with SONATA"""
@@ -232,16 +244,48 @@ def update_edge_population(h5_updates, nodes, population, edges):
 )
 @click.option("--population", default="default", show_default=True, help="Population name")
 @click.option("--nodes", required=True, type=REQUIRED_PATH, help="Node file")
-@click.argument("edges", nargs=-1, required=True)
-def update_edge_pos(morph_path, population, nodes, edges):
+@click.option("--direction", type=click.Choice(["afferent", "efferent"]), required=True)
+@click.argument("edge-file", required=True)
+def update_edge_pos(morph_path, population, nodes, direction, edge_file):
     """Using: section_id, segment_id and offset, create the sonata *_section_pos"""
-    from voxcell import CellCollection
+    from brainbuilder.utils.sonata import reindex
+
+    morphologies = _get_morphs_with_full_path(nodes, morph_path)
+    reindex.write_sonata_pos(morphologies, population, direction, edge_file)
+
+
+@app.command()
+@click.option(
+    "--morph-path", required=True, type=REQUIRED_PATH_DIR, help="path to h5 morphology files"
+)
+@click.option("--population", default="default", show_default=True, help="Population name")
+@click.option("--nodes", required=True, type=REQUIRED_PATH, help="Node file")
+@click.option("--direction", type=click.Choice(["afferent", "efferent"]), required=True)
+@click.argument("edge-file", required=True, type=REQUIRED_PATH)
+def update_edge_section_types(morph_path, population, nodes, direction, edge_file):
+    """Update edge afferent/efferent section types using section_id."""
+    from brainbuilder.utils.sonata import reindex
+
+    morphologies = _get_morphs_with_full_path(nodes, morph_path)
+    reindex.write_section_types(morphologies, population, direction, edge_file)
+
+
+@app.command()
+@click.option("--population", default="default", show_default=True, help="Population name")
+@click.argument("edge-file", required=True, type=REQUIRED_PATH)
+def update_projection_efferent_section_type(population, edge_file):
+    """Write projections' efferent section types as axons."""
+    import h5py
+    import numpy as np
+    from morphio import SectionType
 
     from brainbuilder.utils.sonata import reindex
 
-    morphologies = CellCollection.load(nodes).as_dataframe()["morphology"]
-    morphologies.index = morphologies.index - 1
-    reindex.write_sonata_pos(morph_path, morphologies, population, edges)
+    with h5py.File(edge_file, "r+") as h5:
+        pop0 = h5["edges"][population]["0"]
+        datalen = len(pop0[list(pop0)[0]])
+        types = np.full(datalen, int(SectionType.axon))
+        reindex.backup_and_create_dataset(pop0, "efferent_section_type", types, np.uint32)
 
 
 @app.command()

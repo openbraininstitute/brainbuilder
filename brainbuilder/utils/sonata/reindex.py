@@ -29,18 +29,29 @@ For synapses:
 
 import glob
 import logging
+import multiprocessing
 import os
 import shutil
+from functools import partial
 
+import click
 import h5py
 import morphio
 import numpy as np
-import pandas as pd
+from tqdm import tqdm
 
 L = logging.getLogger(__name__)
 
 FIRST_POINT_ID, PARENT_GROUP_ID = 0, 2
 XYZ = slice(0, 3)
+INDEX_DIRECTION = {
+    "afferent": "target_to_source",
+    "efferent": "source_to_target",
+}
+INDEX_ID = {
+    "afferent": "target_node_id",
+    "efferent": "source_node_id",
+}
 
 
 def _get_only_children(parents):
@@ -237,8 +248,7 @@ def _apply_to_edges(node_ids, updates, edges):
     ):
         section_name, segment_name = direction + "_section_id", direction + "_segment_id"
         if section_name in group and segment_name in group:
-            index = "target_node_id" if direction == "afferent" else "source_node_id"
-            mask = np.isin(edges[index][:], node_ids)
+            mask = np.isin(edges[INDEX_ID[direction]][:], node_ids)
             new_ids = _update_section_and_segment_ids(
                 group[section_name][mask], group[segment_name][mask], updates
             )
@@ -265,147 +275,224 @@ def apply_edge_updates(morphologies, edge_path, h5_updates, population):
             _apply_to_edges(node_ids, h5_updates[morphology + ".h5"], h5["edges"][population])
 
 
-def _morph_section_lengths(morph_path, morph_name):
-    """load h5 morphology, and calculate section_lengths and cumulative_length"""
-    L.debug("Loading: %s", morph_name)
-    m = morphio.Morphology(os.path.join(morph_path, morph_name + ".h5"), morphio.Option.nrn_order)
-    dfs = [
-        pd.DataFrame.from_dict(
-            {
-                "segment_id": [
-                    0,
-                ],
-                "section_id": 0,
-                "cumulative_length": 0.0,
-                "section_length": 1.0,
-            }
-        ),
-    ]
-    for section in m.iter():
-        df = pd.DataFrame()
-        df["segment_id"] = np.arange(len(section.points) - 1)
-        df["section_id"] = section.id + 1  # morphio doesn't consider the soma a section
-        lengths = np.cumsum(np.linalg.norm(section.points[1:] - section.points[:-1], axis=1))
-        df["cumulative_length"] = np.hstack(([0], lengths[:-1]))
-        df["section_length"] = lengths[-1]
-
-        dfs.append(df)
-
-    return pd.concat(dfs, sort=False, ignore_index=True).set_index(["section_id", "segment_id"])
-
-
-def _get_synapse_mask_for_ids(h5_indices, ids, total_synapse_count):
+def _get_synapse_ids(h5_indices, id_):
     """find the mask for the synapses belonging to ids"""
-    mask = np.full(total_synapse_count, False)
-    for id_ in ids:
-        start, end = h5_indices["node_id_to_ranges"][id_]
-        for s, e in h5_indices["range_to_edge_id"][start:end]:
-            mask[s:e] = True
+    syn_ids = []
 
-    return mask
+    start, end = h5_indices["node_id_to_ranges"][id_]
+
+    for s, e in h5_indices["range_to_edge_id"][start:end]:
+        syn_ids.append(np.arange(s, e, dtype=np.uint64))
+
+    return np.sort(np.concatenate(syn_ids)) if syn_ids else None
 
 
-def _calculate_section_position(section_lengths, section_ids, segment_ids, offsets):
-    """find the _section_pos for all synapses"""
-    df = pd.DataFrame.from_dict(
-        {
-            "section_id": section_ids,
-            "segment_id": segment_ids,
-            "offset": offsets,
-        }
-    )
+def _calculate_section_position(morph, section_ids, segment_ids, segment_offsets):
+    """Computes the section position
 
-    df = df.join(section_lengths, on=["section_id", "segment_id"])
+    Args:
+        morph(morphio.Morphology): A morphio mmutable morphology.
+        section_ids(np.array): Mx1 array containing the section ids of the synapses
+        segment_ids(np.array): Mx1 array containing the segment ids of the synapses
+        segment_offsets(np.array): Mx1 array containing the segment offsets of the synapses
 
-    assert len(df[df.isnull().any(axis=1)]) == 0, "All section/segments should exist in morphology"
+    Returns:
+        np.array: Mx1 array containing the respective section positions
+    """
+    section_pos = []
 
-    section_pos = (df["offset"] + df["cumulative_length"]) / df["section_length"]
-    section_pos[np.isnan(section_pos)] = 0.0
+    for section_id, segment_id, segment_offset in zip(section_ids, segment_ids, segment_offsets):
+        len_to_segment = 0
+        total_len = 1
 
-    max_pos = np.max(section_pos.to_numpy())
+        # If an actual section, not a soma
+        if section_id > 0:
+            # morphio doesn't consider soma a section, so section_id is shifted
+            section = morph.section(section_id - 1)
+            total_len = sum(np.linalg.norm(np.diff(section.points, axis=0), axis=1))
+
+            if segment_id > 0:
+                len_to_segment = sum(
+                    np.linalg.norm(np.diff(section.points[: segment_id + 1], axis=0), axis=1)
+                )
+        section_pos.append((len_to_segment + segment_offset) / total_len)
+
+    max_pos = np.max(section_pos)
     if not 0.0 <= max_pos <= 1.00001:
         L.warning("pos %s should be between [0, 1]", max_pos)
 
-    section_pos = np.clip(section_pos, 0.0, 1.0)
-
-    return section_pos
+    return np.clip(section_pos, 0, 1)
 
 
-def _update_pos(h5_population, section_lengths, ids):
-    """for `ids` in population, update the *_section_pos values"""
-    assert "0" in h5_population, "Missing default group of 0"
+def _get_section_pos_data(gid, edge_path, direction, population):
+    """Gets the necessary data from edges file to compute the section position."""
+    with h5py.File(edge_path) as h5:
+        pop = h5["edges"][population]
+        edge_idx = _get_synapse_ids(pop[f"indices/{INDEX_DIRECTION[direction]}"], gid)
 
-    h5_group = h5_population["0"]
-
-    def _data(name, direction, mask):
-        path = f"{direction}_{name}"
-        if path not in h5_group:
+        if edge_idx is None:
             return None
-        return h5_group[path][mask]
 
-    for direction in ("afferent", "efferent"):
-        index = "target_to_source" if direction == "afferent" else "source_to_target"
-        mask = _get_synapse_mask_for_ids(
-            h5_population["indices/" + index],
-            ids.index.to_list(),
-            total_synapse_count=len(h5_group["syn_type_id"]),
-        )
+        index = INDEX_ID[direction]
+        assert len(set(pop[index][edge_idx])) == 1, f"{index} contains erroneous entries"
 
-        section_id = _data("section_id", direction, mask)
-        segment_id = _data("segment_id", direction, mask)
-        offset = _data("segment_offset", direction, mask)
-
-        if section_id is None or segment_id is None or offset is None:
-            L.info("Cannot update %s positions in %s", direction, h5_group.file.filename)
-            continue
-
-        h5_group[f"{direction}_section_pos"][mask] = _calculate_section_position(
-            section_lengths, section_id, segment_id, offset
+        return (
+            np.asarray(pop[f"0/{direction}_section_id"][edge_idx]),
+            np.asarray(pop[f"0/{direction}_segment_id"][edge_idx]),
+            np.asarray(pop[f"0/{direction}_segment_offset"][edge_idx]),
+            edge_idx,
         )
 
 
-def write_sonata_pos(morph_path, morphologies, population, edges):
+def compute_section_positions_worker(id_morph, edge_path, direction, population):
+    """Worker function computing the section pos values.
+
+    Args:
+        id_morph(list,tuple): node ID and full path to morphology
+        edge_path(str): path to the edges.h5 file containing the edges' data
+        direction(str): afferent/efferent
+        population(str): edge population name
+
+    Returns:
+        np.array: the section pos values with their respective indices in the edge file
+        for given node id.
+        None: if the node has no connections in the edge file
+    """
+    gid, morph_path = id_morph
+    data = _get_section_pos_data(gid, edge_path, direction, population)
+
+    if data is None:
+        return None
+
+    morph = morphio.Morphology(morph_path, morphio.Option.nrn_order)
+
+    edge_idx = data[-1]
+    positions = _calculate_section_position(morph, *data[:-1])
+
+    return positions, edge_idx
+
+
+def backup_and_create_dataset(h5_group, field, data, dtype):
+    """Helper function to create a dataset and backup the existing one."""
+    field_bu = field + "_orig"
+
+    if field_bu in h5_group:
+        del h5_group[field_bu]
+    if field in h5_group:
+        h5_group.move(field, field_bu)
+        h5_path = h5_group[field_bu].name
+        filepath = h5_group.file.filename
+        msg = (
+            f"Original field has been backed up to '{h5_path}'.\n"
+            "To remove the backed up field (in python):\n"
+            f" >>> h5 = h5py.File('{filepath}', 'r+')\n"
+            f" >>> del h5['{h5_path}']\n"
+            "\n"
+            "To regain space after removing the field (on commandline):\n"
+            f" $ h5repack -i {filepath} \\\n"
+            f"            -o {filepath}.repacked\n"
+            f" $ mv {filepath}.repacked \\\n"
+            f"      {filepath}"
+        )
+        L.info(click.style(msg, fg="green"))
+
+    h5_group.create_dataset(field, data=data, dtype=dtype)
+
+
+def write_sonata_pos(morphologies, population, direction, edge_path):
+    """Computes section positions in parallel and writes them to the edges file.
+
+    Args:
+        morphologies(pd.DataFrame): full morph paths with index of NodeID
+        population(str): edge_population name
+        direction(str): `afferent` or `efferent`
+        edge_path(str): path to the edges.h5 file
+    """
+    func = partial(
+        compute_section_positions_worker,
+        edge_path=edge_path,
+        direction=direction,
+        population=population,
+    )
+
+    with multiprocessing.Pool() as pool:
+        res = pool.map(func, tqdm(morphologies.reset_index().values))
+
+    positions, edge_ids = np.concatenate([r for r in res if r is not None], axis=1)
+
+    # sort values by edge ids
+    positions = positions[np.argsort(edge_ids)]
+
+    with h5py.File(edge_path, "r+") as h5:
+        pop0 = h5[f"edges/{population}/0"]
+        field = direction + "_section_pos"
+        backup_and_create_dataset(pop0, field, positions, np.float32)
+
+
+def _get_section_type_data(gid, edge_path, direction, population):
+    """Gets the necessary data from edges file to compute the section position."""
+    with h5py.File(edge_path) as h5:
+        pop = h5["edges"][population]
+        edge_idx = _get_synapse_ids(pop[f"indices/{INDEX_DIRECTION[direction]}"], gid)
+
+        if edge_idx is None:
+            return None
+
+        index = INDEX_ID[direction]
+        assert len(set(pop[index][edge_idx])) == 1, f"{index} contains erroneous entries"
+
+        return (
+            np.asarray(pop[f"0/{direction}_section_id"][edge_idx]),
+            edge_idx,
+        )
+
+
+def _get_section_type_worker(id_morph, edge_path, direction, population):
+    gid, morph_path = id_morph
+    data = _get_section_type_data(gid, edge_path, direction, population)
+
+    if data is None:
+        return None
+
+    morph = morphio.Morphology(morph_path, morphio.Option.nrn_order)
+
+    section_ids, edge_idx = data
+    types = np.fromiter(
+        (
+            morphio.SectionType.soma if id_ == 0 else morph.section(id_ - 1).type
+            for id_ in section_ids
+        ),
+        dtype=np.uint32,
+    )
+
+    return types, edge_idx
+
+
+def write_section_types(morphologies, population, direction, edge_path):
     """Update synapses in edges with new `_section_pos` SONATA attribute
 
     Args:
-        morph_path(str): path to h5 morphologogies
-        morphologies(pd.DataFrame()): morph names with index of NodeID
+        morphologies(pd.DataFrame): full morph paths with index of NodeID
         population(str): population name in edge files
-        edges(list(str)): paths to edge files to be updated
+        direction(str): 'afferent' / 'efferent'
+        edge_path(str): path to edge file to be updated
     """
+    func = partial(
+        _get_section_type_worker,
+        edge_path=edge_path,
+        direction=direction,
+        population=population,
+    )
 
-    def create_section_pos(h5_group, name):
-        if not (
-            name + "_section_id" in h5_group
-            and name + "_segment_id" in h5_group
-            and name + "_segment_offset" in h5_group
-        ):
-            return
+    with multiprocessing.Pool() as pool:
+        res = pool.map(func, tqdm(morphologies.reset_index().values))
 
-        name += "_section_pos"
-        new_name = name + "_orig"
+    types, edge_ids = np.concatenate([r for r in res if r is not None], axis=1)
 
-        # create backup, if the original exists
-        if new_name in h5_group:
-            del h5_group[new_name]
-        if name in h5_group:
-            h5_group.move(name, new_name)
+    # sort values by edge ids
+    types = types[np.argsort(edge_ids)]
 
-        size = len(h5_group["syn_type_id"])
-        h5_group[name] = np.zeros(size, dtype=np.float32)
-
-    for edge in edges:
-        with h5py.File(edge, "r+") as h5:
-            h5_group = h5["edges"][population]["0"]
-
-            create_section_pos(h5_group, "afferent")
-            create_section_pos(h5_group, "efferent")
-
-    for edge in edges:
-        with h5py.File(edge, "r+") as h5:
-            for morphology, ids in morphologies.groupby(morphologies):
-                section_lengths = _morph_section_lengths(morph_path, morphology)
-                if ids.empty:
-                    L.debug("No nodes for %s, skipping", morphology)
-                else:
-                    _update_pos(h5["edges"][population], section_lengths, ids)
+    with h5py.File(edge_path, "r+") as h5:
+        pop0 = h5[f"edges/{population}/0"]
+        field = direction + "_section_type"
+        backup_and_create_dataset(pop0, field, types, np.uint32)
