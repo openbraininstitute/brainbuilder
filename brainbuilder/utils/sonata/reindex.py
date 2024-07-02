@@ -32,7 +32,6 @@ import logging
 import multiprocessing
 import os
 import shutil
-import sys
 from functools import partial
 
 import click
