@@ -614,9 +614,10 @@ def write_center_points(morphologies, population, direction, edge_path, node_pat
     positions, edge_ids = res[:, :-1], res[:, -1]
 
     # sort values by edge ids
-    positions = positions[np.argsort(edge_ids)]
+    positions = positions[np.argsort(edge_ids)].T
 
     with h5py.File(edge_path, "r+") as h5:
         pop0 = h5[f"edges/{population}/0"]
-        for field in [direction + "_center_" + a for a in list("xyz")]:
-            backup_and_create_dataset(pop0, field, positions, np.float32)
+        fields = [direction + "_center_" + a for a in list("xyz")]
+        for field, position in zip(fields, positions):
+            backup_and_create_dataset(pop0, field, position, np.float32)
