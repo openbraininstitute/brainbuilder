@@ -511,12 +511,18 @@ def _compute_center_point(morph, section_ids, segment_ids, segment_offsets):
         else:
             section = morph.section(section_id - 1)  # off-by-one gotcha
 
-            # if last segment
             if segment_id == len(section.points) - 1:
-                segment_id -= 1
+                # In rare cases, synapse at the end of last segment has a non-existing
+                # Segment ID (1 too much) and an offset of zero.
+                if segment_offsets[i] != 0:
+                    raise RuntimeError(f"Unexpected offset {segment_offsets[i]}")
 
-            segment_start[i] = section.points[segment_id]
-            segment_end[i] = section.points[segment_id + 1]
+                # Imaginary segment starting at the end of last segment
+                segment_start[i] = section.points[segment_id]
+                segment_end[i] = section.points[segment_id] + 1
+            else:
+                segment_start[i] = section.points[segment_id]
+                segment_end[i] = section.points[segment_id + 1]
 
     along = segment_end - segment_start
     center_point = segment_start + (segment_offsets * along.T / np.linalg.norm(along, axis=1)).T
