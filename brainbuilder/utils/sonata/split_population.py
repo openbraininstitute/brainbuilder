@@ -284,7 +284,14 @@ def _write_edges(
                     dst_mapping=id_mapping[dst_node_pop],
                     h5_read_chunk_size=h5_read_chunk_size,
                 )
-                edge_count, sgid_count, tgid_count = _get_node_counts(h5out, edge_pop_name)
+                ### edge_count, sgid_count, tgid_count = _get_node_counts(h5out, edge_pop_name)  ### ERROR ###
+                # Note: _get_node_counts() returns the node counts based on the node indices that are actually present
+                #       in the edge table. However, in case of unconnected nodes this count may be too low, leading
+                #       to a wrong computation of the index vectors in _write_indexes() which should always have the
+                #       same length as the number of nodes, no matter whether or not they are connected!!
+                edge_count, _, _ = _get_node_counts(h5out, edge_pop_name)  ### FIX ###
+                sgid_count = id_mapping[src_node_pop].shape[0]  ### FIX ###
+                tgid_count = id_mapping[dst_node_pop].shape[0]  ### FIX ###
 
             # after the h5 file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
@@ -466,7 +473,14 @@ def _write_subcircuit_edges(
                 src_mapping=src_mapping,
                 dst_mapping=dst_mapping,
             )
-            edge_count, sgid_count, tgid_count = _get_node_counts(h5out, dst_edge_pop_name)
+            ### edge_count, sgid_count, tgid_count = _get_node_counts(h5out, dst_edge_pop_name)  ### ERROR ###
+            # Note: _get_node_counts() returns the node counts based on the node indices that are actually present
+            #       in the edge table. However, in case of unconnected nodes this count may be too low, leading
+            #       to a wrong computation of the index vectors in _write_indexes() which should always have the
+            #       same length as the number of nodes, no matter whether or not they are connected!!
+            edge_count, _, _ = _get_node_counts(h5out, dst_edge_pop_name)  ### FIX ###
+            sgid_count = src_mapping.shape[0]  ### FIX ###
+            tgid_count = dst_mapping.shape[0]  ### FIX ###
 
             if edge_count == 0:
                 del h5out[f"/edges/{dst_edge_pop_name}"]
