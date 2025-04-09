@@ -602,3 +602,38 @@ def test_split_subcircuit_with_virtual(tmp_path):
         networks, "edges", "$BASE_DIR/V2__C/virtual_edges_V2.h5"
     )
     assert virtual_pop == {"V2__C": {"type": "chemical"}}
+
+
+def test_split_subcircuit_edge_indices(tmp_path):
+    node_set_name = "mtype_a"
+    circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
+
+    split_population.split_subcircuit(
+        tmp_path, node_set_name, circuit_config_path, do_virtual=False, create_external=False
+    )
+
+    _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=False)
+    _check_edge_indices(path=tmp_path)
+
+
+def _check_edge_indices(path):
+    nodes_file = path / "nodes" / "nodes.h5"
+    edges_file = path / "edges" / "edges.h5"
+    with h5py.File(edges_file, "r") as h5edges:
+        epops = list(h5edges["edges"].keys())
+        with h5py.File(nodes_file, "r") as h5nodes:
+            for epop in epops:
+                print(epop)
+                src_npop = h5edges["edges"][epop]["source_node_id"].attrs["node_population"]
+                src_pop_size = len(np.array(h5nodes["nodes"][src_npop]["node_type_id"]))
+
+                tgt_npop = h5edges["edges"][epop]["target_node_id"].attrs["node_population"]
+                tgt_pop_size = len(np.array(h5nodes["nodes"][tgt_npop]["node_type_id"]))
+
+                src_ind_len = np.array(h5edges["edges"][epop]["indices"]["source_to_target"]["node_id_to_ranges"]).shape[0]
+                tgt_ind_len = np.array(h5edges["edges"][epop]["indices"]["target_to_source"]["node_id_to_ranges"]).shape[0]
+
+                assert src_ind_len == src_pop_size
+                assert tgt_ind_len == tgt_pop_size
+    
+    
