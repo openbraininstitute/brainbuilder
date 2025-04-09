@@ -629,10 +629,29 @@ def _check_edge_indices(path):
                 tgt_npop = h5edges["edges"][epop]["target_node_id"].attrs["node_population"]
                 tgt_pop_size = len(np.array(h5nodes["nodes"][tgt_npop]["node_type_id"]))
 
-                src_ind_len = np.array(h5edges["edges"][epop]["indices"]["source_to_target"]["node_id_to_ranges"]).shape[0]
-                tgt_ind_len = np.array(h5edges["edges"][epop]["indices"]["target_to_source"]["node_id_to_ranges"]).shape[0]
+                src_idx_to_rng = np.array(h5edges["edges"][epop]["indices"]["source_to_target"]["node_id_to_ranges"])
+                tgt_idx_to_rng = np.array(h5edges["edges"][epop]["indices"]["target_to_source"]["node_id_to_ranges"])
 
+                src_ind_len = src_idx_to_rng.shape[0]
+                tgt_ind_len = tgt_idx_to_rng.shape[0]
+
+                # Check correct lengths
                 assert src_ind_len == src_pop_size
                 assert tgt_ind_len == tgt_pop_size
     
-    
+                src_rng_to_eid = np.array(h5edges["edges"][epop]["indices"]["source_to_target"]["range_to_edge_id"])
+                tgt_rng_to_eid = np.array(h5edges["edges"][epop]["indices"]["target_to_source"]["range_to_edge_id"])
+
+                src_nid = np.array(h5edges["edges"][epop]["source_node_id"])
+                tgt_nid = np.array(h5edges["edges"][epop]["target_node_id"])
+
+                # Check actual source/target indexing
+                for _nidx in range(src_ind_len):
+                    _eid_ranges = src_rng_to_eid[range(*src_idx_to_rng[_nidx, :]), :]
+                    for _eid_rng in _eid_ranges:
+                        assert all(src_nid[range(*_eid_rng)] == _nidx)
+
+                for _nidx in range(tgt_ind_len):
+                    _eid_ranges = tgt_rng_to_eid[range(*tgt_idx_to_rng[_nidx, :]), :]
+                    for _eid_rng in _eid_ranges:
+                        assert all(tgt_nid[range(*_eid_rng)] == _nidx)
