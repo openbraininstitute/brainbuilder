@@ -623,7 +623,6 @@ def _check_edge_indices(path):
         epops = list(h5edges["edges"].keys())
         with h5py.File(nodes_file, "r") as h5nodes:
             for epop in epops:
-                print(epop)
                 src_npop = h5edges["edges"][epop]["source_node_id"].attrs["node_population"]
                 src_pop_size = len(np.array(h5nodes["nodes"][src_npop]["node_type_id"]))
 
