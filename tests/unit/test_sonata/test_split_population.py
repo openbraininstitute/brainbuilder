@@ -604,18 +604,6 @@ def test_split_subcircuit_with_virtual(tmp_path):
     assert virtual_pop == {"V2__C": {"type": "chemical"}}
 
 
-def test_split_subcircuit_edge_indices(tmp_path):
-    node_set_name = "mtype_a"
-    circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
-
-    split_population.split_subcircuit(
-        tmp_path, node_set_name, circuit_config_path, do_virtual=False, create_external=False
-    )
-
-    _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=False)
-    _check_edge_indices(path=tmp_path)
-
-
 def _check_edge_indices(path):
     nodes_file = path / "nodes" / "nodes.h5"
     edges_file = path / "edges" / "edges.h5"
@@ -655,3 +643,15 @@ def _check_edge_indices(path):
                     _eid_ranges = tgt_rng_to_eid[range(*tgt_idx_to_rng[_nidx, :]), :]
                     for _eid_rng in _eid_ranges:
                         assert all(tgt_nid[range(*_eid_rng)] == _nidx)
+
+
+def test_split_subcircuit_edge_indices(tmp_path):
+    node_set_name = "mtype_a"
+    circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
+
+    split_population.split_subcircuit(
+        tmp_path, node_set_name, circuit_config_path, do_virtual=False, create_external=False
+    )
+
+    _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=False)
+    _check_edge_indices(path=tmp_path)
