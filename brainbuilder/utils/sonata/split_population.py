@@ -846,13 +846,13 @@ def _write_mapping(output, id_mapping):
     utils.dump_json(output / "id_mapping.json", mapping)
 
 
-def split_subcircuit(output, node_set_name, circuit_config_path, do_virtual, create_external):
+def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external):
     """Split a single subcircuit out of circuit, based on nodeset
 
     Args:
         output(str): path where files will be written
         node_set_name(str): name of nodeset to extract
-        circuit_config_path(str): path to circuit_config sonata file
+        circuit(bluepysnap.Circuit|str): Sonata circuit object or path to circuit_config sonata file
         do_virtual(bool): whether to split out the virtual nodes that target the cells
             contained in the specified nodeset
         create_external(bool): whether to create new virtual populations of all the
@@ -861,7 +861,10 @@ def split_subcircuit(output, node_set_name, circuit_config_path, do_virtual, cre
     # pylint: disable=too-many-locals
     output = Path(output)
 
-    circuit = bluepysnap.Circuit(circuit_config_path)
+    if isinstance(circuit, str):
+        circuit = bluepysnap.Circuit(circuit)
+    else:
+        assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
 
     node_pop_to_paths, edge_pop_to_paths = _gather_layout_from_networks(circuit.config["networks"])
 
