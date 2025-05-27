@@ -21,9 +21,9 @@ L = logging.getLogger("brainbuilder")
 
 
 def _add_me_info(cells, mecombo_info):
-    assert not mecombo_info.duplicated(
-        "combo_name"
-    ).any(), "Duplicate me-combos, strange ModelMangement run?"
+    assert not mecombo_info.duplicated("combo_name").any(), (
+        "Duplicate me-combos, strange ModelMangement run?"
+    )
 
     mecombo_info = mecombo_info.set_index("combo_name")
 
@@ -32,8 +32,7 @@ def _add_me_info(cells, mecombo_info):
         missing_me_combos = me_combos[mecombo_info.index.get_indexer(me_combos) == -1]
         if len(missing_me_combos) != 0:
             raise BrainBuilderError(
-                f"The me_combo :{missing_me_combos.tolist()} are missing from "
-                f"the e-model release"
+                f"The me_combo :{missing_me_combos.tolist()} are missing from the e-model release"
             )
 
         mecombo_params = mecombo_info.loc[me_combos]

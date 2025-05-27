@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-""" Helper methods for cell orientations. """
+"""Helper methods for cell orientations."""
 
 import numpy as np
 from voxcell.math_utils import angles_to_matrices

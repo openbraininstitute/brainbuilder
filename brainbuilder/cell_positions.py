@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-""" Algorithms to create cell positions. """
+"""Algorithms to create cell positions."""
 
 import logging
 

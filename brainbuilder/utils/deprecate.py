@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-""" Deprecation utilities. """
+"""Deprecation utilities."""
 
 import warnings
 
