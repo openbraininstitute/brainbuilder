@@ -228,15 +228,19 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
     _finalize_edges(new_edges)
 
 
-def _get_node_counts(h5out, new_pop_name):
-    """for `h5out`, return the `edge_count`, `source_node_count`, and `target_node_count`"""
-    source_node_count = target_node_count = 0
-    new_edges = h5out["edges"][new_pop_name]
+def _get_node_counts(h5out, new_edge_pop_name, src_mapping, dst_mapping):
+    """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
+
+    source_node_count = int(np.max(src_mapping)) + 1
+    target_node_count = int(np.max(dst_mapping)) + 1
+
+    new_edges = h5out["edges"][new_edge_pop_name]
     edge_count = len(new_edges["source_node_id"])
+
     if edge_count > 0:
-        # add 1 because IDs are 0-based
-        source_node_count = int(np.max(new_edges["source_node_id"]) + 1)
-        target_node_count = int(np.max(new_edges["target_node_id"]) + 1)
+        assert source_node_count >= int(np.max(new_edges["source_node_id"]))
+        assert target_node_count >= int(np.max(new_edges["target_node_id"]))
+
     return edge_count, source_node_count, target_node_count
 
 
@@ -284,9 +288,11 @@ def _write_edges(
                     dst_mapping=id_mapping[dst_node_pop],
                     h5_read_chunk_size=h5_read_chunk_size,
                 )
-                edge_count, _, _ = _get_node_counts(h5out, edge_pop_name)
-                sgid_count = id_mapping[src_node_pop].shape[0]  # Actual node count for writing the indexes, no matter if connected or not
-                tgid_count = id_mapping[dst_node_pop].shape[0]  # Actual node count for writing the indexes, no matter if connected or not
+                edge_count, sgid_count, tgid_count = _get_node_counts(h5out,
+                                                                      edge_pop_name,
+                                                                      id_mapping[src_node_pop],
+                                                                      id_mapping[dst_node_pop]
+                                                                      )
 
             # after the h5 file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
@@ -468,9 +474,11 @@ def _write_subcircuit_edges(
                 src_mapping=src_mapping,
                 dst_mapping=dst_mapping,
             )
-            edge_count, _, _ = _get_node_counts(h5out, dst_edge_pop_name)
-            sgid_count = src_mapping.shape[0]  # Actual node count for writing the indexes, no matter if connected or not
-            tgid_count = dst_mapping.shape[0]  # Actual node count for writing the indexes, no matter if connected or not
+            edge_count, sgid_count, tgid_count = _get_node_counts(h5out,
+                                                                  dst_edge_pop_name,
+                                                                  src_mapping,
+                                                                  dst_mapping
+                                                                  )
 
             if edge_count == 0:
                 del h5out[f"/edges/{dst_edge_pop_name}"]
@@ -865,10 +873,7 @@ def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external
     # pylint: disable=too-many-locals
     output = Path(output)
 
-    if isinstance(circuit, str):
-        circuit = bluepysnap.Circuit(circuit)
-    else:
-        assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
+    circuit = bluepysnap.Circuit(circuit)
 
     node_pop_to_paths, edge_pop_to_paths = _gather_layout_from_networks(circuit.config["networks"])
 
