@@ -77,9 +77,9 @@ def _only_child_removal(parents, first_points):
     """
     only_children = _get_only_children(parents)
 
-    assert np.all(
-        (only_children - 1) == parents[only_children]
-    ), "Some only_children sections do not follow their parent"
+    assert np.all((only_children - 1) == parents[only_children]), (
+        "Some only_children sections do not follow their parent"
+    )
 
     only_children = [int(c) for c in only_children]
 

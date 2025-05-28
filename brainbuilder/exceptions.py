@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-""" Exceptions used throughout package. """
+"""Exceptions used throughout package."""
 
 
 class BrainBuilderError(Exception):

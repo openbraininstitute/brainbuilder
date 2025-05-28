@@ -40,9 +40,9 @@ def get_population_name(h5_file, population_name=None):
     """
     names = get_population_names(h5_file)
     if population_name is None:
-        assert (
-            len(names) == 1
-        ), f"{h5_file} must have a single population only, if one is not specified"
+        assert len(names) == 1, (
+            f"{h5_file} must have a single population only, if one is not specified"
+        )
         return names[0]
     elif population_name not in names:
         raise ValueError(f'"{population_name}" population does not exist in {h5_file}')

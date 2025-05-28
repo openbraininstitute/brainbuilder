@@ -10,22 +10,37 @@ def test_load_density__dangerously_low_densities(tmp_path):
     """Test for very low densities where the float precision affects the total count."""
 
     shape = (10, 10, 10)
+    n_voxels = np.prod(shape)
+
     voxel_dimensions = np.array([25, 25, 25])
     filepath = tmp_path / "test_load_density__dangerously_low_densities.nrrd"
-    raw = np.full(shape, dtype=np.float64, fill_value=2.04160691e02)
 
-    raw[1, :, 1] = 8.36723867e10
+    small_density = 2.04160691e02
+    small_counts = small_density * 25 ** 3 / 1e9
+
+    raw = np.full(shape, dtype=np.float64, fill_value=small_density)
+
+    big_density = 8.36723867e10
+    big_counts = big_density * 25 ** 3 / 1e9
+
+    raw[1, :, 1] = big_density
+
+    expected_counts = np.full(shape, dtype=np.float64, fill_value=small_counts)
+    expected_counts[1, :, 1] = big_counts
+
+    # assigned [1, :, 1] with big densities (10) and the rest small ones (1000 - 10)
+    total_counts = int(np.round(big_counts * shape[1] + small_counts * (n_voxels - shape[1])))
 
     density = voxcell.VoxelData(raw=raw, voxel_dimensions=voxel_dimensions)
     density.save_nrrd(filepath)
 
     loaded_density = density.with_data(
-        test_module._load_density(str(filepath), mask=np.ones(shape, int), atlas=None)
+        test_module._load_density(str(filepath), mask=np.ones(shape, bool), atlas=None)
     )
+    counts_per_voxel, count = _get_cell_count(loaded_density, 1.0)
 
-    _, count = _get_cell_count(loaded_density, 1.0)
-
-    assert count == 13073813
+    assert np.all(counts_per_voxel == expected_counts)
+    assert count == total_counts
 
 
 def test_load_density__near_zero_values_are_ignored(tmp_path):
