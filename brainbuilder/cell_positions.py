@@ -22,8 +22,8 @@ def _get_cell_count(density, density_factor):
     """Helper function that counts the number of cells per voxel and the total
     number of cells.
     """
-    voxel_mm3 = density.voxel_volume / 1e9  # voxel volume is in um^3
-    cell_count_per_voxel = density.raw * density_factor * voxel_mm3
+    # voxel volume is in um^3
+    cell_count_per_voxel = density.raw * density_factor * density.voxel_volume / 1e9
     cell_count = int(np.round(np.sum(cell_count_per_voxel)))
 
     return cell_count_per_voxel, cell_count
