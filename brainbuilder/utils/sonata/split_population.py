@@ -861,7 +861,7 @@ def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external
     # pylint: disable=too-many-locals
     output = Path(output)
 
-    if isinstance(circuit, str):
+    if isinstance(circuit, (str, Path)):
         circuit = bluepysnap.Circuit(circuit)
     else:
         assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
