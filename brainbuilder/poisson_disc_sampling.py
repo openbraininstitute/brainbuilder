@@ -202,9 +202,7 @@ def generate_points(
     """
     # initialisation of helper containers
     domain = np.array([np.min(bbox, axis=0), np.max(bbox, axis=0)])
-    grid = Grid(
-        domain, min_distance() / np.sqrt(domain.shape[1])
-    )  # pylint: disable=unsubscriptable-object
+    grid = Grid(domain, min_distance() / np.sqrt(domain.shape[1]))  # pylint: disable=unsubscriptable-object
 
     active_list = []
     sample_points = []

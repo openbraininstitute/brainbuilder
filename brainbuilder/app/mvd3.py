@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-""" Tools for working with MVD3 """
+"""Tools for working with MVD3"""
 
 import shutil
 from builtins import input  # pylint: disable=redefined-builtin

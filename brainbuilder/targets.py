@@ -100,7 +100,9 @@ def create_node_sets(cells, full_hierarchy, atlas, targets, allow_empty, populat
             if name in result:
                 raise BrainBuilderError(f"Duplicate node set: '{name}'")
 
-            ids = bluepysnap.query.resolve_ids(cells, population, query)
+            ids = bluepysnap.query.resolve_ids(
+                cells, population, population_type=None, queries=query
+            )
             if not allow_empty and ids.any():
                 raise BrainBuilderError(f"Empty target: {name} {query}")
 

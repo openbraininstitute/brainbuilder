@@ -791,9 +791,9 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
 
             el[f"{type_}_file"] = os.path.join("$BASE_DIR", updated_path)
 
-    assert all(
-        f.startswith("external") for f in new_population_files
-    ), f"Did not use all populations: {new_population_files}"
+    assert all(f.startswith("external") for f in new_population_files), (
+        f"Did not use all populations: {new_population_files}"
+    )
 
     for el in config["networks"][type_]:
         for population in list(el["populations"]):
