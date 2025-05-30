@@ -15,6 +15,37 @@ import bluepysnap
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
 
 
+def _check_edge_indices(nodes_file, edges_file):
+    def check_index_consistency(node2range, range2edge, ids):
+        for id_ in range(node2range.shape[0]):
+            range_start, range_end = node2range[id_, :]
+            for edge_start, edge_end in range2edge[range_start:range_end, :]:
+                assert all(ids[edge_start:edge_end] == id_)
+
+    with h5py.File(edges_file, "r") as h5edges, h5py.File(nodes_file, "r") as h5nodes:
+        for pop_name in h5edges["edges"]:
+            base_path = "edges/" + pop_name
+
+            src_pop = h5edges[base_path + "/source_node_id"].attrs["node_population"]
+            tgt_pop = h5edges[base_path + "/target_node_id"].attrs["node_population"]
+
+            src_node2range = h5edges[base_path + "/indices/source_to_target/node_id_to_ranges"][:]
+            tgt_node2range = h5edges[base_path + "/indices/target_to_source/node_id_to_ranges"][:]
+
+            # check index length is equal to population size
+            assert src_node2range.shape[0] == h5nodes["nodes"][src_pop]["node_type_id"].shape[0]
+            assert tgt_node2range.shape[0] == h5nodes["nodes"][tgt_pop]["node_type_id"].shape[0]
+
+            src_range2edge = h5edges[base_path + "/indices/source_to_target/range_to_edge_id"][:]
+            tgt_range2edge = h5edges[base_path + "/indices/target_to_source/range_to_edge_id"][:]
+
+            src_ids = h5edges[base_path + "/source_node_id"][:]
+            tgt_ids = h5edges[base_path + "/target_node_id"][:]
+
+            check_index_consistency(src_node2range, src_range2edge, src_ids)
+            check_index_consistency(tgt_node2range, tgt_range2edge, tgt_ids)
+
+
 def test__get_population_name():
     assert "src__dst__chemical" == split_population._get_population_name(src="src", dst="dst")
     assert "src" == split_population._get_population_name(src="src", dst="src")
@@ -187,6 +218,7 @@ def test_split_population(tmp_path):
     utils.assert_json_files_equal(
         tmp_path / "circuit_config.json", expected_dir / "circuit_config.json"
     )
+    _check_edge_indices(nodes_path, edges_path)
 
 
 def test__split_population_by_node_set():
@@ -621,3 +653,18 @@ def test_split_subcircuit_with_virtual(tmp_path, circuit):
         networks, "edges", "$BASE_DIR/V2__C/virtual_edges_V2.h5"
     )
     assert virtual_pop == {"V2__C": {"type": "chemical"}}
+
+
+def test_split_subcircuit_edge_indices(tmp_path):
+    node_set_name = "mtype_a"
+    circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
+
+    split_population.split_subcircuit(
+        tmp_path, node_set_name, circuit_config_path, do_virtual=False, create_external=False
+    )
+
+    _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=False)
+
+    nodes_path = tmp_path / "nodes" / "nodes.h5"
+    edges_path = tmp_path / "edges" / "edges.h5"
+    _check_edge_indices(nodes_path, edges_path)
