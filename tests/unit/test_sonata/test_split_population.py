@@ -10,6 +10,7 @@ from numpy.testing import assert_array_equal
 
 from brainbuilder.utils import load_json
 from brainbuilder.utils.sonata import split_population
+import bluepysnap
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
 
@@ -539,23 +540,35 @@ def _check_biophysical_nodes(path, has_virtual, has_external):
         assert mapping == expected_mapping
 
 
-def test_split_subcircuit_with_no_externals(tmp_path):
+@pytest.mark.parametrize(
+    "circuit",
+    [
+        DATA_PATH / "split_subcircuit" / "circuit_config.json",
+        bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"),
+    ],
+)
+def test_split_subcircuit_with_no_externals(tmp_path, circuit):
     node_set_name = "mtype_a"
-    circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
 
     split_population.split_subcircuit(
-        tmp_path, node_set_name, circuit_config_path, do_virtual=False, create_external=False
+        tmp_path, node_set_name, circuit, do_virtual=False, create_external=False
     )
 
     _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=False)
 
 
-def test_split_subcircuit_with_externals(tmp_path):
+@pytest.mark.parametrize(
+    "circuit",
+    [
+        DATA_PATH / "split_subcircuit" / "circuit_config.json",
+        bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"),
+    ],
+)
+def test_split_subcircuit_with_externals(tmp_path, circuit):
     node_set_name = "mtype_a"
-    circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
 
     split_population.split_subcircuit(
-        tmp_path, node_set_name, circuit_config_path, do_virtual=False, create_external=True
+        tmp_path, node_set_name, circuit, do_virtual=False, create_external=True
     )
 
     _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=True)
@@ -586,11 +599,17 @@ def test_split_subcircuit_with_externals(tmp_path):
         assert h5["edges/external_A__C/0/delay"][0] == 0.5
 
 
-def test_split_subcircuit_with_virtual(tmp_path):
+@pytest.mark.parametrize(
+    "circuit",
+    [
+        DATA_PATH / "split_subcircuit" / "circuit_config.json",
+        bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"),
+    ],
+)
+def test_split_subcircuit_with_virtual(tmp_path, circuit):
     node_set_name = "mtype_a"
-    circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
     split_population.split_subcircuit(
-        tmp_path, node_set_name, circuit_config_path, do_virtual=True, create_external=False
+        tmp_path, node_set_name, circuit, do_virtual=True, create_external=False
     )
 
     _check_biophysical_nodes(path=tmp_path, has_virtual=True, has_external=False)

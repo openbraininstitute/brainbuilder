@@ -288,11 +288,9 @@ def _write_edges(
                     dst_mapping=id_mapping[dst_node_pop],
                     h5_read_chunk_size=h5_read_chunk_size,
                 )
-                edge_count, sgid_count, tgid_count = _get_node_counts(h5out,
-                                                                      edge_pop_name,
-                                                                      id_mapping[src_node_pop],
-                                                                      id_mapping[dst_node_pop]
-                                                                      )
+                edge_count, sgid_count, tgid_count = _get_node_counts(
+                    h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
+                )
 
             # after the h5 file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
@@ -474,11 +472,9 @@ def _write_subcircuit_edges(
                 src_mapping=src_mapping,
                 dst_mapping=dst_mapping,
             )
-            edge_count, sgid_count, tgid_count = _get_node_counts(h5out,
-                                                                  dst_edge_pop_name,
-                                                                  src_mapping,
-                                                                  dst_mapping
-                                                                  )
+            edge_count, sgid_count, tgid_count = _get_node_counts(
+                h5out, dst_edge_pop_name, src_mapping, dst_mapping
+            )
 
             if edge_count == 0:
                 del h5out[f"/edges/{dst_edge_pop_name}"]
@@ -873,7 +869,10 @@ def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external
     # pylint: disable=too-many-locals
     output = Path(output)
 
-    circuit = bluepysnap.Circuit(circuit)
+    if isinstance(circuit, (str, Path)):
+        circuit = bluepysnap.Circuit(circuit)
+    else:
+        assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
 
     node_pop_to_paths, edge_pop_to_paths = _gather_layout_from_networks(circuit.config["networks"])
 
