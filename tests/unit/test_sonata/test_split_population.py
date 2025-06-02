@@ -405,9 +405,9 @@ def _find_populations_by_path(networks, key, name):
 
 def _check_biophysical_nodes(path, has_virtual, has_external):
     mapping = load_json(path / "id_mapping.json")
-    assert mapping["A"] == {"new_id": [0, 1, 2], "old_id": [0, 2, 4]}
-    assert mapping["B"] == {"new_id": [0, 1, 2, 3], "old_id": [0, 2, 4, 5]}
-    assert mapping["C"] == {"new_id": [0, 1, 2, 3], "old_id": [0, 2, 4, 5]}
+    assert mapping["A"] == {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": [0, 2, 4], "original_name": "A"}
+    assert mapping["B"] == {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "B", "original_id": [0, 2, 4, 5], "original_name": "B"}
+    assert mapping["C"] == {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "C", "original_id": [0, 2, 4, 5], "original_name": "C"}
 
     with h5py.File(path / "nodes" / "nodes.h5", "r") as h5:
         nodes = h5["nodes"]
@@ -490,9 +490,9 @@ def _check_biophysical_nodes(path, has_virtual, has_external):
         }
 
         expected_mapping = {
-            "A": {"old_id": [0, 2, 4], "new_id": [0, 1, 2]},
-            "B": {"old_id": [0, 2, 4, 5], "new_id": [0, 1, 2, 3]},
-            "C": {"old_id": [0, 2, 4, 5], "new_id": [0, 1, 2, 3]},
+            "A": {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": [0, 2, 4], "original_name": "A"},
+            "B": {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "B", "original_id": [0, 2, 4, 5], "original_name": "B"},
+            "C": {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "C", "original_id": [0, 2, 4, 5], "original_name": "C"},
         }
 
         if has_virtual:
