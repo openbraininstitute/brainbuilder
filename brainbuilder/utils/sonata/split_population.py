@@ -632,10 +632,14 @@ def _get_subcircuit_external_ids(all_sgids, all_tgids, wanted_src_ids, wanted_ds
     return ret.sort_index()
 
 
-def _write_subcircuit_external(output, circuit, id_mapping,
-                               node_pop_name_mapping,
-                               existing_node_pop_names,
-                               existing_edge_pop_names):
+def _write_subcircuit_external(
+    output,
+    circuit,
+    id_mapping,
+    node_pop_name_mapping,
+    existing_node_pop_names,
+    existing_edge_pop_names,
+):
     """Write external connectivity.
 
     returns: (new_node_files, new_edges_files); with, respectively,
@@ -684,7 +688,7 @@ def _write_subcircuit_external(output, circuit, id_mapping,
                 L.debug("{0} already exists as an node population".format(new_source_pop_name))
                 new_source_pop_name = "external_" + new_source_pop_name
             node_pop_name_mapping[new_source_pop_name] = edge.source.name
-            
+
             output_path = output / (new_name + ".h5")
             output_path.parent.mkdir(parents=True, exist_ok=True)
             L.debug(
@@ -704,7 +708,10 @@ def _write_subcircuit_external(output, circuit, id_mapping,
                 src_mapping=wanted_src_ids,
                 dst_mapping=id_mapping[edge.target.name],
             )
-            new_nodes[new_source_pop_name] = (edge.source.name, wanted_src_ids.index.to_numpy())  # HERE? HERE? HERE?
+            new_nodes[new_source_pop_name] = (
+                edge.source.name,
+                wanted_src_ids.index.to_numpy(),
+            )  # HERE? HERE? HERE?
 
             id_mapping[new_source_pop_name] = wanted_src_ids
 
@@ -721,9 +728,14 @@ def _write_subcircuit_external(output, circuit, id_mapping,
     return new_node_files, new_edges_files
 
 
-def _write_subcircuit_virtual(output, circuit, edge_populations_to_paths, id_mapping,
-                              node_pop_name_mapping,
-                              list_of_sources_to_ignore=None):
+def _write_subcircuit_virtual(
+    output,
+    circuit,
+    edge_populations_to_paths,
+    id_mapping,
+    node_pop_name_mapping,
+    list_of_sources_to_ignore=None,
+):
     """write all node/edge populations that have virtual nodes as source
 
     Note: the id_mapping dictionary is updated with the used virtual nodes
@@ -736,9 +748,11 @@ def _write_subcircuit_virtual(output, circuit, edge_populations_to_paths, id_map
     virtual_populations = {
         name: edge
         for name, edge in circuit.edges.items()
-        if (edge.source.type == "virtual" and
-            edge.target.name in id_mapping and
-            edge.source.name not in list_of_sources_to_ignore)
+        if (
+            edge.source.type == "virtual"
+            and edge.target.name in id_mapping
+            and edge.source.name not in list_of_sources_to_ignore
+        )
     }
 
     # gather the ids of the virtual populations that are used; within a circuit
@@ -767,8 +781,10 @@ def _write_subcircuit_virtual(output, circuit, edge_populations_to_paths, id_map
     # write the edges that have the virtual populations as source
     for edge_pop_name, edge in virtual_populations.items():
         new_edges_files[edge_pop_name] = _write_subcircuit_edges(
-            output_path=os.path.join(output, edge_populations_to_paths[edge_pop_name]), # Where to write to
-            edges_path=_get_storage_path(edge), # Where to read from
+            output_path=os.path.join(
+                output, edge_populations_to_paths[edge_pop_name]
+            ),  # Where to write to
+            edges_path=_get_storage_path(edge),  # Where to read from
             src_node_pop=edge.source.name,
             dst_node_pop=edge.target.name,
             src_edge_pop_name=edge_pop_name,
@@ -830,7 +846,8 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
         updated_path = _strip_base_path(str(new_pop_path))
 
         matched_originals = [
-            _entry["populations"][new_pop_name] for _entry in old_population_list
+            _entry["populations"][new_pop_name]
+            for _entry in old_population_list
             if new_pop_name in _entry["populations"]
         ]
         assert len(matched_originals) == 1 or len(matched_originals) == 0
@@ -838,18 +855,14 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
             config["networks"][type_].append(
                 {
                     str_type: os.path.join("$BASE_DIR", updated_path),
-                    "populations": {
-                        new_pop_name: copy.deepcopy(matched_originals[0])
-                    }
+                    "populations": {new_pop_name: copy.deepcopy(matched_originals[0])},
                 }
             )
         else:
             config["networks"][type_].append(
                 {
                     str_type: os.path.join("$BASE_DIR", updated_path),
-                    "populations": {
-                        new_pop_name: {}
-                    }
+                    "populations": {new_pop_name: {}},
                 }
             )
         config["networks"][type_][-1]["populations"][new_pop_name].setdefault("type", default_type)
@@ -885,34 +898,40 @@ def _update_node_sets(node_sets, id_mapping):
 
     return ret
 
+
 def _mapping_to_parent_dict(id_mapping, node_pop_name_mapping):
     mapping = {}
     for population, df in id_mapping.items():
         mapping[population] = {
             STR_PARENT_IDS: df.index.to_list(),
             STR_THIS_IDS: df.new_id.to_list(),
-            STR_PARENT_NAME: node_pop_name_mapping[population]
+            STR_PARENT_NAME: node_pop_name_mapping[population],
         }
     return mapping
+
 
 def _no_mapping_to_original(this_mapping):
     for this_pop in this_mapping.keys():
         this_mapping[this_pop][STR_ORIG_IDS] = this_mapping[this_pop][STR_PARENT_IDS]
         this_mapping[this_pop][STR_ORIG_NAME] = this_mapping[this_pop][STR_PARENT_NAME]
 
+
 def _add_mapping_to_original(this_mapping, parent_mapping):
     # TODO: This strongly assumes that the parent_mapping is complete and valid.
     def backwards_mapping(mapping_dict):
         return pd.Series(mapping_dict[STR_ORIG_IDS], index=mapping_dict[STR_THIS_IDS])
-    
+
     for this_pop in this_mapping.keys():
         parent_pop = this_mapping[this_pop][STR_PARENT_NAME]
 
-        orig_ids = backwards_mapping(parent_mapping[parent_pop])[this_mapping[this_pop][STR_PARENT_IDS]]
+        orig_ids = backwards_mapping(parent_mapping[parent_pop])[
+            this_mapping[this_pop][STR_PARENT_IDS]
+        ]
         orig_name = parent_mapping[parent_pop][STR_ORIG_NAME]
 
         this_mapping[this_pop][STR_ORIG_IDS] = orig_ids.to_list()
         this_mapping[this_pop][STR_ORIG_NAME] = orig_name
+
 
 def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
     """write the id mappings between the old and new populations for future analysis"""
@@ -921,6 +940,7 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
     provenance = parent_circ.config["components"].get("provenance", {})
     if "id_mapping" in provenance.keys():
         import json
+
         # Currently, bluepysnap does not seem to resolve $BASE_DIR for entries in "provenance".
         # Therefore I decided to not prepend it and just assume the file exists near the circuit config.
         parent_root = os.path.split(parent_circ._circuit_config_path)[0]
@@ -930,14 +950,20 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
         _add_mapping_to_original(this_mapping, parent_mapping)
     else:
         _no_mapping_to_original(this_mapping)
-        
+
     mapping_fn = "id_mapping.json"
     utils.dump_json(output / mapping_fn, this_mapping)
     return mapping_fn
 
 
-def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external,
-                     list_of_virtual_sources_to_ignore=None):
+def split_subcircuit(
+    output,
+    node_set_name,
+    circuit,
+    do_virtual,
+    create_external,
+    list_of_virtual_sources_to_ignore=None,
+):
     """Split a single subcircuit out of circuit, based on nodeset
 
     Args:
@@ -969,7 +995,8 @@ def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external
     #    pop.get(node_set_name, raise_missing_property=False)
     split_populations = {
         pop_name: pop.get(pop.ids(node_set_name, raise_missing_property=False))
-        for pop_name, pop in circuit.nodes.items() if not pop.type == "virtual"
+        for pop_name, pop in circuit.nodes.items()
+        if not pop.type == "virtual"
     }
     split_populations = {pop_name: df for pop_name, df in split_populations.items() if not df.empty}
 
@@ -987,8 +1014,12 @@ def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external
 
     if do_virtual:
         new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_virtual(
-            output, circuit, edge_pop_to_paths, id_mapping, 
-            node_pop_name_mapping, list_of_virtual_sources_to_ignore
+            output,
+            circuit,
+            edge_pop_to_paths,
+            id_mapping,
+            node_pop_name_mapping,
+            list_of_virtual_sources_to_ignore,
         )
 
         new_node_files.update(new_virtual_node_files)
@@ -998,8 +1029,12 @@ def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external
     existing_edge_pop_names = list(new_edge_files.keys())
     if create_external:
         new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_external(
-            output, circuit, id_mapping, node_pop_name_mapping,
-            existing_node_pop_names, existing_edge_pop_names
+            output,
+            circuit,
+            id_mapping,
+            node_pop_name_mapping,
+            existing_node_pop_names,
+            existing_edge_pop_names,
         )
 
         new_node_files.update(new_virtual_node_files)
@@ -1018,6 +1053,6 @@ def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external
     config = _update_config_with_new_paths(output, config, new_edge_files, type_="edges")
 
     # TODO: Should be "$BASE_DIR/" + mapping_fn. But bluepysnap does not seem to resolve
-    # $BASE_DIR for entries in "provenance"..? So I don't even try. 
+    # $BASE_DIR for entries in "provenance"..? So I don't even try.
     config["components"].setdefault("provenance", {})["id_mapping"] = mapping_fn
     utils.dump_json(output / "circuit_config.json", config)
