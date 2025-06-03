@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-""" Tools for working with SYN2 """
+"""Tools for working with SYN2"""
 
 import logging
 import os
@@ -103,9 +103,9 @@ def _check_syn2_invariants(path, population, expected_properties, afferent_index
         groups = np.nonzero(diff)[0]
         for end in groups:
             end += 1
-            assert np.all(
-                secondary_gids[start : end - 1] <= secondary_gids[start + 1 : end]
-            ), f"{secondary_sort} must be sorted"
+            assert np.all(secondary_gids[start : end - 1] <= secondary_gids[start + 1 : end]), (
+                f"{secondary_sort} must be sorted"
+            )
             start = end
 
         assert "indexes" in population, 'missing "/synapses/default/indexes" dataset'
@@ -121,12 +121,12 @@ def _check_syn2_invariants(path, population, expected_properties, afferent_index
                 gid = primary_gids[start]
                 ranges = idx_post["neuron_id_to_range"][gid]
                 assert len(ranges) == 2, "if properly sorted, should only have 2 positions in range"
-                assert (
-                    idx_post["range_to_synapse_id"][ranges[0]][0] == start
-                ), f"start index position is wrong for gid == {gid}"
-                assert (
-                    idx_post["range_to_synapse_id"][ranges[0]][1] == end
-                ), f"end index position is wrong for gid == {gid}"
+                assert idx_post["range_to_synapse_id"][ranges[0]][0] == start, (
+                    f"start index position is wrong for gid == {gid}"
+                )
+                assert idx_post["range_to_synapse_id"][ranges[0]][1] == end, (
+                    f"end index position is wrong for gid == {gid}"
+                )
                 start = end
 
 

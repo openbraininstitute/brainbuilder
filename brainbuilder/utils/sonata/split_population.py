@@ -27,6 +27,8 @@ H5_READ_CHUNKSIZE = 500_000_000
 GROUP_NAME = "0"
 # Sentinel to mark an edge file being empty
 DELETED_EMPTY_EDGES_FILE = "DELETED_EMPTY_EDGES_FILE"
+# Sentinel to mark an edge population being empty
+DELETED_EMPTY_EDGES_POPULATION = "DELETED_EMPTY_EDGES_POPULATION"
 # MAPPING
 # name of field with ids that are valid in extracted circuit
 STR_THIS_IDS = "new_id"
@@ -239,15 +241,19 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
     _finalize_edges(new_edges)
 
 
-def _get_node_counts(h5out, new_pop_name):
-    """for `h5out`, return the `edge_count`, `source_node_count`, and `target_node_count`"""
-    source_node_count = target_node_count = 0
-    new_edges = h5out["edges"][new_pop_name]
+def _get_node_counts(h5out, new_edge_pop_name, src_mapping, dst_mapping):
+    """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
+
+    source_node_count = int(np.max(src_mapping)) + 1
+    target_node_count = int(np.max(dst_mapping)) + 1
+
+    new_edges = h5out["edges"][new_edge_pop_name]
     edge_count = len(new_edges["source_node_id"])
+
     if edge_count > 0:
-        # add 1 because IDs are 0-based
-        source_node_count = int(np.max(new_edges["source_node_id"]) + 1)
-        target_node_count = int(np.max(new_edges["target_node_id"]) + 1)
+        assert source_node_count >= int(np.max(new_edges["source_node_id"]))
+        assert target_node_count >= int(np.max(new_edges["target_node_id"]))
+
     return edge_count, source_node_count, target_node_count
 
 
@@ -295,7 +301,9 @@ def _write_edges(
                     dst_mapping=id_mapping[dst_node_pop],
                     h5_read_chunk_size=h5_read_chunk_size,
                 )
-                edge_count, sgid_count, tgid_count = _get_node_counts(h5out, edge_pop_name)
+                edge_count, sgid_count, tgid_count = _get_node_counts(
+                    h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
+                )
 
             # after the h5 file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
@@ -461,6 +469,7 @@ def _write_subcircuit_edges(
 
     If DELETED_EMPTY_EDGES_FILE is returned, the file was removed since no
     populations existed in it any more
+    If DELETED_EMPTY_EDGES_POPULATION is returned, the population was removed
     """
     with h5py.File(edges_path, "r") as h5in:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -477,7 +486,9 @@ def _write_subcircuit_edges(
                 src_mapping=src_mapping,
                 dst_mapping=dst_mapping,
             )
-            edge_count, sgid_count, tgid_count = _get_node_counts(h5out, dst_edge_pop_name)
+            edge_count, sgid_count, tgid_count = _get_node_counts(
+                h5out, dst_edge_pop_name, src_mapping, dst_mapping
+            )
 
             if edge_count == 0:
                 del h5out[f"/edges/{dst_edge_pop_name}"]
@@ -490,6 +501,8 @@ def _write_subcircuit_edges(
         elif is_file_empty:
             os.unlink(output_path)
             output_path = DELETED_EMPTY_EDGES_FILE
+        else:  # population empty, but not file
+            output_path = DELETED_EMPTY_EDGES_POPULATION
 
         return output_path
 
@@ -808,7 +821,10 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
     old_population_list = copy.deepcopy(config["networks"][type_])
     config["networks"][type_] = []
     for new_pop_name, new_pop_path in new_population_files.items():
-        if new_pop_path == DELETED_EMPTY_EDGES_FILE:
+        if (
+            new_pop_path == DELETED_EMPTY_EDGES_FILE
+            or new_pop_path == DELETED_EMPTY_EDGES_POPULATION
+        ):
             continue
 
         updated_path = _strip_base_path(str(new_pop_path))
@@ -920,14 +936,14 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
     return mapping_fn
 
 
-def split_subcircuit(output, node_set_name, circuit_config_path, do_virtual, create_external,
+def split_subcircuit(output, node_set_name, circuit, do_virtual, create_external,
                      list_of_virtual_sources_to_ignore=None):
     """Split a single subcircuit out of circuit, based on nodeset
 
     Args:
         output(str): path where files will be written
         node_set_name(str): name of nodeset to extract
-        circuit_config_path(str): path to circuit_config sonata file
+        circuit(bluepysnap.Circuit|str): Sonata circuit object or path to circuit_config sonata file
         do_virtual(bool): whether to split out the virtual nodes that target the cells
             contained in the specified nodeset
         create_external(bool): whether to create new virtual populations of all the
@@ -939,7 +955,10 @@ def split_subcircuit(output, node_set_name, circuit_config_path, do_virtual, cre
     # pylint: disable=too-many-locals
     output = Path(output)
 
-    circuit = bluepysnap.Circuit(circuit_config_path)
+    if isinstance(circuit, (str, Path)):
+        circuit = bluepysnap.Circuit(circuit)
+    else:
+        assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
 
     node_pop_to_paths, edge_pop_to_paths = _gather_layout_from_networks(circuit.config["networks"])
 

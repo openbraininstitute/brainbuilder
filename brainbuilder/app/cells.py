@@ -348,7 +348,7 @@ def init(population_name, output):
     "--input",
     "input_path",
     default=None,
-    help="Existing cells which are extended with" "the new positioned cells",
+    help="Existing cells which are extended with the new positioned cells",
 )
 def place_cli(
     composition,
@@ -615,12 +615,12 @@ def positions_and_orientations(annotation_path, orientation_path, config_path, o
     L.info("Loading orientation file %s ...", orientation_path)
     orientation = VoxelData.load_nrrd(orientation_path)
 
-    assert np.allclose(
-        annotation.offset, orientation.offset
-    ), "The annotation and orientation files have different offsets."
-    assert np.allclose(
-        annotation.voxel_dimensions, orientation.voxel_dimensions
-    ), "The annotation and orientation files have different voxel dimensions."
+    assert np.allclose(annotation.offset, orientation.offset), (
+        "The annotation and orientation files have different offsets."
+    )
+    assert np.allclose(annotation.voxel_dimensions, orientation.voxel_dimensions), (
+        "The annotation and orientation files have different voxel dimensions."
+    )
 
     # The columns to be populated
     positions = []

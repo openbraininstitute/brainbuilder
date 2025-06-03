@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-""" Utilities for random sampling. """
+"""Utilities for random sampling."""
 
 import json
 
