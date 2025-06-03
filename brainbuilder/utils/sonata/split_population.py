@@ -656,8 +656,9 @@ def _write_subcircuit_external(output, circuit, id_mapping):
             if len(wanted_src_ids) == 0:
                 continue
 
-            new_name = f"external_{name}"
-            output_path = output / (new_name + ".h5")
+            new_node_name = f"external_{edge.source.name}_{edge.target.name}"
+            new_edge_name = f"external_{edge.source.name}__{edge.target.name}"
+            output_path = output / (new_edge_name + ".h5")
             output_path.parent.mkdir(parents=True, exist_ok=True)
             L.debug(
                 "Writing edges %s for %s -> %s [%s]",
@@ -666,19 +667,19 @@ def _write_subcircuit_external(output, circuit, id_mapping):
                 edge.target.name,
                 output_path,
             )
-            new_edges_files[new_name] = _write_subcircuit_edges(
+            new_edges_files[new_edge_name] = _write_subcircuit_edges(
                 output_path=str(output_path),
                 edges_path=_get_storage_path(edge),
-                src_node_pop=edge.source.name,
+                src_node_pop=new_node_name,
                 dst_node_pop=edge.target.name,
                 src_edge_pop_name=name,
-                dst_edge_pop_name=new_name,
+                dst_edge_pop_name=new_edge_name,
                 src_mapping=wanted_src_ids,
                 dst_mapping=id_mapping[edge.target.name],
             )
-            new_nodes[new_name] = wanted_src_ids
+            new_nodes[new_edge_name] = wanted_src_ids
 
-            id_mapping[new_name] = wanted_src_ids
+            id_mapping[new_node_name] = wanted_src_ids
 
     new_node_files = {}
     for population_name, wanted_src_ids in new_nodes.items():

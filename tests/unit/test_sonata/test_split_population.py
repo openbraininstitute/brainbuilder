@@ -533,8 +533,8 @@ def _check_biophysical_nodes(path, has_virtual, has_external):
             expected_mapping["V2"] = {"old_id": [0], "new_id": [0]}
 
         if has_external:
-            expected_mapping["external_A__B"] = {"old_id": [5], "new_id": [0]}
-            expected_mapping["external_A__C"] = {"old_id": [5], "new_id": [0]}
+            expected_mapping["external_A_B"] = {"old_id": [5], "new_id": [0]}
+            expected_mapping["external_A_C"] = {"old_id": [5], "new_id": [0]}
 
         mapping = load_json(path / "id_mapping.json")
         assert mapping == expected_mapping
@@ -574,8 +574,8 @@ def test_split_subcircuit_with_externals(tmp_path, circuit):
     _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=True)
 
     mapping = load_json(tmp_path / "id_mapping.json")
-    assert mapping["external_A__B"] == {"new_id": [0], "old_id": [5]}
-    assert mapping["external_A__C"] == {"new_id": [0], "old_id": [5]}
+    assert mapping["external_A_B"] == {"new_id": [0], "old_id": [5]}
+    assert mapping["external_A_C"] == {"new_id": [0], "old_id": [5]}
     assert "external_B" not in mapping
     assert "external_C" not in mapping
 
@@ -586,7 +586,7 @@ def test_split_subcircuit_with_externals(tmp_path, circuit):
         assert len(h5["nodes/external_A__C/0/model_type"]) == 1
 
     with h5py.File(tmp_path / "external_A__B.h5", "r") as h5:
-        assert h5["edges/external_A__B/source_node_id"].attrs["node_population"] == "external_A__B"
+        assert h5["edges/external_A__B/source_node_id"].attrs["node_population"] == "external_A_B"
         assert h5["edges/external_A__B/target_node_id"].attrs["node_population"] == "B"
         assert len(h5["edges/external_A__B/0/delay"]) == 1
 
@@ -597,7 +597,7 @@ def test_split_subcircuit_with_externals(tmp_path, circuit):
     with h5py.File(tmp_path / "external_A__C.h5", "r") as h5:
         assert len(h5["edges/external_A__C/0/delay"]) == 1
         assert h5["edges/external_A__C/0/delay"][0] == 0.5
-        assert h5["edges/external_A__C/source_node_id"].attrs["node_population"] == "external_A__C"
+        assert h5["edges/external_A__C/source_node_id"].attrs["node_population"] == "external_A_C"
         assert h5["edges/external_A__C/target_node_id"].attrs["node_population"] == "C"
 
 
