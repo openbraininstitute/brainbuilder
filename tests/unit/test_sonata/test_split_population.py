@@ -475,6 +475,8 @@ def _check_biophysical_nodes(path, has_virtual, has_external):
         assert list(edges["C__A"]["source_node_id"]) == [2]
         assert list(edges["C__A"]["target_node_id"]) == [2]
 
+        assert "C__B" not in edges
+
         config = load_json(path / "circuit_config.json")
 
         assert "manifest" in config
@@ -496,10 +498,8 @@ def _check_biophysical_nodes(path, has_virtual, has_external):
         assert edge_pops == {
             "A__B": {"type": "chemical"},
             "A__C": {"type": "chemical"},
-            "B__A": {"type": "chemical"},
             "B__C": {"type": "chemical"},
             "C__A": {"type": "chemical"},
-            "C__B": {"type": "chemical"},
         }
 
         virtual_node_count = sum(
@@ -512,7 +512,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external):
         else:
             assert virtual_node_count == 0
             assert len(node_pops) == 3
-            assert len(edge_pops) == 6
+            assert len(edge_pops) == 4
 
         node_sets = load_json(path / "node_sets.json")
         assert node_sets == {
