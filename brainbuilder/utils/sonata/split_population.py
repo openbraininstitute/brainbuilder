@@ -791,7 +791,10 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
 
             population_path = new_population_files[population]
             del new_population_files[population]
-            if population_path == DELETED_EMPTY_EDGES_FILE or population_path == DELETED_EMPTY_EDGES_POPULATION:
+            if (
+                population_path == DELETED_EMPTY_EDGES_FILE
+                or population_path == DELETED_EMPTY_EDGES_POPULATION
+            ):
                 removed_populations.add(population)
                 continue
 
