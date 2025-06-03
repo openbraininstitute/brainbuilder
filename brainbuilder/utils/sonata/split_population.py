@@ -27,6 +27,8 @@ H5_READ_CHUNKSIZE = 500_000_000
 GROUP_NAME = "0"
 # Sentinel to mark an edge file being empty
 DELETED_EMPTY_EDGES_FILE = "DELETED_EMPTY_EDGES_FILE"
+# Sentinel to mark an edge population being empty
+DELETED_EMPTY_EDGES_POPULATION = "DELETED_EMPTY_EDGES_POPULATION"
 
 
 def _create_chunked_slices(length, chunk_size):
@@ -456,6 +458,7 @@ def _write_subcircuit_edges(
 
     If DELETED_EMPTY_EDGES_FILE is returned, the file was removed since no
     populations existed in it any more
+    If DELETED_EMPTY_EDGES_POPULATION is returned, the population was removed
     """
     with h5py.File(edges_path, "r") as h5in:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -487,6 +490,8 @@ def _write_subcircuit_edges(
         elif is_file_empty:
             os.unlink(output_path)
             output_path = DELETED_EMPTY_EDGES_FILE
+        else:  # population empty, but not file
+            output_path = DELETED_EMPTY_EDGES_POPULATION
 
         return output_path
 
@@ -786,7 +791,7 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
 
             population_path = new_population_files[population]
             del new_population_files[population]
-            if population_path == DELETED_EMPTY_EDGES_FILE:
+            if population_path == DELETED_EMPTY_EDGES_FILE or population_path == DELETED_EMPTY_EDGES_POPULATION:
                 removed_populations.add(population)
                 continue
 
