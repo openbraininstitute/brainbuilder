@@ -586,7 +586,7 @@ def test_split_subcircuit_with_externals(tmp_path, circuit):
         assert len(h5["nodes/external_A__C/0/model_type"]) == 1
 
     with h5py.File(tmp_path / "external_A__B.h5", "r") as h5:
-        assert h5["edges/external_A__B/source_node_id"].attrs["node_population"] == "A"
+        assert h5["edges/external_A__B/source_node_id"].attrs["node_population"] == "external_A__B"
         assert h5["edges/external_A__B/target_node_id"].attrs["node_population"] == "B"
         assert len(h5["edges/external_A__B/0/delay"]) == 1
 
@@ -597,6 +597,8 @@ def test_split_subcircuit_with_externals(tmp_path, circuit):
     with h5py.File(tmp_path / "external_A__C.h5", "r") as h5:
         assert len(h5["edges/external_A__C/0/delay"]) == 1
         assert h5["edges/external_A__C/0/delay"][0] == 0.5
+        assert h5["edges/external_A__C/source_node_id"].attrs["node_population"] == "external_A__C"
+        assert h5["edges/external_A__C/target_node_id"].attrs["node_population"] == "C"
 
 
 @pytest.mark.parametrize(
