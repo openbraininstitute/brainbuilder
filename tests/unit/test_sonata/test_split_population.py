@@ -554,13 +554,15 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
 
 
 @pytest.mark.parametrize(
-    "circuit,from_subcircuit",
+    "circuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        DATA_PATH / "split_subcircuit" / "circuit_config.json",
+        bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"),
     ],
+)
+@pytest.mark.parametrize(
+    "from_subcircuit",
+    [False, True],
 )
 def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_a"
@@ -573,13 +575,15 @@ def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
 
 
 @pytest.mark.parametrize(
-    "circuit,from_subcircuit",
+    "circuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        DATA_PATH / "split_subcircuit" / "circuit_config.json",
+        bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"),
     ],
+)
+@pytest.mark.parametrize(
+    "from_subcircuit",
+    [False, True],
 )
 def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_a"
@@ -620,13 +624,15 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
 
 
 @pytest.mark.parametrize(
-    "circuit,from_subcircuit",
+    "circuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        DATA_PATH / "split_subcircuit" / "circuit_config.json",
+        bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"),
     ],
+)
+@pytest.mark.parametrize(
+    "from_subcircuit",
+    [False, True],
 )
 def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_a"
