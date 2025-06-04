@@ -713,6 +713,8 @@ def _write_subcircuit_external(
                 wanted_src_ids.index.to_numpy(),
             )  # HERE? HERE? HERE?
 
+            if new_source_pop_name in id_mapping:
+                assert id_mapping[new_source_pop_name].equals(wanted_src_ids), "FIXME: ID mapping mismatch"
             id_mapping[new_source_pop_name] = wanted_src_ids
 
     new_node_files = {}
