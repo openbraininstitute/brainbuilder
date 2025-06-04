@@ -573,7 +573,7 @@ def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
 
 
 @pytest.mark.parametrize(
-    ""circuit,from_subcircuit"",
+    "circuit,from_subcircuit",
     [
         (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
         (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
@@ -620,7 +620,7 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
 
 
 @pytest.mark.parametrize(
-    ""circuit,from_subcircuit"",
+    "circuit,from_subcircuit",
     [
         (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
         (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
