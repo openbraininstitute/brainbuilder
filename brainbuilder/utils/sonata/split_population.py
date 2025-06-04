@@ -698,6 +698,21 @@ def _write_subcircuit_external(
                 edge.target.name,
                 output_path,
             )
+
+            if new_source_pop_name in id_mapping:
+                # If mapping already exists, only add new IDs w/o changing existing!
+                # (May happen if different target populations have same external source population)
+                existing_mapping = id_mapping[new_source_pop_name]
+                is_existing = _isin(wanted_src_ids.index, existing_mapping.index)
+                wanted_src_ids.loc[is_existing] = existing_mapping.loc[wanted_src_ids.loc[is_existing].index]
+                new_ids = np.arange(np.sum(~is_existing)) + max(wanted_src_ids["new_id"].loc[is_existing]) + 1  # Continue IDs
+                wanted_src_ids.loc[~is_existing, "new_id"] = new_ids
+
+                # And merge new into existing
+                id_mapping[new_source_pop_name] = pd.concat([existing_mapping, wanted_src_ids.loc[~is_existing]], axis=0)
+            else:
+                id_mapping[new_source_pop_name] = wanted_src_ids
+
             new_edges_files[new_name] = _write_subcircuit_edges(
                 output_path=str(output_path),
                 edges_path=_get_storage_path(edge),
@@ -713,11 +728,13 @@ def _write_subcircuit_external(
                 wanted_src_ids.index.to_numpy(),
             )  # HERE? HERE? HERE?
 
-            if new_source_pop_name in id_mapping:
-                assert id_mapping[new_source_pop_name].equals(wanted_src_ids), (
-                    f"FIXME: ID mapping mismatch for '{new_source_pop_name}':\n{id_mapping[new_source_pop_name]}\nvs.\n{wanted_src_ids}"
-                )
-            id_mapping[new_source_pop_name] = wanted_src_ids
+            # print(id_mapping[new_source_pop_name])
+
+            # if new_source_pop_name in id_mapping:
+            #     assert id_mapping[new_source_pop_name].equals(wanted_src_ids), (
+            #         f"FIXME: ID mapping mismatch for '{new_source_pop_name}':\n{id_mapping[new_source_pop_name]}\nvs.\n{wanted_src_ids}"
+            #     )
+            # id_mapping[new_source_pop_name] = wanted_src_ids
 
     new_node_files = {}
     # write new virtual nodes from originally non-virtual populations
