@@ -704,12 +704,20 @@ def _write_subcircuit_external(
                 # (May happen if different target populations have same external source population)
                 existing_mapping = id_mapping[new_source_pop_name]
                 is_existing = _isin(wanted_src_ids.index, existing_mapping.index)
-                wanted_src_ids.loc[is_existing] = existing_mapping.loc[wanted_src_ids.loc[is_existing].index]
-                new_ids = np.arange(np.sum(~is_existing)) + max(wanted_src_ids["new_id"].loc[is_existing]) + 1  # Continue IDs
+                wanted_src_ids.loc[is_existing] = existing_mapping.loc[
+                    wanted_src_ids.loc[is_existing].index
+                ]
+                new_ids = (
+                    np.arange(np.sum(~is_existing))
+                    + max(wanted_src_ids["new_id"].loc[is_existing])
+                    + 1
+                )  # Continue IDs
                 wanted_src_ids.loc[~is_existing, "new_id"] = new_ids
 
                 # And merge new into existing
-                id_mapping[new_source_pop_name] = pd.concat([existing_mapping, wanted_src_ids.loc[~is_existing]], axis=0)
+                id_mapping[new_source_pop_name] = pd.concat(
+                    [existing_mapping, wanted_src_ids.loc[~is_existing]], axis=0
+                )
             else:
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
