@@ -11,11 +11,12 @@ Have 3 populations, to test that a nodeset that address multiple one
 03 3b      3b   <   3b         ('C', 'B', 3, 3)
 04 4a      4a       4a  <      ('A', 'C', 4, 4)
 05 4a      4a       4a  >      ('C', 'A', 4, 4)
-06 5b  >   5a       5a         ('A', 'B', 5, 5)  \ type b -> a
-07 5b      5a       5a  <      ('A', 'C', 5, 5)  /
-08 0a  >   0a       0a         ('A', 'B', 0, 0)  \ duplicates
-09 1b  <   1b       1b         ('B', 'A', 1, 1)  /
-10 0a  >   2a       2a         ('A', 'B', 0, 2)
+06 5b  >   5a       5a         ('A', 'B', 5, 5)  \ 
+07 5b      5a       5a  <      ('A', 'C', 5, 5)    type b -> a
+08 3b      2a       2a  <      ('A', 'C', 3, 2)  /
+09 0a  >   0a       0a         ('A', 'B', 0, 0)  \ duplicates
+10 1b  <   1b       1b         ('B', 'A', 1, 1)  /
+11 0a  >   2a       2a         ('A', 'B', 0, 2)
  | ||
  | |\ a/b are 'mtypes'
  | \ Node ID
@@ -33,9 +34,11 @@ nodeA  nodeB  nodeC
 Note: Since nodes are being removed, only node IDs 0/2/4 will be kept, and they need to be renumbered
 
 For 'external'; only
+ Node  nodaA 3b will be kept; pointing to nodeC::2a, and
  Node  nodaA 5b will be kept; pointing to both nodeB::5a and nodeC::5a, which were renumbered
- 5b  >   5a       5a                   ('external_A', 'B', 0, 5)
- 5b      5a       5a  <  Renumbered -> ('external_A', 'C', 0, 5)
+ 3b      2a       2a  <                ('external_A', 'B', 0, 2)
+ 5b  >   5a       5a                   ('external_A', 'B', 1, 5)
+ 5b      5a       5a  <  Renumbered -> ('external_A', 'C', 1, 5)
 """
 
 from collections import namedtuple
@@ -132,6 +135,7 @@ edges = (
     Edge("B", "C", [2], [2]),
     Edge("C", "B", [3], [3]),
     Edge("A", "C", [4, 5], [4, 5]),
+    Edge("A", "C", [3], [2]),
     Edge("C", "A", [4], [4]),
     Edge("A", "B", [0], [0]),
     Edge("B", "A", [1], [1]),

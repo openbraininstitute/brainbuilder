@@ -1,0 +1,60 @@
+{
+    "version": 2,
+    "manifest": {
+       "$BASE_DIR": ".",
+       "$NETWORK_NODES_DIR": "$BASE_DIR/networks/nodes",
+       "$NETWORK_EDGES_DIR": "$BASE_DIR/networks/edges"
+    },
+    "components": {
+        "morphologies_dir": "$BASE_DIR/morph/dir",
+        "biophysical_neuron_models_dir": "/emodel/dir",
+        "provenance": {
+            "id_mapping": "id_mapping.json"
+        }
+    },
+    "node_sets_file": "$BASE_DIR/node_sets.json",
+    "networks": {
+        "nodes": [{
+            "nodes_file": "$NETWORK_NODES_DIR/nodes.h5",
+            "populations": {
+                "A": { "type": "biophysical" },
+                "B": { "type": "biophysical" },
+                "C": { "type": "biophysical" }
+            }
+        },{
+            "nodes_file": "$NETWORK_NODES_DIR/virtual_nodes_V1.h5",
+            "populations": {
+                "V1": { "type": "virtual" }
+            }
+        },{
+            "nodes_file": "$NETWORK_NODES_DIR/virtual_nodes_V2.h5",
+            "populations": {
+                "V2": { "type": "virtual" }
+            }
+        }
+        ],
+        "edges": [{
+                "edges_file": "$NETWORK_EDGES_DIR/edges.h5",
+                "populations": {
+                    "A__B": { "type": "chemical" },
+                    "A__C": { "type": "chemical" },
+                    "B__A": { "type": "chemical" },
+                    "B__C": { "type": "chemical" },
+                    "C__A": { "type": "chemical" },
+                    "C__B": { "type": "chemical" }
+                }
+            },{
+                "edges_file": "$NETWORK_EDGES_DIR/virtual_edges_V1.h5",
+                "populations": {
+                    "V1__A": { "type": "chemical" },
+                    "V1__B": { "type": "chemical" }
+                }
+            },{
+                "edges_file": "$NETWORK_EDGES_DIR/virtual_edges_V2.h5",
+                "populations": {
+                    "V2__C": { "type": "chemical" }
+                }
+            }
+        ]
+    }
+}
