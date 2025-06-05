@@ -17,7 +17,6 @@ import voxcell
 from joblib import Parallel, delayed
 
 from brainbuilder import utils
-from brainbuilder.utils.sonata import curate
 
 L = logging.getLogger(__name__)
 
