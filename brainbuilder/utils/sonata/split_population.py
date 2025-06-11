@@ -680,11 +680,11 @@ def _write_subcircuit_external(
 
             new_name = f"external_{name}"
             while new_name in existing_edge_pop_names:
-                L.debug("{0} already exists as an edge population".format(new_name))
+                L.debug(f"{new_name} already exists as an edge population")
                 new_name = "external_" + new_name
-            new_source_pop_name = "external_{0}".format(edge.source.name)
+            new_source_pop_name = f"external_{edge.source.name}"
             while new_source_pop_name in existing_node_pop_names:
-                L.debug("{0} already exists as an node population".format(new_source_pop_name))
+                L.debug(f"{new_source_pop_name} already exists as an node population")
                 new_source_pop_name = "external_" + new_source_pop_name
             node_pop_name_mapping[new_source_pop_name] = edge.source.name
 
@@ -710,7 +710,7 @@ def _write_subcircuit_external(
                     np.arange(np.sum(~is_existing))
                     + max(wanted_src_ids["new_id"].loc[is_existing])
                     + 1
-                )  # Continue IDs
+                )  # New node IDs begin at the lowest unused value (max + 1)
                 wanted_src_ids.loc[~is_existing, "new_id"] = new_ids
 
                 # And merge new into existing
@@ -723,7 +723,7 @@ def _write_subcircuit_external(
             new_edges_files[new_name] = _write_subcircuit_edges(
                 output_path=str(output_path),
                 edges_path=_get_storage_path(edge),
-                src_node_pop=new_source_pop_name,  # HERE HERE HERE!
+                src_node_pop=new_source_pop_name,
                 dst_node_pop=edge.target.name,
                 src_edge_pop_name=name,
                 dst_edge_pop_name=new_name,
@@ -733,7 +733,7 @@ def _write_subcircuit_external(
             new_nodes[new_source_pop_name] = (
                 edge.source.name,
                 wanted_src_ids.index.to_numpy(),
-            )  # HERE? HERE? HERE?
+            )
 
             # print(id_mapping[new_source_pop_name])
 
@@ -762,7 +762,7 @@ def _write_subcircuit_virtual(
     edge_populations_to_paths,
     id_mapping,
     node_pop_name_mapping,
-    list_of_sources_to_ignore=None,
+    list_of_sources_to_ignore=(),
 ):
     """write all node/edge populations that have virtual nodes as source
 
@@ -770,8 +770,6 @@ def _write_subcircuit_virtual(
     """
     # pylint: disable=too-many-locals
     new_node_files, new_edges_files = {}, {}
-    if list_of_sources_to_ignore is None:
-        list_of_sources_to_ignore = []
 
     virtual_populations = {
         name: edge
@@ -857,7 +855,7 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
             path = path[1:]
         return path
 
-    str_type = "{0}_file".format(type_)
+    str_type = f"{type_}_file"
     if type_ == "nodes":
         default_type = "virtual"
     else:  # Must be edges. This is checked above.
@@ -938,21 +936,20 @@ def _mapping_to_parent_dict(id_mapping, node_pop_name_mapping):
     return mapping
 
 
-def _no_mapping_to_original(this_mapping):
+def _make_parent_the_original_mapping(this_mapping):
     for this_pop in this_mapping.keys():
         this_mapping[this_pop][STR_ORIG_IDS] = this_mapping[this_pop][STR_PARENT_IDS]
         this_mapping[this_pop][STR_ORIG_NAME] = this_mapping[this_pop][STR_PARENT_NAME]
 
 
 def _add_mapping_to_original(this_mapping, parent_mapping):
-    # TODO: This strongly assumes that the parent_mapping is complete and valid.
-    def backwards_mapping(mapping_dict):
-        return pd.Series(mapping_dict[STR_ORIG_IDS], index=mapping_dict[STR_THIS_IDS])
 
     for this_pop in this_mapping.keys():
         parent_pop = this_mapping[this_pop][STR_PARENT_NAME]
 
-        orig_ids = backwards_mapping(parent_mapping[parent_pop])[
+        backwards_mapped = pd.Series(parent_mapping[parent_pop][STR_ORIG_IDS],
+                                     index=parent_mapping[parent_pop][STR_THIS_IDS])
+        orig_ids = backwards_mapped[
             this_mapping[this_pop][STR_PARENT_IDS]
         ]
         orig_name = parent_mapping[parent_pop][STR_ORIG_NAME]
@@ -977,7 +974,7 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
             parent_mapping = json.load(fid)
         _add_mapping_to_original(this_mapping, parent_mapping)
     else:
-        _no_mapping_to_original(this_mapping)
+        _make_parent_the_original_mapping(this_mapping)
 
     mapping_fn = "id_mapping.json"
     utils.dump_json(output / mapping_fn, this_mapping)
@@ -990,7 +987,7 @@ def split_subcircuit(
     circuit,
     do_virtual,
     create_external,
-    list_of_virtual_sources_to_ignore=None,
+    list_of_virtual_sources_to_ignore=(),
 ):
     """Split a single subcircuit out of circuit, based on nodeset
 
@@ -1002,9 +999,9 @@ def split_subcircuit(
             contained in the specified nodeset
         create_external(bool): whether to create new virtual populations of all the
             incoming connections
-        list_of_virtual_sources_to_ignore (list[str] or None): Only considered if do_virtual==True.
-            List of names of virtual source node populations. Virtual edge populations associated
-            with these sources will NOT be extracted into the subcircuit.
+        list_of_virtual_sources_to_ignore (list[str] or tuple[str], default=()): Only considered if 
+            do_virtual==True. List of names of virtual source node populations. Virtual edge 
+            populations associated with these sources will NOT be extracted into the subcircuit.
     """
     # pylint: disable=too-many-locals
     output = Path(output)
