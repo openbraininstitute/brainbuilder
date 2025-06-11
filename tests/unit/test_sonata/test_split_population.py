@@ -436,11 +436,25 @@ def _find_populations_by_path(networks, key, name):
     return populations
 
 
-def _check_biophysical_nodes(path, has_virtual, has_external):
+def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=False):
     mapping = load_json(path / "id_mapping.json")
-    assert mapping["A"] == {"new_id": [0, 1, 2], "old_id": [0, 2, 4]}
-    assert mapping["B"] == {"new_id": [0, 1, 2, 3], "old_id": [0, 2, 4, 5]}
-    assert mapping["C"] == {"new_id": [0, 1, 2, 3], "old_id": [0, 2, 4, 5]}
+
+    def _orig_id_map(ids, pop):
+        orig_offset = {"A": 1000, "B": 2000, "C": 3000, "V1": 8000, "V2": 9000}
+        if from_subcircuit:
+            return [_id + orig_offset[pop] for _id in ids]
+        else:
+            return ids
+
+    def _orig_name_map(name):
+        if from_subcircuit:
+            return "All" + name
+        else:
+            return name
+
+    assert mapping["A"] == {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": _orig_id_map([0, 2, 4], "A"), "original_name": _orig_name_map("A")}
+    assert mapping["B"] == {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "B", "original_id": _orig_id_map([0, 2, 4, 5], "B"), "original_name": _orig_name_map("B")}
+    assert mapping["C"] == {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "C", "original_id": _orig_id_map([0, 2, 4, 5], "C"), "original_name": _orig_name_map("C")}
 
     with h5py.File(path / "nodes" / "nodes.h5", "r") as h5:
         nodes = h5["nodes"]
@@ -507,7 +521,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external):
             for node in config["networks"]["nodes"]
             for population in node["populations"].values()
         )
-        if has_virtual:
+        if has_virtual or has_external:
             assert virtual_node_count > 0
         else:
             assert virtual_node_count == 0
@@ -523,96 +537,108 @@ def _check_biophysical_nodes(path, has_virtual, has_external):
         }
 
         expected_mapping = {
-            "A": {"old_id": [0, 2, 4], "new_id": [0, 1, 2]},
-            "B": {"old_id": [0, 2, 4, 5], "new_id": [0, 1, 2, 3]},
-            "C": {"old_id": [0, 2, 4, 5], "new_id": [0, 1, 2, 3]},
+            "A": {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": _orig_id_map([0, 2, 4], "A"), "original_name": _orig_name_map("A")},
+            "B": {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "B", "original_id": _orig_id_map([0, 2, 4, 5], "B"), "original_name": _orig_name_map("B")},
+            "C": {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "C", "original_id": _orig_id_map([0, 2, 4, 5], "C"), "original_name": _orig_name_map("C")},
         }
 
         if has_virtual:
-            expected_mapping["V1"] = {"old_id": [0, 2, 3], "new_id": [0, 1, 2]}
-            expected_mapping["V2"] = {"old_id": [0], "new_id": [0]}
+            expected_mapping["V1"] = {"new_id": [0, 1, 2], "parent_id": [0, 2, 3], "parent_name": "V1", "original_id": _orig_id_map([0, 2, 3], "V1"), "original_name": _orig_name_map("V1")}
+            expected_mapping["V2"] = {"new_id": [0], "parent_id": [0], "parent_name": "V2", "original_id": _orig_id_map([0], "V2"), "original_name": _orig_name_map("V2")}
 
         if has_external:
-            expected_mapping["external_A__B"] = {"old_id": [5], "new_id": [0]}
-            expected_mapping["external_A__C"] = {"old_id": [5], "new_id": [0]}
+            expected_mapping["external_A"] = {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": _orig_id_map([5, 3], "A"), "original_name": _orig_name_map("A")}
 
         mapping = load_json(path / "id_mapping.json")
         assert mapping == expected_mapping
 
 
 @pytest.mark.parametrize(
-    "circuit",
+    "circuit,from_subcircuit",
     [
-        DATA_PATH / "split_subcircuit" / "circuit_config.json",
-        bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"),
+        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
+        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
     ],
 )
-def test_split_subcircuit_with_no_externals(tmp_path, circuit):
+def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_a"
 
     split_population.split_subcircuit(
         tmp_path, node_set_name, circuit, do_virtual=False, create_external=False
     )
 
-    _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=False)
+    _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=False, from_subcircuit=from_subcircuit)
 
 
 @pytest.mark.parametrize(
-    "circuit",
+    "circuit,from_subcircuit",
     [
-        DATA_PATH / "split_subcircuit" / "circuit_config.json",
-        bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"),
+        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
+        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
     ],
 )
-def test_split_subcircuit_with_externals(tmp_path, circuit):
+def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_a"
 
     split_population.split_subcircuit(
         tmp_path, node_set_name, circuit, do_virtual=False, create_external=True
     )
 
-    _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=True)
+    _check_biophysical_nodes(path=tmp_path, has_virtual=False, has_external=True, from_subcircuit=from_subcircuit)
 
     mapping = load_json(tmp_path / "id_mapping.json")
-    assert mapping["external_A__B"] == {"new_id": [0], "old_id": [5]}
-    assert mapping["external_A__C"] == {"new_id": [0], "old_id": [5]}
+    if from_subcircuit:
+        assert mapping["external_A"] == {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": [1005, 1003], "original_name": "AllA"}
+    else:
+        assert mapping["external_A"] == {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": [5, 3], "original_name": "A"}
     assert "external_B" not in mapping
     assert "external_C" not in mapping
 
-    with h5py.File(tmp_path / "nodes_external_A__B.h5", "r") as h5:
-        assert len(h5["nodes/external_A__B/0/model_type"]) == 1
-
-    with h5py.File(tmp_path / "nodes_external_A__C.h5", "r") as h5:
-        assert len(h5["nodes/external_A__C/0/model_type"]) == 1
+    with h5py.File(tmp_path / "external_A/nodes.h5", "r") as h5:
+        assert len(h5["nodes/external_A/0/model_type"]) == 2
 
     with h5py.File(tmp_path / "external_A__B.h5", "r") as h5:
-        assert h5["edges/external_A__B/source_node_id"].attrs["node_population"] == "A"
+        assert h5["edges/external_A__B/source_node_id"].attrs["node_population"] == "external_A"
         assert h5["edges/external_A__B/target_node_id"].attrs["node_population"] == "B"
         assert len(h5["edges/external_A__B/0/delay"]) == 1
-
-    networks = load_json(tmp_path / "circuit_config.json")["networks"]
-    assert len(networks["nodes"]) == 1
-    assert len(networks["edges"]) == 1
+        assert h5["edges/external_A__B/0/delay"][0] == 0.5
+        assert list(h5["edges/external_A__B/source_node_id"]) == [0]
+        assert list(h5["edges/external_A__B/target_node_id"]) == [3]
 
     with h5py.File(tmp_path / "external_A__C.h5", "r") as h5:
-        assert len(h5["edges/external_A__C/0/delay"]) == 1
+        assert h5["edges/external_A__C/source_node_id"].attrs["node_population"] == "external_A"
+        assert h5["edges/external_A__C/target_node_id"].attrs["node_population"] == "C"
+        assert len(h5["edges/external_A__C/0/delay"]) == 2
         assert h5["edges/external_A__C/0/delay"][0] == 0.5
+        assert h5["edges/external_A__C/0/delay"][1] == 0.5
+        assert list(h5["edges/external_A__C/source_node_id"]) == [0, 1]
+        assert list(h5["edges/external_A__C/target_node_id"]) == [3, 1]
+
+    networks = load_json(tmp_path / "circuit_config.json")["networks"]
+    assert len(networks["nodes"]) == 4
+    assert len(networks["edges"]) == 6
 
 
 @pytest.mark.parametrize(
-    "circuit",
+    "circuit,from_subcircuit",
     [
-        DATA_PATH / "split_subcircuit" / "circuit_config.json",
-        bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"),
+        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
+        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
     ],
 )
-def test_split_subcircuit_with_virtual(tmp_path, circuit):
+def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_a"
     split_population.split_subcircuit(
         tmp_path, node_set_name, circuit, do_virtual=True, create_external=False
     )
 
-    _check_biophysical_nodes(path=tmp_path, has_virtual=True, has_external=False)
+    _check_biophysical_nodes(path=tmp_path, has_virtual=True, has_external=False, from_subcircuit=from_subcircuit)
 
     with h5py.File(tmp_path / "V1" / "nodes.h5", "r") as h5:
         assert len(h5["nodes/V1/0/model_type"]) == 3

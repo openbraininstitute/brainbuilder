@@ -1,0 +1,121 @@
+{
+  "A": {
+    "parent_id": [
+      100,
+      101,
+      102,
+      103,
+      104,
+      105
+    ],
+    "new_id": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "parent_name": "SubA",
+    "original_id": [
+      1000,
+      1001,
+      1002,
+      1003,
+      1004,
+      1005
+    ],
+    "original_name": "AllA"
+  },
+  "B": {
+    "parent_id": [
+      200,
+      201,
+      202,
+      203,
+      204,
+      205
+    ],
+    "new_id": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "parent_name": "SubB",
+    "original_id": [
+      2000,
+      2001,
+      2002,
+      2003,
+      2004,
+      2005
+    ],
+    "original_name": "AllB"
+  },
+  "C": {
+    "parent_id": [
+      300,
+      301,
+      302,
+      303,
+      304,
+      305
+    ],
+    "new_id": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "parent_name": "SubC",
+    "original_id": [
+      3000,
+      3001,
+      3002,
+      3003,
+      3004,
+      3005
+    ],
+    "original_name": "AllC"
+  },
+  "V1": {
+    "parent_id": [
+      800,
+      801,
+      802,
+      803
+    ],
+    "new_id": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "parent_name": "SubV1",
+    "original_id": [
+      8000,
+      8001,
+      8002,
+      8003
+    ],
+    "original_name": "AllV1"
+  },
+  "V2": {
+    "parent_id": [
+      900
+    ],
+    "new_id": [
+      0
+    ],
+    "parent_name": "SubV2",
+    "original_id": [
+      9000
+    ],
+    "original_name": "AllV2"
+  }
+}
