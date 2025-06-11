@@ -943,15 +943,13 @@ def _make_parent_the_original_mapping(this_mapping):
 
 
 def _add_mapping_to_original(this_mapping, parent_mapping):
-
     for this_pop in this_mapping.keys():
         parent_pop = this_mapping[this_pop][STR_PARENT_NAME]
 
-        backwards_mapped = pd.Series(parent_mapping[parent_pop][STR_ORIG_IDS],
-                                     index=parent_mapping[parent_pop][STR_THIS_IDS])
-        orig_ids = backwards_mapped[
-            this_mapping[this_pop][STR_PARENT_IDS]
-        ]
+        backwards_mapped = pd.Series(
+            parent_mapping[parent_pop][STR_ORIG_IDS], index=parent_mapping[parent_pop][STR_THIS_IDS]
+        )
+        orig_ids = backwards_mapped[this_mapping[this_pop][STR_PARENT_IDS]]
         orig_name = parent_mapping[parent_pop][STR_ORIG_NAME]
 
         this_mapping[this_pop][STR_ORIG_IDS] = orig_ids.to_list()
@@ -999,8 +997,8 @@ def split_subcircuit(
             contained in the specified nodeset
         create_external(bool): whether to create new virtual populations of all the
             incoming connections
-        list_of_virtual_sources_to_ignore (list[str] or tuple[str], default=()): Only considered if 
-            do_virtual==True. List of names of virtual source node populations. Virtual edge 
+        list_of_virtual_sources_to_ignore (list[str] or tuple[str], default=()): Only considered if
+            do_virtual==True. List of names of virtual source node populations. Virtual edge
             populations associated with these sources will NOT be extracted into the subcircuit.
     """
     # pylint: disable=too-many-locals
