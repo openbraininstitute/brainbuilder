@@ -790,6 +790,11 @@ def _write_subcircuit_virtual(
         name: np.unique(np.concatenate(ids)) for name, ids in pop_used_source_node_ids.items()
     }
 
+    for name, ids in pop_used_source_node_ids.items():
+        assert len(ids) > 0, f"ERROR: Virtual population '{name}' empty!"
+        # TODO: If empty, remove source node population from pop_used_source_node_ids
+        # TODO: If empty, remove edge populations with that source from virtual_populations
+
     # update the mappings with the virtual nodes
     for name, ids in pop_used_source_node_ids.items():
         id_mapping[name] = pd.DataFrame({NEW_IDS: range(len(ids))}, index=ids)

@@ -2,5 +2,6 @@
     "mtype_a": {"mtype": "a"},
     "someA": {"population": "A", "node_id": [0, 1, 2] },
     "allB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5] },
+    "someB": {"population": "B", "node_id": [2, 3, 4] },
     "noC": {"population": "C", "node_id": [] }
 }

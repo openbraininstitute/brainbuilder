@@ -533,6 +533,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             "mtype_a": {"mtype": "a"},
             "someA": {"node_id": [0, 1], "population": "A"},
             "allB": {"node_id": [0, 1, 2, 3], "population": "B"},
+            "someB": {"node_id": [1, 2], "population": "B"},
             "noC": {"node_id": [], "population": "C"},
         }
 
@@ -679,6 +680,24 @@ def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
         networks, "edges", "$BASE_DIR/V2__C/virtual_edges_V2.h5"
     )
     assert virtual_pop == {"V2__C": {"type": "chemical"}}
+
+
+@pytest.mark.parametrize(
+    "circuit,from_subcircuit",
+    [
+        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
+        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+    ],
+)
+def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit):
+    node_set_name = "someB"
+    split_population.split_subcircuit(
+        tmp_path, node_set_name, circuit, do_virtual=True, create_external=False
+    )
+
+    # TODO: Add additional checks
 
 
 def test_split_subcircuit_edge_indices(tmp_path):
