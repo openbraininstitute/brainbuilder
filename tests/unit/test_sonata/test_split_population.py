@@ -693,7 +693,7 @@ def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
     ],
 )
 def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit):
-    node_set_name = "someB"
+    node_set_name = "mtype_b"
     split_population.split_subcircuit(
         tmp_path, node_set_name, circuit, do_virtual=True, create_external=False
     )
