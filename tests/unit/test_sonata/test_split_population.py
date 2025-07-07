@@ -531,6 +531,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
         node_sets = load_json(path / "node_sets.json")
         assert node_sets == {
             "mtype_a": {"mtype": "a"},
+            "mtype_b": {"mtype": "b"},
             "someA": {"node_id": [0, 1], "population": "A"},
             "allB": {"node_id": [0, 1, 2, 3], "population": "B"},
             "someB": {"node_id": [1, 2], "population": "B"},
