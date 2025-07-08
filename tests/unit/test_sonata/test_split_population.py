@@ -531,8 +531,10 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
         node_sets = load_json(path / "node_sets.json")
         assert node_sets == {
             "mtype_a": {"mtype": "a"},
+            "mtype_b": {"mtype": "b"},
             "someA": {"node_id": [0, 1], "population": "A"},
             "allB": {"node_id": [0, 1, 2, 3], "population": "B"},
+            "someB": {"node_id": [1, 2], "population": "B"},
             "noC": {"node_id": [], "population": "C"},
         }
 
@@ -679,6 +681,141 @@ def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
         networks, "edges", "$BASE_DIR/V2__C/virtual_edges_V2.h5"
     )
     assert virtual_pop == {"V2__C": {"type": "chemical"}}
+
+
+@pytest.mark.parametrize(
+    "circuit,from_subcircuit",
+    [
+        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
+        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+    ],
+)
+def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit):
+    node_set_name = "mtype_b"
+    split_population.split_subcircuit(
+        tmp_path, node_set_name, circuit, do_virtual=True, create_external=False
+    )
+
+    mapping = load_json(tmp_path / "id_mapping.json")
+
+    def _orig_id_map(ids, pop):
+        orig_offset = {"A": 1000, "B": 2000, "C": 3000, "V1": 8000, "V2": 9000}
+        if from_subcircuit:
+            return [_id + orig_offset[pop] for _id in ids]
+        else:
+            return ids
+
+    def _orig_name_map(name):
+        if from_subcircuit:
+            return "All" + name
+        else:
+            return name
+
+    assert mapping["A"] == {"new_id": [0, 1, 2], "parent_id": [1, 3, 5], "parent_name": "A", "original_id": _orig_id_map([1, 3, 5], "A"), "original_name": _orig_name_map("A")}
+    assert mapping["B"] == {"new_id": [0, 1], "parent_id": [1, 3], "parent_name": "B", "original_id": _orig_id_map([1, 3], "B"), "original_name": _orig_name_map("B")}
+    assert mapping["C"] == {"new_id": [0, 1], "parent_id": [1, 3], "parent_name": "C", "original_id": _orig_id_map([1, 3], "C"), "original_name": _orig_name_map("C")}
+    assert mapping["V1"] == {"new_id": [0], "parent_id": [1], "parent_name": "V1", "original_id": _orig_id_map([1], "V1"), "original_name": _orig_name_map("V1")}
+    assert "V2" not in mapping
+
+    with h5py.File(tmp_path / "nodes" / "nodes.h5", "r") as h5:
+        nodes = h5["nodes"]
+        for src in ("A", ):  # Cagegorical m-types, i.e., @library created by Voxcell (#unique < 0.5 * #total)
+            assert src in nodes
+            assert len(nodes[src]["0/@library/mtype"]) == 1
+            assert np.all(nodes[src]["0/@library/mtype"][0] == b"b")
+            assert np.all(nodes[src]["0/mtype"][:] == 0)
+        for src in ("B", "C"):  # Non-cagegorical m-types, i.e., @library not created by Voxcell (not #unique < 0.5 * #total)
+            assert src in nodes
+            assert "@library" not in nodes[src]["0"].keys()
+            assert np.all(nodes[src]["0/mtype"][:] == b"b")
+
+        assert len(nodes["A/node_type_id"]) == 3
+        assert len(nodes["B/node_type_id"]) == 2
+        assert len(nodes["C/node_type_id"]) == 2
+
+    with h5py.File(tmp_path / "V1" / "nodes.h5", "r") as h5:
+        assert len(h5["nodes/V1/0/model_type"]) == 1
+
+    assert not (tmp_path / "V2" / "nodes.h5").exists()
+
+    with h5py.File(tmp_path / "edges" / "edges.h5", "r") as h5:
+        edges = h5["edges"]
+
+        assert "A__B" not in edges
+
+        assert "B__A" in edges
+        assert list(edges["B__A"]["source_node_id"]) == [0, 0]
+        assert list(edges["B__A"]["target_node_id"]) == [0, 0]  # 2nd is duplicate edge
+
+        assert "A__C" not in edges
+
+        assert "B__C" not in edges
+
+        assert "C__A" not in edges
+
+        assert "C__B" in edges
+        assert list(edges["C__B"]["source_node_id"]) == [1]
+        assert list(edges["C__B"]["target_node_id"]) == [1]
+
+    with h5py.File(tmp_path / "edges" / "virtual_edges_V1.h5", "r") as h5:
+        assert list(h5["edges"].keys()) == ["V1__B"]
+        assert len(h5["edges/V1__B/0/delay"]) == 1
+        assert list(h5["edges/V1__B/source_node_id"]) == [0]
+        assert list(h5["edges/V1__B/target_node_id"]) == [0]
+
+    assert not (tmp_path / "edges" / "virtual_edges_V2.h5").exists()
+    
+    config = load_json(tmp_path / "circuit_config.json")
+
+    assert "manifest" in config
+    assert config["manifest"]["$BASE_DIR"] == "./"
+    assert "networks" in config
+    assert "nodes" in config["networks"]
+    node_pops = _find_populations_by_path(
+        config["networks"], "nodes", "$BASE_DIR/nodes/nodes.h5"
+    )
+    assert node_pops == {
+        "A": {"type": "biophysical"},
+        "B": {"type": "biophysical"},
+        "C": {"type": "biophysical"},
+    }
+    assert "edges" in config["networks"]
+    edge_pops = _find_populations_by_path(
+        config["networks"], "edges", "$BASE_DIR/edges/edges.h5"
+    )
+    assert edge_pops == {
+        "B__A": {"type": "chemical"},
+        "C__B": {"type": "chemical"},
+    }
+
+    virtual_node_count = sum(
+        population["type"] == "virtual"
+        for node in config["networks"]["nodes"]
+        for population in node["populations"].values()
+    )
+    assert virtual_node_count == 1
+
+    networks = config["networks"]
+    virtual_pop = _find_populations_by_path(networks, "nodes", f"$BASE_DIR/V1/nodes.h5")
+    assert len(virtual_pop) == 1
+    assert virtual_pop[f"V1"] == {"type": "virtual"}
+
+    virtual_pop = _find_populations_by_path(
+        networks, "edges", "$BASE_DIR/edges/virtual_edges_V1.h5"
+    )
+    assert virtual_pop == {"V1__B": {"type": "chemical"}}
+
+    node_sets = load_json(tmp_path / "node_sets.json")
+    assert node_sets == {
+        "mtype_a": {"mtype": "a"},
+        "mtype_b": {"mtype": "b"},
+        "someA": {"node_id": [0], "population": "A"},
+        "allB": {"node_id": [0, 1], "population": "B"},
+        "someB": {"node_id": [1], "population": "B"},
+        "noC": {"node_id": [], "population": "C"},
+    }
 
 
 def test_split_subcircuit_edge_indices(tmp_path):
