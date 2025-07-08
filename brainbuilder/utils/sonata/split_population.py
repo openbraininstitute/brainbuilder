@@ -787,10 +787,11 @@ def _write_subcircuit_virtual(
         )
 
     pop_used_source_node_ids = {
-        name: np.unique(np.concatenate(ids)) for name, ids in pop_used_source_node_ids.items()
+        name: np.unique(np.concatenate(ids))
+        for name, ids in pop_used_source_node_ids.items()
         if len(np.concatenate(ids)) > 0  # Exclude empty sources
     }
-    
+
     # Remove edge populations with empty sources
     virtual_populations = {
         name: edge
