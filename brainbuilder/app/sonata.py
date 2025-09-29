@@ -45,6 +45,37 @@ def from_mvd3(mvd3, output, model_type, mecombo_info, population):
 
 
 @app.command()
+@click.option("-o", "--output", help="directory to output SONATA files", required=True)
+@click.option("--nodes-file", help="Path to nodes file", required=True)
+@click.option("--node-types-file", help="Path to node type file", required=True)
+@click.option("--edges-file", help="Path to edges file", required=True)
+@click.option("--edge-types-file", help="Path to edge type file", required=True)
+def from_allen_circuit(nodes_file, node_types_file, edges_file, edge_types_file, output):
+    """Provide SONATA nodes with MorphoElectrical info"""
+    from brainbuilder.utils.sonata import convert_allen_v1
+    from voxcell import CellCollection
+    from pathlib import Path
+
+    import h5py
+
+    node_file_name = Path(nodes_file).name
+    edge_file_name = Path(edges_file).name
+
+    cells_df, node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
+    edges_df, src_pop, tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
+
+    # save to sonata
+    if not Path(output).exists():
+        Path(output).mkdir(parents=True, exist_ok=True)
+    cells = CellCollection.from_dataframe(cells_df, index_offset=0)
+    cells.population_name = node_pop
+    cells.save_sonata(Path(output) / node_file_name, cells_df)
+
+    with h5py.File(Path(output) / edge_file_name, "w") as h5f:
+        convert_allen_v1.write_edges_from_dataframe(edges_df, src_pop, tgt_pop, h5f)
+
+
+@app.command()
 @click.argument("cells-path")
 @click.option("-o", "--output", help="Path to output SONATA nodes", required=True)
 @click.option("--model-type", help="Type of neurons", required=True)
