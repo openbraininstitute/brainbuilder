@@ -63,7 +63,11 @@ def load_allen_edges(edges_file, edge_types_file):
     edges_df.rename(columns={"syn_weight": "conductance"}, inplace=True)
     # edges_df["target_query"]=edges_df["target_query"].str.split("&pop_name==", n=1, expand=True)[1].str.strip("'")
     # edges_df["source_query"]=edges_df["target_query"].str.split("&pop_name==", n=1, expand=True)[1].str.strip("'")
-    return edges_df, pop[0], pop[1]
+
+    edges_df_expanded = edges_df.loc[edges_df.index.repeat(edges_df["nsyns"])].reset_index(
+        drop=True
+    )
+    return edges_df_expanded, pop[0], pop[1]
 
 
 def split_dataframe_by_attribute(df, attribute_name):
