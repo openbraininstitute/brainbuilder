@@ -63,6 +63,7 @@ def from_allen_circuit(nodes_file, node_types_file, edges_file, edge_types_file,
 
     cells_df, node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
     edges_df, src_pop, tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
+    edges_df = convert_allen_v1.prepare_synapses(edges_df, cells_df)
 
     # save to sonata
     if not Path(output).exists():
@@ -70,6 +71,7 @@ def from_allen_circuit(nodes_file, node_types_file, edges_file, edge_types_file,
     cells = CellCollection.from_dataframe(cells_df, index_offset=0)
     cells.population_name = node_pop
     cells.save_sonata(Path(output) / node_file_name, cells_df)
+
 
     with h5py.File(Path(output) / edge_file_name, "w") as h5f:
         convert_allen_v1.write_edges_from_dataframe(edges_df, src_pop, tgt_pop, h5f)
