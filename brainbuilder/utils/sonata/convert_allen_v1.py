@@ -36,14 +36,18 @@ def load_allen_nodes(nodes_file, node_types_file):
     cells_df, node_population = sonata_to_dataframe(nodes_file, file_type="nodes")
     cells_df = cells_df.merge(
         node_types_df[
-            ["node_type_id", "model_template", "morphology", "rotation_angle_zaxis", "model_type"]
+            ["node_type_id", "dynamics_params", "morphology", "rotation_angle_zaxis", "model_type"]
         ],
         on="node_type_id",
         how="left",
     )
     # print(cells_df.loc[cells_df["node_type_id"] >= 100000121, "rotation_angle_yaxis"])
+    cells_df.rename(columns={"dynamics_params": "model_template"}, inplace=True)
+    # hoc template name can not be started with number, prefix with BP_ where necessary
     cells_df["model_template"] = cells_df["model_template"].str.replace(
-        r"^.*:([A-Za-z0-9_]+)(?:\.hoc)?$", r"hoc:\1", regex=True
+        r"^([0-9][A-Za-z0-9_]*)(?:\.json)?$|^([A-Za-z][A-Za-z0-9_]*)(?:\.json)?$",
+        lambda m: f"hoc:BP_{m.group(1)}" if m.group(1) else f"hoc:{m.group(2)}",
+        regex=True,
     )
     cells_df["morphology"] = cells_df["morphology"].str.replace(r"\.[^.]+$", "", regex=True)
     cells_df["rotation_angle_zaxis"] = cells_df["rotation_angle_zaxis"].fillna(0)
