@@ -51,7 +51,7 @@ def load_allen_nodes(nodes_file, node_types_file):
 
     for dummy_field in ["mtype", "etype"]:
         if dummy_field not in cells_df.columns:
-            cells_df[dummy_field]="None"
+            cells_df[dummy_field] = "None"
 
     return cells_df, node_population
 
@@ -61,21 +61,42 @@ def load_allen_edges(edges_file, edge_types_file):
     edges_df, pop = sonata_to_dataframe(edges_file, file_type="edges")
     assert len(pop) == 2, "Should return source and target population names for edges"
     edges_df = edges_df.merge(
-        edge_types_df[["edge_type_id", "syn_weight", "weight_function", "weight_sigma", "delay"]], on="edge_type_id", how="left"
+        edge_types_df[["edge_type_id", "syn_weight", "weight_function", "weight_sigma", "delay"]],
+        on="edge_type_id",
+        how="left",
     )
     # edges_df.rename(columns={"syn_weight": "conductance"}, inplace=True)
     return edges_df, pop[0], pop[1]
 
+
 def prepare_synapses(edges_df, nodes_df):
     adjust_synapse_weights(edges_df, nodes_df)
-    edges_df_expanded = edges_df.loc[edges_df.index.repeat(edges_df["nsyns"])].reset_index(drop=True)
+
+    biophysical_gids = nodes_df.index[nodes_df["model_type"] == "biophysical"]
+    point_gids = nodes_df.index[nodes_df["model_type"] == "point_process"]
+    # For edges targeting point cells, multiple syn_weight by nsys
+    mask = edges_df["target_node_id"].isin(point_gids)
+    edges_df.loc[mask, "conductance"] *= edges_df.loc[mask, "nsyns"]
+    # For edges targeting biophysical cells, expand synapses
+    repeat_counts = edges_df["nsyns"].where(edges_df["target_node_id"].isin(biophysical_gids), 1)
+    edges_df_expanded = edges_df.loc[edges_df.index.repeat(repeat_counts)].reset_index(drop=True)
+
     return edges_df_expanded
 
+
 def adjust_synapse_weights(edges_df, nodes_df):
-    src_df = nodes_df.loc[edges_df["source_node_id"], ["tuning_angle", "x","z"]].reset_index(drop=True)
-    tgt_df = nodes_df.loc[edges_df["target_node_id"], ["tuning_angle", "x","z"]].reset_index(drop=True)
-    edges_df.loc[edges_df["weight_function"]=="DirectionRule_others", "conductance"] = DirectionRule_others(edges_df, src_df, tgt_df)
-    edges_df.loc[edges_df["weight_function"]=="DirectionRule_EE", "conductance"] = DirectionRule_EE(edges_df, src_df, tgt_df)
+    src_df = nodes_df.loc[edges_df["source_node_id"], ["tuning_angle", "x", "z"]].reset_index(
+        drop=True
+    )
+    tgt_df = nodes_df.loc[edges_df["target_node_id"], ["tuning_angle", "x", "z"]].reset_index(
+        drop=True
+    )
+    edges_df.loc[edges_df["weight_function"] == "DirectionRule_others", "conductance"] = (
+        DirectionRule_others(edges_df, src_df, tgt_df)
+    )
+    edges_df.loc[edges_df["weight_function"] == "DirectionRule_EE", "conductance"] = (
+        DirectionRule_EE(edges_df, src_df, tgt_df)
+    )
 
 
 def write_edges_from_dataframe(data_df, src_pop, tgt_pop, outfile):
@@ -131,47 +152,44 @@ def ranges_per_node(node_to_edge_ids):
 
 
 def DirectionRule_others(edge_props, src_node, trg_node):
-    """Adjust the synapse weight, copied from bmtk 
-    """
-    sigma = edge_props['weight_sigma']
-    src_tuning = src_node['tuning_angle']
-    tar_tuning = trg_node['tuning_angle']
+    """Adjust the synapse weight, copied from bmtk"""
+    sigma = edge_props["weight_sigma"]
+    src_tuning = src_node["tuning_angle"]
+    tar_tuning = trg_node["tuning_angle"]
 
     delta_tuning_180 = abs(abs((abs(tar_tuning - src_tuning) % 360.0) - 180.0) - 180.0)
-    w_multiplier_180 = np.exp(-(delta_tuning_180 / sigma) ** 2)
-    return w_multiplier_180 * edge_props['syn_weight']
+    w_multiplier_180 = np.exp(-((delta_tuning_180 / sigma) ** 2))
+    return w_multiplier_180 * edge_props["syn_weight"]
 
 
 def DirectionRule_EE(edge_props, src_node, trg_node):
-    """Adjust the synapse weight, copied from bmtk 
-    """
-    sigma = edge_props['weight_sigma']
+    """Adjust the synapse weight, copied from bmtk"""
+    sigma = edge_props["weight_sigma"]
 
-    src_tuning = src_node['tuning_angle']
-    x_src = src_node['x']
-    z_src = src_node['z']
+    src_tuning = src_node["tuning_angle"]
+    x_src = src_node["x"]
+    z_src = src_node["z"]
 
-    tar_tuning = trg_node['tuning_angle']
-    x_tar = trg_node['x']
-    z_tar = trg_node['z']
+    tar_tuning = trg_node["tuning_angle"]
+    x_tar = trg_node["x"]
+    z_tar = trg_node["z"]
 
     delta_tuning_180 = abs(abs((abs(tar_tuning - src_tuning) % 360.0) - 180.0) - 180.0)
-    w_multiplier_180 = np.exp(-(delta_tuning_180 / sigma) ** 2)
+    w_multiplier_180 = np.exp(-((delta_tuning_180 / sigma) ** 2))
 
     delta_x = (x_tar - x_src) * 0.07
     delta_z = (z_tar - z_src) * 0.04
 
-    theta_pref = tar_tuning * (np.pi / 180.)
+    theta_pref = tar_tuning * (np.pi / 180.0)
     xz = delta_x * np.cos(theta_pref) + delta_z * np.sin(theta_pref)
     sigma_phase = 1.0
-    phase_scale_ratio = np.exp(- (xz ** 2 / (2 * sigma_phase ** 2)))
+    phase_scale_ratio = np.exp(-(xz**2 / (2 * sigma_phase**2)))
 
     # To account for the 0.07 vs 0.04 dimensions. This ensures
     # the horizontal neurons are scaled by 5.5/4 (from the midpoint
     # of 4 & 7). Also, ensures the vertical is scaled by 5.5/7. This
     # was a basic linear estimate to get the numbers (y = ax + b).
     theta_tar_scale = abs(abs(abs(180.0 - abs(tar_tuning) % 360.0) - 90.0) - 90.0)
-    phase_scale_ratio = phase_scale_ratio * (5.5 / 4 - 11. / 1680 * theta_tar_scale)
+    phase_scale_ratio = phase_scale_ratio * (5.5 / 4 - 11.0 / 1680 * theta_tar_scale)
 
-    return w_multiplier_180 * phase_scale_ratio * edge_props['syn_weight']
-
+    return w_multiplier_180 * phase_scale_ratio * edge_props["syn_weight"]
