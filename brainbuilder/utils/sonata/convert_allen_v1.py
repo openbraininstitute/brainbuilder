@@ -41,7 +41,6 @@ def load_allen_nodes(nodes_file, node_types_file):
         on="node_type_id",
         how="left",
     )
-    # print(cells_df.loc[cells_df["node_type_id"] >= 100000121, "rotation_angle_yaxis"])
     cells_df.rename(columns={"dynamics_params": "model_template"}, inplace=True)
     # hoc template name can not be started with number, prefix with BP_ where necessary
     cells_df["model_template"] = cells_df["model_template"].str.replace(
@@ -53,9 +52,7 @@ def load_allen_nodes(nodes_file, node_types_file):
     cells_df["rotation_angle_zaxis"] = cells_df["rotation_angle_zaxis"].fillna(0)
     cells_df["morphology"] = cells_df["morphology"].fillna("None")
 
-    for dummy_field in ["mtype", "etype"]:
-        if dummy_field not in cells_df.columns:
-            cells_df[dummy_field] = "None"
+    cells_df[["mtype", "etype"]] = "None"
 
     return cells_df, node_population
 
@@ -73,17 +70,25 @@ def load_allen_edges(edges_file, edge_types_file):
     return edges_df, pop[0], pop[1]
 
 
-def prepare_synapses(edges_df, nodes_df):
+def prepare_synapses(edges_df, nodes_df, syn_location_file):
     adjust_synapse_weights(edges_df, nodes_df)
 
     biophysical_gids = nodes_df.index[nodes_df["model_type"] == "biophysical"]
     point_gids = nodes_df.index[nodes_df["model_type"] == "point_process"]
     # For edges targeting point cells, multiple syn_weight by nsys
-    mask = edges_df["target_node_id"].isin(point_gids)
-    edges_df.loc[mask, "conductance"] *= edges_df.loc[mask, "nsyns"]
+    mask_point = edges_df["target_node_id"].isin(point_gids)
+    edges_df.loc[mask_point, "conductance"] *= edges_df.loc[mask_point, "nsyns"]
     # For edges targeting biophysical cells, expand synapses
     repeat_counts = edges_df["nsyns"].where(edges_df["target_node_id"].isin(biophysical_gids), 1)
     edges_df_expanded = edges_df.loc[edges_df.index.repeat(repeat_counts)].reset_index(drop=True)
+
+    # Read synapse location from --syn-location-file
+    syn_df = pd.read_csv(syn_location_file, sep=r"\s+")
+    mask = edges_df_expanded["target_node_id"].isin(biophysical_gids)
+    assert np.allclose(edges_df_expanded.loc[mask, "conductance"], syn_df["syn_weight"])
+    edges_df_expanded[["afferent_section_id", "afferent_section_pos"]] = np.nan
+    edges_df_expanded.loc[mask, "afferent_section_id"] = syn_df["sec_id"]
+    edges_df_expanded.loc[mask, "afferent_section_pos"] = syn_df["sec_x"]
 
     return edges_df_expanded
 
