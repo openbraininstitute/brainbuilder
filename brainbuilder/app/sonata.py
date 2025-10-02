@@ -50,7 +50,10 @@ def from_mvd3(mvd3, output, model_type, mecombo_info, population):
 @click.option("--node-types-file", help="Path to node type file", required=True)
 @click.option("--edges-file", help="Path to edges file", required=True)
 @click.option("--edge-types-file", help="Path to edge type file", required=True)
-def from_allen_circuit(nodes_file, node_types_file, edges_file, edge_types_file, output):
+@click.option("--synapse-location-file", help="Path to synapse location file", required=True)
+def from_allen_circuit(
+    nodes_file, node_types_file, edges_file, edge_types_file, synapse_location_file, output
+):
     """Provide SONATA nodes with MorphoElectrical info"""
     from brainbuilder.utils.sonata import convert_allen_v1
     from voxcell import CellCollection
@@ -63,15 +66,18 @@ def from_allen_circuit(nodes_file, node_types_file, edges_file, edge_types_file,
 
     cells_df, node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
     edges_df, src_pop, tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
-    edges_df = convert_allen_v1.prepare_synapses(edges_df, cells_df)
+    edges_df = convert_allen_v1.prepare_synapses(edges_df, cells_df, synapse_location_file)
 
-    # save to sonata
+    # drop columns not needed for OBI simulator
+    cells_df.drop(["tuning_angle"], axis=1, inplace=True)
+    edges_df.drop(["weight_function", "weight_sigma", "syn_weight"], axis=1, inplace=True)
+
+    # save to sonata h5 files
     if not Path(output).exists():
         Path(output).mkdir(parents=True, exist_ok=True)
     cells = CellCollection.from_dataframe(cells_df, index_offset=0)
     cells.population_name = node_pop
     cells.save_sonata(Path(output) / node_file_name, cells_df)
-
 
     with h5py.File(Path(output) / edge_file_name, "w") as h5f:
         convert_allen_v1.write_edges_from_dataframe(edges_df, src_pop, tgt_pop, h5f)
