@@ -11,8 +11,8 @@ def sonata_to_dataframe(sonata_file, file_type="nodes"):
         assert len(population_names) == 1, "Single population is supported only"
         population_name = population_names[0]
 
-        population = h5f[f"/{file_type}/{population_name}"]
-        assert "0" in population, 'Single group "0" is supported only'
+        population = h5f[f"{file_type}/{population_name}"]
+        assert "0" in population, "group '0' doesn't exst"
         group = population["0"]
 
         for key in group.keys():
@@ -70,27 +70,51 @@ def load_allen_edges(edges_file, edge_types_file):
     return edges_df, pop[0], pop[1]
 
 
-def prepare_synapses(edges_df, nodes_df, syn_location_file):
+def prepare_synapses(edges_df, nodes_df, precomputed_edges_file):
     adjust_synapse_weights(edges_df, nodes_df)
+    # Read synapse location and weights from precomputed edges file
+    syn_0_df, syn_1_df = read_precomputed_edges_file(precomputed_edges_file)
 
     biophysical_gids = nodes_df.index[nodes_df["model_type"] == "biophysical"]
     point_gids = nodes_df.index[nodes_df["model_type"] == "point_process"]
+
     # For edges targeting point cells, multiple syn_weight by nsys
     mask_point = edges_df["target_node_id"].isin(point_gids)
     edges_df.loc[mask_point, "conductance"] *= edges_df.loc[mask_point, "nsyns"]
+    assert np.allclose(edges_df.loc[mask_point, "conductance"], abs(syn_1_df["syn_weight"])), (
+        "point syn weight is not consistent with the precomputed file"
+    )
+
     # For edges targeting biophysical cells, expand synapses
     repeat_counts = edges_df["nsyns"].where(edges_df["target_node_id"].isin(biophysical_gids), 1)
     edges_df_expanded = edges_df.loc[edges_df.index.repeat(repeat_counts)].reset_index(drop=True)
-
-    # Read synapse location from --syn-location-file
-    syn_df = pd.read_csv(syn_location_file, sep=r"\s+")
-    mask = edges_df_expanded["target_node_id"].isin(biophysical_gids)
-    assert np.allclose(edges_df_expanded.loc[mask, "conductance"], syn_df["syn_weight"])
+    mask_biophysical = edges_df_expanded["target_node_id"].isin(biophysical_gids)
+    assert np.allclose(
+        edges_df_expanded.loc[mask_biophysical, "conductance"], syn_0_df["syn_weight"]
+    ), "biophysical syn weight is not consistent with the precomputed file"
     edges_df_expanded[["afferent_section_id", "afferent_section_pos"]] = np.nan
-    edges_df_expanded.loc[mask, "afferent_section_id"] = syn_df["sec_id"]
-    edges_df_expanded.loc[mask, "afferent_section_pos"] = syn_df["sec_x"]
+    edges_df_expanded.loc[mask_biophysical, "afferent_section_id"] = syn_0_df["sec_id"]
+    edges_df_expanded.loc[mask_biophysical, "afferent_section_pos"] = syn_0_df["sec_x"]
 
     return edges_df_expanded
+
+
+def read_precomputed_edges_file(precomputed_edges_file):
+    res = []
+    with h5py.File(precomputed_edges_file, "r") as h5f:
+        population_names = list(h5f["/edges"].keys())
+        assert len(population_names) == 1, "Single population is supported only"
+        population_name = population_names[0]
+
+        population = h5f[f"/edges/{population_name}"]
+        for group_name in ["0", "1"]:
+            assert group_name in population, f"group {group_name} doesn't exst"
+            group = population[group_name]
+            syn_weight = group["syn_weight"][()]
+            sec_id = group["sec_id"][()] if "sec_id" in group else np.empty(len(syn_weight))
+            sec_x = group["sec_x"][()] if "sec_x" in group else np.empty(len(syn_weight))
+            res.append(pd.DataFrame({"syn_weight": syn_weight, "sec_id": sec_id, "sec_x": sec_x}))
+    return res
 
 
 def adjust_synapse_weights(edges_df, nodes_df):

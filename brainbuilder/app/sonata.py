@@ -50,12 +50,17 @@ def from_mvd3(mvd3, output, model_type, mecombo_info, population):
 @click.option("--node-types-file", help="Path to node type file", required=True)
 @click.option("--edges-file", help="Path to edges file", required=True)
 @click.option("--edge-types-file", help="Path to edge type file", required=True)
-@click.option("--synapse-location-file", help="Path to synapse location file", required=True)
+@click.option(
+    "--precomputed-edges-file",
+    help="Path to allen's precomputed edges file, for syn weights and locations",
+    required=True,
+)
 def from_allen_circuit(
-    nodes_file, node_types_file, edges_file, edge_types_file, synapse_location_file, output
+    nodes_file, node_types_file, edges_file, edge_types_file, precomputed_edges_file, output
 ):
     """Provide SONATA nodes with MorphoElectrical info"""
     from brainbuilder.utils.sonata import convert_allen_v1
+    from brainbuilder.utils.sonata import split_population as module
     from voxcell import CellCollection
     from pathlib import Path
 
@@ -63,10 +68,12 @@ def from_allen_circuit(
 
     node_file_name = Path(nodes_file).name
     edge_file_name = Path(edges_file).name
+    split_output = Path(output) / "split_circuit"
+    assert not split_output.exists(), f"Please remove {split_output} first"
 
     cells_df, node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
     edges_df, src_pop, tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
-    edges_df = convert_allen_v1.prepare_synapses(edges_df, cells_df, synapse_location_file)
+    edges_df = convert_allen_v1.prepare_synapses(edges_df, cells_df, precomputed_edges_file)
 
     # drop columns not needed for OBI simulator
     cells_df.drop(["tuning_angle"], axis=1, inplace=True)
@@ -77,10 +84,19 @@ def from_allen_circuit(
         Path(output).mkdir(parents=True, exist_ok=True)
     cells = CellCollection.from_dataframe(cells_df, index_offset=0)
     cells.population_name = node_pop
-    cells.save_sonata(Path(output) / node_file_name, cells_df)
+    output_nodes = Path(output) / node_file_name
+    output_edges = Path(output) / edge_file_name
+    cells.save_sonata(output_nodes, cells_df)
 
-    with h5py.File(Path(output) / edge_file_name, "w") as h5f:
+    with h5py.File(output_edges, "w") as h5f:
         convert_allen_v1.write_edges_from_dataframe(edges_df, src_pop, tgt_pop, h5f)
+
+    # Split populations
+    # Create the directory
+    split_output.mkdir(parents=True, exist_ok=True)
+    module.split_population(
+        split_output, attribute="model_type", nodes_path=output_nodes, edges_path=output_edges
+    )
 
 
 @app.command()
