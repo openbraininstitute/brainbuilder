@@ -125,6 +125,7 @@ def adjust_synapse_weights(edges_df, nodes_df):
     tgt_df = nodes_df.loc[edges_df["target_node_id"], ["tuning_angle", "x", "z"]].reset_index(
         drop=True
     )
+    edges_df.loc[:, "conductance"] = edges_df["syn_weight"]  # default cond
     edges_df.loc[edges_df["weight_function"] == "DirectionRule_others", "conductance"] = (
         DirectionRule_others(edges_df, src_df, tgt_df)
     )

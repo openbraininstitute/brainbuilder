@@ -98,6 +98,7 @@ def from_allen_circuit(
         split_output, attribute="model_type", nodes_path=output_nodes, edges_path=output_edges
     )
 
+
 @app.command()
 @click.option("-o", "--output", help="directory to output SONATA files", required=True)
 @click.option("--nodes-file", help="Path to nodes file", required=True)
@@ -114,43 +115,20 @@ def from_allen_projection_edges(
 ):
     """Provide SONATA nodes with MorphoElectrical info"""
     from brainbuilder.utils.sonata import convert_allen_v1
-    from brainbuilder.utils.sonata import split_population as module
     from pathlib import Path
 
     import h5py
-    import numpy as np
 
-    nodes_df, node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
-    edges_df, src_pop, tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
-    assert edges_df["weight_function"].unique() == ["wmax"], "weight_function is not only wmax"
-    edges_df.rename(columns={"syn_weight": "conductance"}, inplace=True)
-    edges_df.drop(["weight_function", "weight_sigma"], axis=1, inplace=True)
-
-    # Read synapse location and weights from precomputed edges file
-    syn_biophysical_df, syn_point_df = convert_allen_v1.load_precomputed_edges_file(precomputed_edges_file)
+    nodes_df, _node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
+    edges_df, src_pop, _tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
+    edges_df = convert_allen_v1.prepare_synapses(edges_df, nodes_df, precomputed_edges_file)
+    edges_df.drop(["weight_function", "weight_sigma", "nsyns"], axis=1, inplace=True)
 
     # split projecting to src->biophysical, src->point_process
     biophysical_gids = nodes_df.index[nodes_df["model_type"] == "biophysical"]
     point_gids = nodes_df.index[nodes_df["model_type"] == "point_process"]
     biophysical_edges = edges_df[(edges_df["target_node_id"].isin(biophysical_gids))]
     point_edges = edges_df[(edges_df["target_node_id"].isin(point_gids))]
-
-
-    # For edges targeting point cells, multiple syn_weight by nsys
-    point_edges.loc[:, "conductance"] *= point_edges["nsyns"]
-    # cross check with precompuated file to make sure the weights are correct
-    assert np.allclose(point_edges["conductance"], abs(syn_point_df["syn_weight"])), (
-        "point syn weight is not consistent with the precomputed file"
-    )
-
-    # For edges targeting biophysical cells, expand synapses
-    repeat_counts = biophysical_edges["nsyns"]
-    biophysical_edges=biophysical_edges.loc[biophysical_edges.index.repeat(repeat_counts)].reset_index(drop=True)
-    assert np.allclose(
-        biophysical_edges["conductance"], syn_biophysical_df["syn_weight"]
-    ), "biophysical syn weight is not consistent with the precomputed file"
-    biophysical_edges["afferent_section_id"] = syn_biophysical_df["sec_id"]
-    biophysical_edges["afferent_section_pos"] = syn_biophysical_df["sec_x"]
 
     # save -> biophyscial edges
     if not Path(output).exists():
@@ -165,6 +143,7 @@ def from_allen_projection_edges(
     output_edges = Path(output) / edge_file_name
     with h5py.File(output_edges, "w") as h5f:
         convert_allen_v1.write_edges_from_dataframe(point_edges, src_pop, "point_process", h5f)
+
 
 @app.command()
 @click.argument("cells-path")
