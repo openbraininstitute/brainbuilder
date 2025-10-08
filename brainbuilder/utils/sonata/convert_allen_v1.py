@@ -73,7 +73,7 @@ def load_allen_edges(edges_file, edge_types_file):
 def prepare_synapses(edges_df, nodes_df, precomputed_edges_file):
     adjust_synapse_weights(edges_df, nodes_df)
     # Read synapse location and weights from precomputed edges file
-    syn_0_df, syn_1_df = read_precomputed_edges_file(precomputed_edges_file)
+    syn_biophysical_df, syn_point_df = load_precomputed_edges_file(precomputed_edges_file)
 
     biophysical_gids = nodes_df.index[nodes_df["model_type"] == "biophysical"]
     point_gids = nodes_df.index[nodes_df["model_type"] == "point_process"]
@@ -81,7 +81,8 @@ def prepare_synapses(edges_df, nodes_df, precomputed_edges_file):
     # For edges targeting point cells, multiple syn_weight by nsys
     mask_point = edges_df["target_node_id"].isin(point_gids)
     edges_df.loc[mask_point, "conductance"] *= edges_df.loc[mask_point, "nsyns"]
-    assert np.allclose(edges_df.loc[mask_point, "conductance"], abs(syn_1_df["syn_weight"])), (
+    # cross check with precompuated file to make sure the weights are correct
+    assert np.allclose(edges_df.loc[mask_point, "conductance"], abs(syn_point_df["syn_weight"])), (
         "point syn weight is not consistent with the precomputed file"
     )
 
@@ -90,16 +91,16 @@ def prepare_synapses(edges_df, nodes_df, precomputed_edges_file):
     edges_df_expanded = edges_df.loc[edges_df.index.repeat(repeat_counts)].reset_index(drop=True)
     mask_biophysical = edges_df_expanded["target_node_id"].isin(biophysical_gids)
     assert np.allclose(
-        edges_df_expanded.loc[mask_biophysical, "conductance"], syn_0_df["syn_weight"]
+        edges_df_expanded.loc[mask_biophysical, "conductance"], syn_biophysical_df["syn_weight"]
     ), "biophysical syn weight is not consistent with the precomputed file"
     edges_df_expanded[["afferent_section_id", "afferent_section_pos"]] = np.nan
-    edges_df_expanded.loc[mask_biophysical, "afferent_section_id"] = syn_0_df["sec_id"]
-    edges_df_expanded.loc[mask_biophysical, "afferent_section_pos"] = syn_0_df["sec_x"]
+    edges_df_expanded.loc[mask_biophysical, "afferent_section_id"] = syn_biophysical_df["sec_id"]
+    edges_df_expanded.loc[mask_biophysical, "afferent_section_pos"] = syn_biophysical_df["sec_x"]
 
     return edges_df_expanded
 
 
-def read_precomputed_edges_file(precomputed_edges_file):
+def load_precomputed_edges_file(precomputed_edges_file):
     res = []
     with h5py.File(precomputed_edges_file, "r") as h5f:
         population_names = list(h5f["/edges"].keys())
