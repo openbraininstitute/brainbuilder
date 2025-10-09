@@ -71,22 +71,22 @@ def from_allen_circuit(
     split_output = Path(output) / "split_circuit"
     assert not split_output.exists(), f"Please remove {split_output} first"
 
-    cells_df, node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
+    nodes_df, node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
     edges_df, src_pop, tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
-    edges_df = convert_allen_v1.prepare_synapses(edges_df, cells_df, precomputed_edges_file)
+    edges_df = convert_allen_v1.prepare_synapses(edges_df, nodes_df, precomputed_edges_file)
 
     # drop columns not needed for OBI simulator
-    cells_df.drop(["tuning_angle"], axis=1, inplace=True)
+    nodes_df.drop(["tuning_angle"], axis=1, inplace=True)
     edges_df.drop(["weight_function", "weight_sigma", "syn_weight", "nsyns"], axis=1, inplace=True)
 
     # save to sonata h5 files
     if not Path(output).exists():
         Path(output).mkdir(parents=True, exist_ok=True)
-    cells = CellCollection.from_dataframe(cells_df, index_offset=0)
+    cells = CellCollection.from_dataframe(nodes_df, index_offset=0)
     cells.population_name = node_pop
     output_nodes = Path(output) / node_file_name
     output_edges = Path(output) / edge_file_name
-    cells.save_sonata(output_nodes, cells_df)
+    cells.save_sonata(output_nodes)
 
     with h5py.File(output_edges, "w") as h5f:
         convert_allen_v1.write_edges_from_dataframe(edges_df, src_pop, tgt_pop, h5f)
@@ -127,7 +127,9 @@ def from_allen_projection_edges(
     # split projecting to src->biophysical, src->point_process
     biophysical_gids = nodes_df.index[nodes_df["model_type"] == "biophysical"]
     point_gids = nodes_df.index[nodes_df["model_type"] == "point_process"]
-    biophysical_edges = edges_df[(edges_df["target_node_id"].isin(biophysical_gids))].reset_index(drop=True)
+    biophysical_edges = edges_df[(edges_df["target_node_id"].isin(biophysical_gids))].reset_index(
+        drop=True
+    )
     point_edges = edges_df[(edges_df["target_node_id"].isin(point_gids))].reset_index(drop=True)
 
     # save -> biophyscial edges
