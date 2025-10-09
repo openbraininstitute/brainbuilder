@@ -93,8 +93,12 @@ def prepare_synapses(edges_df, nodes_df, precomputed_edges_file):
         edges_df_expanded.loc[mask_biophysical, "conductance"], syn_biophysical_df["syn_weight"]
     ), "biophysical syn weight is not consistent with the precomputed file"
     edges_df_expanded[["afferent_section_id", "afferent_section_pos"]] = np.nan
-    edges_df_expanded.loc[mask_biophysical, "afferent_section_id"] = syn_biophysical_df["sec_id"].to_numpy() # row-to-row, not by index
-    edges_df_expanded.loc[mask_biophysical, "afferent_section_pos"] = syn_biophysical_df["sec_x"].to_numpy()
+    edges_df_expanded.loc[mask_biophysical, "afferent_section_id"] = syn_biophysical_df[
+        "sec_id"
+    ].to_numpy()  # row-to-row, not by index
+    edges_df_expanded.loc[mask_biophysical, "afferent_section_pos"] = syn_biophysical_df[
+        "sec_x"
+    ].to_numpy()
 
     return edges_df_expanded
 
