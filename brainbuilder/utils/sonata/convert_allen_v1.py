@@ -66,7 +66,6 @@ def load_allen_edges(edges_file, edge_types_file):
         on="edge_type_id",
         how="left",
     )
-    # edges_df.rename(columns={"syn_weight": "conductance"}, inplace=True)
     return edges_df, pop[0], pop[1]
 
 
@@ -94,8 +93,8 @@ def prepare_synapses(edges_df, nodes_df, precomputed_edges_file):
         edges_df_expanded.loc[mask_biophysical, "conductance"], syn_biophysical_df["syn_weight"]
     ), "biophysical syn weight is not consistent with the precomputed file"
     edges_df_expanded[["afferent_section_id", "afferent_section_pos"]] = np.nan
-    edges_df_expanded.loc[mask_biophysical, "afferent_section_id"] = syn_biophysical_df["sec_id"]
-    edges_df_expanded.loc[mask_biophysical, "afferent_section_pos"] = syn_biophysical_df["sec_x"]
+    edges_df_expanded.loc[mask_biophysical, "afferent_section_id"] = syn_biophysical_df["sec_id"].to_numpy() # row-to-row, not by index
+    edges_df_expanded.loc[mask_biophysical, "afferent_section_pos"] = syn_biophysical_df["sec_x"].to_numpy()
 
     return edges_df_expanded
 

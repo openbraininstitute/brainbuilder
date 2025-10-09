@@ -127,8 +127,8 @@ def from_allen_projection_edges(
     # split projecting to src->biophysical, src->point_process
     biophysical_gids = nodes_df.index[nodes_df["model_type"] == "biophysical"]
     point_gids = nodes_df.index[nodes_df["model_type"] == "point_process"]
-    biophysical_edges = edges_df[(edges_df["target_node_id"].isin(biophysical_gids))]
-    point_edges = edges_df[(edges_df["target_node_id"].isin(point_gids))]
+    biophysical_edges = edges_df[(edges_df["target_node_id"].isin(biophysical_gids))].reset_index(drop=True)
+    point_edges = edges_df[(edges_df["target_node_id"].isin(point_gids))].reset_index(drop=True)
 
     # save -> biophyscial edges
     if not Path(output).exists():
