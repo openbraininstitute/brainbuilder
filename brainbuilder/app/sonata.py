@@ -88,8 +88,11 @@ def from_allen_circuit(
     output_edges = Path(output) / edge_file_name
     cells.save_sonata(output_nodes)
 
+    n_source_nodes = n_target_nodes = len(nodes_df)
     with h5py.File(output_edges, "w") as h5f:
-        convert_allen_v1.write_edges_from_dataframe(edges_df, src_pop, tgt_pop, h5f)
+        convert_allen_v1.write_edges_from_dataframe(
+            edges_df, src_pop, tgt_pop, n_source_nodes, n_target_nodes, h5f
+        )
 
     # Split populations
     # Create the directory
@@ -101,8 +104,9 @@ def from_allen_circuit(
 
 @app.command()
 @click.option("-o", "--output", help="directory to output SONATA files", required=True)
-@click.option("--nodes-file", help="Path to nodes file", required=True)
-@click.option("--node-types-file", help="Path to node type file", required=True)
+@click.option("--n-source-nodes", help="number of virtual source nodes", type=int, required=True)
+@click.option("--target-nodes-file", help="Path to the target nodes file", required=True)
+@click.option("--target-node-types-file", help="Path to the target node type file", required=True)
 @click.option("--edges-file", help="Path to edges file", required=True)
 @click.option("--edge-types-file", help="Path to edge type file", required=True)
 @click.option(
@@ -111,7 +115,13 @@ def from_allen_circuit(
     required=True,
 )
 def from_allen_projection_edges(
-    nodes_file, node_types_file, edges_file, edge_types_file, precomputed_edges_file, output
+    n_source_nodes,
+    target_nodes_file,
+    target_node_types_file,
+    edges_file,
+    edge_types_file,
+    precomputed_edges_file,
+    output,
 ):
     """Provide SONATA nodes with MorphoElectrical info"""
     from brainbuilder.utils.sonata import convert_allen_v1
@@ -119,7 +129,9 @@ def from_allen_projection_edges(
 
     import h5py
 
-    nodes_df, _node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
+    nodes_df, _node_pop = convert_allen_v1.load_allen_nodes(
+        target_nodes_file, target_node_types_file
+    )
     edges_df, src_pop, _tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
     edges_df = convert_allen_v1.prepare_synapses(edges_df, nodes_df, precomputed_edges_file)
     edges_df.drop(["weight_function", "weight_sigma", "nsyns"], axis=1, inplace=True)
@@ -138,19 +150,32 @@ def from_allen_projection_edges(
     point_id_map = dict(zip(point_gids, range(len(point_gids))))
     point_edges["target_node_id"] = point_edges["target_node_id"].map(point_id_map)
 
-    # save -> biophyscial edges
     if not Path(output).exists():
         Path(output).mkdir(parents=True, exist_ok=True)
+
+    # save -> all edges
+    edge_file_name = Path(edges_file).name
+    output_edges = Path(output) / edge_file_name
+    with h5py.File(output_edges, "w") as h5f:
+        convert_allen_v1.write_edges_from_dataframe(
+            edges_df, src_pop, "v1", n_source_nodes, len(nodes_df), h5f
+        )
+
+    # save -> biophyscial edges
     edge_file_name = f"edges_{src_pop}_biophysical.h5"
     output_edges = Path(output) / edge_file_name
     with h5py.File(output_edges, "w") as h5f:
-        convert_allen_v1.write_edges_from_dataframe(biophysical_edges, src_pop, "biophysical", h5f)
+        convert_allen_v1.write_edges_from_dataframe(
+            biophysical_edges, src_pop, "biophysical", n_source_nodes, len(biophysical_gids), h5f
+        )
 
     # save -> point_process edges
     edge_file_name = f"edges_{src_pop}_point_process.h5"
     output_edges = Path(output) / edge_file_name
     with h5py.File(output_edges, "w") as h5f:
-        convert_allen_v1.write_edges_from_dataframe(point_edges, src_pop, "point_process", h5f)
+        convert_allen_v1.write_edges_from_dataframe(
+            point_edges, src_pop, "point_process", 17400, len(point_gids), h5f
+        )
 
 
 @app.command()
