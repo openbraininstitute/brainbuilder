@@ -137,7 +137,7 @@ def adjust_synapse_weights(edges_df, nodes_df):
     )
 
 
-def write_edges_from_dataframe(data_df, src_pop, tgt_pop, outfile):
+def write_edges_from_dataframe(data_df, src_pop, tgt_pop, n_source_nodes, n_target_nodes, outfile):
     edge_population = f"{src_pop}__{tgt_pop}__chemical"
     group = outfile.create_group(f"/edges/{edge_population}")
     group_pop = group.create_group("0")
@@ -152,17 +152,19 @@ def write_edges_from_dataframe(data_df, src_pop, tgt_pop, outfile):
         group_pop.create_dataset(attribute_name, data=data_df[attribute_name].to_numpy())
     group_indices_src = group.create_group("indices/source_to_target")
     group_indices_tgt = group.create_group("indices/target_to_source")
-    write_index_group(group_indices_src, data_df.groupby("source_node_id"))
-    write_index_group(group_indices_tgt, data_df.groupby("target_node_id"))
+    write_index_group(group_indices_src, data_df.groupby("source_node_id"), n_source_nodes)
+    write_index_group(group_indices_tgt, data_df.groupby("target_node_id"), n_target_nodes)
 
 
-def write_index_group(group, grouped_df):
-    """Write the index group for sonata edges file.
+def write_index_group(group, grouped_df, n_nodes):
+    """Write the index group for nodes ids: [0, n_nodes-1]
     grouped_df.groups = {"node_id": [list of edge indices]}
     """
-    edge_ids_list_per_node = [indices_to_ranges(list(idx)) for idx in grouped_df.groups.values()]
-    range_ids = ranges_per_node(edge_ids_list_per_node)
-    edge_ids = list(chain.from_iterable(edge_ids_list_per_node))
+    node_to_edge_ids = dict.fromkeys(list(range(n_nodes)), [])
+    for key, value in grouped_df.groups.items():
+        node_to_edge_ids[key] = indices_to_ranges(list(value))
+    range_ids = ranges_per_node(node_to_edge_ids)
+    edge_ids = list(chain.from_iterable(node_to_edge_ids.values()))
     group.create_dataset("node_id_to_ranges", data=range_ids)
     group.create_dataset("range_to_edge_id", data=edge_ids)
 
@@ -171,7 +173,7 @@ def indices_to_ranges(indices):
     """Given a list of [indices], return list of [start, end) ranges .
     e.g. [0,1,2,7,8,10,11,12] -> [[0,3], [7,9], [10,13]]"""
     if not indices:
-        return []
+        return [0, 0]
     arr = np.sort(np.array(indices))
     # find where consecutive list breaks
     breaks = np.where(np.diff(arr) != 1)[0] + 1
@@ -181,17 +183,20 @@ def indices_to_ranges(indices):
     return np.stack((arr[starts], arr[ends - 1] + 1), axis=1)
 
 
-def ranges_per_node(edge_ids_list):
+def ranges_per_node(node_to_edge_ids):
     """Given list of [edge_ids], return list of [start, end) ranges.
     e.g. [[[0,3], [3,5], [5,8]], [[9,10]]] -> [[0,3],[3,4]]
     Range 0 -> ids[0,3), Range 1 -> ids[3,4), etc.]
     """
     res = []
     start = 0
-    for ranges in edge_ids_list:
+    for ranges in node_to_edge_ids.values():
         n_ranges = len(ranges)
         end = start + n_ranges
-        res.append([start, end])
+        if n_ranges == 0:
+            res.append([0, 0])
+        else:
+            res.append([start, end])
         start = end
     return res
 
