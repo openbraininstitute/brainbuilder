@@ -157,19 +157,16 @@ def write_edges_from_dataframe(data_df, src_pop, tgt_pop, outfile):
 
 
 def write_index_group(group, grouped_df):
-    """Write the index group for sonata edges file.
-    grouped_df.groups = {"node_id": [list of edge indices]}
-    """
-    edge_ids_list_per_node = [indices_to_ranges(list(idx)) for idx in grouped_df.groups.values()]
-    range_ids = ranges_per_node(edge_ids_list_per_node)
-    edge_ids = list(chain.from_iterable(edge_ids_list_per_node))
+    node_to_edge_ids = {
+        key: indices_to_ranges(list(value)) for key, value in grouped_df.groups.items()
+    }
+    range_ids = ranges_per_node(node_to_edge_ids)
+    edge_ids = list(chain.from_iterable(node_to_edge_ids.values()))
     group.create_dataset("node_id_to_ranges", data=range_ids)
     group.create_dataset("range_to_edge_id", data=edge_ids)
 
 
 def indices_to_ranges(indices):
-    """Given a list of [indices], return list of [start, end) ranges .
-    e.g. [0,1,2,7,8,10,11,12] -> [[0,3], [7,9], [10,13]]"""
     if not indices:
         return []
     arr = np.sort(np.array(indices))
@@ -181,14 +178,10 @@ def indices_to_ranges(indices):
     return np.stack((arr[starts], arr[ends - 1] + 1), axis=1)
 
 
-def ranges_per_node(edge_ids_list):
-    """Given list of [edge_ids], return list of [start, end) ranges.
-    e.g. [[[0,3], [3,5], [5,8]], [[9,10]]] -> [[0,3],[3,4]]
-    Range 0 -> ids[0,3), Range 1 -> ids[3,4), etc.]
-    """
+def ranges_per_node(node_to_edge_ids):
     res = []
     start = 0
-    for ranges in edge_ids_list:
+    for ranges in node_to_edge_ids.values():
         n_ranges = len(ranges)
         end = start + n_ranges
         res.append([start, end])
