@@ -5,6 +5,7 @@ import collections
 import copy
 import itertools as it
 import logging
+import math
 import os
 from pathlib import Path
 
@@ -220,7 +221,16 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
     assert (sgids_new >= 0).all(), "Source population ids must be positive."
     assert (tgids_new >= 0).all(), "Target population ids must be positive."
 
+    total_chunks = math.ceil(len(orig_edges["source_node_id"]) / h5_read_chunk_size)
+    L.debug(
+        "Processing %s edges in %s chunks of size %s [src_edge_name=%s]",
+        len(orig_edges["source_node_id"]),
+        total_chunks,
+        h5_read_chunk_size,
+        src_edge_name,
+    )
     for sl in _create_chunked_slices(len(orig_edges["source_node_id"]), h5_read_chunk_size):
+        L.debug("Processing chunk %s", sl)
         sgids = orig_edges["source_node_id"][sl]
         tgids = orig_edges["target_node_id"][sl]
         sgid_mask = _isin(sgids, sgids_new)
@@ -237,6 +247,7 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
             )
             _populate_edge_group(orig_group, new_group, sl, mask)
 
+    L.debug("Finalize edges")
     _finalize_edges(new_edges)
 
 
