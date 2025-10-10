@@ -130,7 +130,13 @@ def from_allen_projection_edges(
     biophysical_edges = edges_df[(edges_df["target_node_id"].isin(biophysical_gids))].reset_index(
         drop=True
     )
+    biophysical_id_map = dict(zip(biophysical_gids, range(len(biophysical_gids))))
+    biophysical_edges["target_node_id"] = biophysical_edges["target_node_id"].map(
+        biophysical_id_map
+    )
     point_edges = edges_df[(edges_df["target_node_id"].isin(point_gids))].reset_index(drop=True)
+    point_id_map = dict(zip(point_gids, range(len(point_gids))))
+    point_edges["target_node_id"] = point_edges["target_node_id"].map(point_id_map)
 
     # save -> biophyscial edges
     if not Path(output).exists():
