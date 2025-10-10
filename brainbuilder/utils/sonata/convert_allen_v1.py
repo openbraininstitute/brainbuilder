@@ -2,6 +2,8 @@ import h5py
 import pandas as pd
 import numpy as np
 from itertools import chain
+from brainbuilder import utils
+from pathlib import Path
 
 
 def sonata_to_dataframe(sonata_file, file_type="nodes"):
@@ -62,15 +64,32 @@ def load_allen_edges(edges_file, edge_types_file):
     edges_df, pop = sonata_to_dataframe(edges_file, file_type="edges")
     assert len(pop) == 2, "Should return source and target population names for edges"
     edges_df = edges_df.merge(
-        edge_types_df[["edge_type_id", "syn_weight", "weight_function", "weight_sigma", "delay"]],
+        edge_types_df[
+            [
+                "edge_type_id",
+                "syn_weight",
+                "weight_function",
+                "weight_sigma",
+                "delay",
+                "dynamics_params",
+            ]
+        ],
         on="edge_type_id",
         how="left",
     )
     return edges_df, pop[0], pop[1]
 
 
-def prepare_synapses(edges_df, nodes_df, precomputed_edges_file):
+def prepare_synapses(edges_df, nodes_df, precomputed_edges_file, syn_parameter_dir):
     adjust_synapse_weights(edges_df, nodes_df)
+    edges_df = add_synapse_parameters(edges_df, syn_parameter_dir)
+    edges_df_expanded = add_precomputed_synapse_locations(
+        edges_df, nodes_df, precomputed_edges_file
+    )
+    return edges_df_expanded
+
+
+def add_precomputed_synapse_locations(edges_df, nodes_df, precomputed_edges_file):
     # Read synapse location and weights from precomputed edges file
     syn_biophysical_df, syn_point_df = load_precomputed_edges_file(precomputed_edges_file)
 
@@ -85,7 +104,7 @@ def prepare_synapses(edges_df, nodes_df, precomputed_edges_file):
         "point syn weight is not consistent with the precomputed file"
     )
 
-    # For edges targeting biophysical cells, expand synapses
+    # For edges targeting biophysical cells, expand synapses, apply precomputed sec_id and seg_x
     repeat_counts = edges_df["nsyns"].where(edges_df["target_node_id"].isin(biophysical_gids), 1)
     edges_df_expanded = edges_df.loc[edges_df.index.repeat(repeat_counts)].reset_index(drop=True)
     mask_biophysical = edges_df_expanded["target_node_id"].isin(biophysical_gids)
@@ -101,6 +120,21 @@ def prepare_synapses(edges_df, nodes_df, precomputed_edges_file):
     ].to_numpy()
 
     return edges_df_expanded
+
+
+def add_synapse_parameters(edges_df, sym_parameter_dir):
+    # We rename tau1, tau2 and erev with the BBP synapse parameter names in the output file, so that we can run with our simulator directly
+    syn_params_map = {"dynamics_params": [], "facilitation_time": [], "decay_time": [], "u_syn": []}
+    for json_file in edges_df["dynamics_params"].unique():
+        params = utils.load_json(Path(sym_parameter_dir) / json_file)
+        if params["level_of_detail"] == "exp2syn":
+            syn_params_map["dynamics_params"].append(json_file)
+            syn_params_map["facilitation_time"].append(params["tau1"])
+            syn_params_map["decay_time"].append(params["tau2"])
+            syn_params_map["u_syn"].append(params["erev"])
+    # create a dataframe from syn_params_map
+    syn_params_df = pd.DataFrame(syn_params_map)
+    return edges_df.merge(syn_params_df, on="dynamics_params", how="left")
 
 
 def load_precomputed_edges_file(precomputed_edges_file):

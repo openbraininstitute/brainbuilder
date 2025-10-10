@@ -45,18 +45,25 @@ def from_mvd3(mvd3, output, model_type, mecombo_info, population):
 
 
 @app.command()
-@click.option("-o", "--output", help="directory to output SONATA files", required=True)
+@click.option("-o", "--output", help="Directory to output SONATA files", required=True)
 @click.option("--nodes-file", help="Path to nodes file", required=True)
 @click.option("--node-types-file", help="Path to node type file", required=True)
 @click.option("--edges-file", help="Path to edges file", required=True)
 @click.option("--edge-types-file", help="Path to edge type file", required=True)
+@click.option("--syn-parameter-dir", help="Directory to synapse parameters files", required=True)
 @click.option(
     "--precomputed-edges-file",
     help="Path to allen's precomputed edges file, for syn weights and locations",
     required=True,
 )
 def from_allen_circuit(
-    nodes_file, node_types_file, edges_file, edge_types_file, precomputed_edges_file, output
+    nodes_file,
+    node_types_file,
+    edges_file,
+    edge_types_file,
+    precomputed_edges_file,
+    syn_parameter_dir,
+    output,
 ):
     """Provide SONATA nodes with MorphoElectrical info"""
     from brainbuilder.utils.sonata import convert_allen_v1
@@ -73,11 +80,17 @@ def from_allen_circuit(
 
     nodes_df, node_pop = convert_allen_v1.load_allen_nodes(nodes_file, node_types_file)
     edges_df, src_pop, tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
-    edges_df = convert_allen_v1.prepare_synapses(edges_df, nodes_df, precomputed_edges_file)
+    edges_df = convert_allen_v1.prepare_synapses(
+        edges_df, nodes_df, precomputed_edges_file, syn_parameter_dir
+    )
 
     # drop columns not needed for OBI simulator
     nodes_df.drop(["tuning_angle"], axis=1, inplace=True)
-    edges_df.drop(["weight_function", "weight_sigma", "syn_weight", "nsyns"], axis=1, inplace=True)
+    edges_df.drop(
+        ["weight_function", "weight_sigma", "syn_weight", "nsyns", "dynamics_params"],
+        axis=1,
+        inplace=True,
+    )
 
     # save to sonata h5 files
     if not Path(output).exists():
@@ -114,6 +127,7 @@ def from_allen_circuit(
     help="Path to allen's precomputed edges file, for syn weights and locations",
     required=True,
 )
+@click.option("--syn-parameter-dir", help="Directory to synapse parameters files", required=True)
 def from_allen_projection_edges(
     n_source_nodes,
     target_nodes_file,
@@ -121,6 +135,7 @@ def from_allen_projection_edges(
     edges_file,
     edge_types_file,
     precomputed_edges_file,
+    syn_parameter_dir,
     output,
 ):
     """Provide SONATA nodes with MorphoElectrical info"""
@@ -133,8 +148,12 @@ def from_allen_projection_edges(
         target_nodes_file, target_node_types_file
     )
     edges_df, src_pop, _tgt_pop = convert_allen_v1.load_allen_edges(edges_file, edge_types_file)
-    edges_df = convert_allen_v1.prepare_synapses(edges_df, nodes_df, precomputed_edges_file)
-    edges_df.drop(["weight_function", "weight_sigma", "nsyns"], axis=1, inplace=True)
+    edges_df = convert_allen_v1.prepare_synapses(
+        edges_df, nodes_df, precomputed_edges_file, syn_parameter_dir
+    )
+    edges_df.drop(
+        ["weight_function", "weight_sigma", "nsyns", "dynamics_params"], axis=1, inplace=True
+    )
 
     # split projecting to src->biophysical, src->point_process
     biophysical_gids = nodes_df.index[nodes_df["model_type"] == "biophysical"]
