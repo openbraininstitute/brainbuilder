@@ -54,6 +54,7 @@ def load_allen_nodes(nodes_file, node_types_file):
     cells_df["rotation_angle_zaxis"] = cells_df["rotation_angle_zaxis"].fillna(0)
     cells_df["morphology"] = cells_df["morphology"].fillna("None")
 
+    # add dummy attributes
     cells_df[["mtype", "etype"]] = "None"
 
     return cells_df, node_population
@@ -83,6 +84,9 @@ def load_allen_edges(edges_file, edge_types_file):
 def prepare_synapses(edges_df, nodes_df, precomputed_edges_file, syn_parameter_dir):
     adjust_synapse_weights(edges_df, nodes_df)
     edges_df = add_synapse_parameters(edges_df, syn_parameter_dir)
+    edges_df[["depression_time"]] = -1
+    edges_df[["n_rrp_vesicles"]] = -1
+    edges_df[["syn_type_id"]] = -1
     edges_df_expanded = add_precomputed_synapse_locations(
         edges_df, nodes_df, precomputed_edges_file
     )
