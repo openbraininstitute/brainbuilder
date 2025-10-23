@@ -55,7 +55,7 @@ def load_allen_nodes(nodes_file, node_types_file):
     cells_df["morphology"] = cells_df["morphology"].fillna("None")
 
     # add dummy attributes
-    cells_df[["mtype", "etype"]] = "None"
+    add_dummy_values(cells_df, ["mtype", "etype"], "None")
 
     return cells_df, node_population
 
@@ -84,13 +84,17 @@ def load_allen_edges(edges_file, edge_types_file):
 def prepare_synapses(edges_df, nodes_df, precomputed_edges_file, syn_parameter_dir):
     adjust_synapse_weights(edges_df, nodes_df)
     edges_df = add_synapse_parameters(edges_df, syn_parameter_dir)
-    edges_df[["depression_time"]] = -1
-    edges_df[["n_rrp_vesicles"]] = -1
-    edges_df[["syn_type_id"]] = -1
+    add_dummy_values(edges_df, ["depression_time", "n_rrp_vesicles", "syn_type_id"], -1)
     edges_df_expanded = add_precomputed_synapse_locations(
         edges_df, nodes_df, precomputed_edges_file
     )
     return edges_df_expanded
+
+
+def add_dummy_values(df, attribute_names, default_value):
+    for attribute_name in attribute_names:
+        if attribute_name not in df.columns:
+            df[attribute_name] = default_value
 
 
 def add_precomputed_synapse_locations(edges_df, nodes_df, precomputed_edges_file):
