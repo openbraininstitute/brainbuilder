@@ -119,7 +119,7 @@ def add_precomputed_synapse_locations(edges_df, nodes_df, precomputed_edges_file
     assert np.allclose(
         edges_df_expanded.loc[mask_biophysical, "conductance"], syn_biophysical_df["syn_weight"]
     ), "biophysical syn weight is not consistent with the precomputed file"
-    edges_df_expanded[["afferent_section_id", "afferent_section_pos"]] = np.nan
+    edges_df_expanded[["afferent_section_id", "afferent_section_pos"]] = -1
     edges_df_expanded.loc[mask_biophysical, "afferent_section_id"] = syn_biophysical_df[
         "sec_id"
     ].to_numpy()  # row-to-row, not by index
