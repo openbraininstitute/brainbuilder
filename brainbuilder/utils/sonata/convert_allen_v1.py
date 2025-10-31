@@ -38,12 +38,23 @@ def load_allen_nodes(nodes_file, node_types_file):
     cells_df, node_population = sonata_to_dataframe(nodes_file, file_type="nodes")
     cells_df = cells_df.merge(
         node_types_df[
-            ["node_type_id", "dynamics_params", "morphology", "rotation_angle_zaxis", "model_type"]
+            [
+                "node_type_id",
+                "dynamics_params",
+                "morphology",
+                "rotation_angle_zaxis",
+                "model_type",
+                "ei",
+                "location",
+            ]
         ],
         on="node_type_id",
         how="left",
     )
-    cells_df.rename(columns={"dynamics_params": "model_template"}, inplace=True)
+    cells_df.rename(
+        columns={"dynamics_params": "model_template", "ei": "synapse_class", "location": "layer"},
+        inplace=True,
+    )
     # hoc template name can not be started with number, prefix with BP_ where necessary
     cells_df["model_template"] = cells_df["model_template"].str.replace(
         r"^([0-9][A-Za-z0-9_]*)(?:\.json)?$|^([A-Za-z][A-Za-z0-9_]*)(?:\.json)?$",
@@ -53,6 +64,7 @@ def load_allen_nodes(nodes_file, node_types_file):
     cells_df["morphology"] = cells_df["morphology"].str.replace(r"\.[^.]+$", "", regex=True)
     cells_df["rotation_angle_zaxis"] = cells_df["rotation_angle_zaxis"].fillna(0)
     cells_df["morphology"] = cells_df["morphology"].fillna("None")
+    cells_df["synapse_class"] = cells_df["synapse_class"].map({"e": "EXC", "i": "INH"})
 
     # add dummy attributes
     add_dummy_values(cells_df, ["mtype", "etype"], "None")
@@ -120,7 +132,7 @@ def add_precomputed_synapse_locations(edges_df, nodes_df, precomputed_edges_file
         edges_df_expanded.loc[mask_biophysical, "conductance"], syn_biophysical_df["syn_weight"]
     ), "biophysical syn weight is not consistent with the precomputed file"
     edges_df_expanded["afferent_section_id"] = -1
-    edges_df_expanded["afferent_section_pos"] = -1.
+    edges_df_expanded["afferent_section_pos"] = -1.0
     edges_df_expanded.loc[mask_biophysical, "afferent_section_id"] = syn_biophysical_df[
         "sec_id"
     ].to_numpy()  # row-to-row, not by index
