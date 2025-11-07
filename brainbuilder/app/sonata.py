@@ -56,7 +56,7 @@ def from_mvd3(mvd3, output, model_type, mecombo_info, population):
     help="Path to allen's precomputed edges file, for syn weights and locations",
     required=True,
 )
-def from_allen_circuit(
+def convert_allen_circuit(
     nodes_file,
     node_types_file,
     edges_file,
@@ -65,7 +65,6 @@ def from_allen_circuit(
     syn_parameter_dir,
     output,
 ):
-    """Provide SONATA nodes with MorphoElectrical info"""
     from brainbuilder.utils.sonata import convert_allen_v1
     from brainbuilder.utils.sonata import split_population as module
     from voxcell import CellCollection
@@ -87,7 +86,15 @@ def from_allen_circuit(
     # drop columns not needed for OBI simulator
     nodes_df.drop(["tuning_angle"], axis=1, inplace=True)
     edges_df.drop(
-        ["weight_function", "weight_sigma", "syn_weight", "nsyns", "dynamics_params"],
+        [
+            "weight_function",
+            "weight_sigma",
+            "syn_weight",
+            "nsyns",
+            "dynamics_params",
+            "distance_range",
+            "target_sections",
+        ],
         axis=1,
         inplace=True,
     )
@@ -128,7 +135,7 @@ def from_allen_circuit(
     required=True,
 )
 @click.option("--syn-parameter-dir", help="Directory to synapse parameters files", required=True)
-def from_allen_projection_edges(
+def convert_allen_projection_edges(
     n_source_nodes,
     target_nodes_file,
     target_node_types_file,
@@ -138,7 +145,6 @@ def from_allen_projection_edges(
     syn_parameter_dir,
     output,
 ):
-    """Provide SONATA nodes with MorphoElectrical info"""
     from brainbuilder.utils.sonata import convert_allen_v1
     from pathlib import Path
 
@@ -152,7 +158,16 @@ def from_allen_projection_edges(
         edges_df, nodes_df, precomputed_edges_file, syn_parameter_dir
     )
     edges_df.drop(
-        ["weight_function", "weight_sigma", "nsyns", "dynamics_params"], axis=1, inplace=True
+        [
+            "weight_function",
+            "weight_sigma",
+            "nsyns",
+            "dynamics_params",
+            "distance_range",
+            "target_sections",
+        ],
+        axis=1,
+        inplace=True,
     )
 
     # split projecting to src->biophysical, src->point_process
@@ -195,6 +210,24 @@ def from_allen_projection_edges(
         convert_allen_v1.write_edges_from_dataframe(
             point_edges, src_pop, "point_process", 17400, len(point_gids), h5f
         )
+
+
+@app.command()
+@click.option("-o", "--output-dir", help="Directory to output SONATA files", required=True)
+@click.option("--nodes-file", help="Path to the target nodes file", required=True)
+@click.option("--node-types-file", help="Path to the target node type file", required=True)
+@click.option("--edges-file", help="Path to edges file", required=True)
+@click.option("--edge-types-file", help="Path to edge type file", required=True)
+@click.option("--morphology-dir", help="Directory to morphology file", required=True)
+def precompute_allen_synapse_locations(
+    output_dir, nodes_file, node_types_file, edges_file, edge_types_file, morphology_dir
+):
+    """Precompute synapse locations for Allen V1 circuit"""
+    from brainbuilder.utils.sonata import convert_allen_v1
+
+    convert_allen_v1.compute_synapse_loctations(
+        nodes_file, node_types_file, edges_file, edge_types_file, output_dir, morphology_dir
+    )
 
 
 @app.command()
