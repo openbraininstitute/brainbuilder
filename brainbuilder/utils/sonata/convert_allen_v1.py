@@ -85,6 +85,8 @@ def load_allen_edges(edges_file, edge_types_file):
                 "weight_sigma",
                 "delay",
                 "dynamics_params",
+                "distance_range",
+                "target_sections",
             ]
         ],
         on="edge_type_id",
@@ -298,3 +300,115 @@ def DirectionRule_EE(edge_props, src_node, trg_node):
     phase_scale_ratio = phase_scale_ratio * (5.5 / 4 - 11.0 / 1680 * theta_tar_scale)
 
     return w_multiplier_180 * phase_scale_ratio * edge_props["syn_weight"]
+
+
+def compute_synapse_loctations(
+    nodes_file, node_types_file, edges_file, edge_types_file, output_dir, morphology_dir
+):
+    nodes_df, _node_pop = load_allen_nodes(nodes_file, node_types_file)
+    edges_df, src_pop, tgt_pop = load_allen_edges(edges_file, edge_types_file)
+    adjust_synapse_weights(edges_df, nodes_df)
+    biophysical_gids = nodes_df.index[nodes_df["model_type"] == "biophysical"]
+    biophysical_edges = edges_df[(edges_df["target_node_id"].isin(biophysical_gids))]
+    point_gids = nodes_df.index[nodes_df["model_type"] == "point_process"]
+    point_edges = edges_df[(edges_df["target_node_id"].isin(point_gids))]
+    point_edges.loc[:, "syn_weight"] *= point_edges["nsyns"]
+    sec_ids, seg_xs = find_section_locations(biophysical_edges, nodes_df, morphology_dir)
+    repeat_counts = biophysical_edges["nsyns"]
+    biophysical_edges = biophysical_edges.loc[
+        biophysical_edges.index.repeat(repeat_counts)
+    ].reset_index(drop=True)
+    biophysical_edges["sec_id"] = sec_ids
+    biophysical_edges["sec_x"] = seg_xs
+
+    if not Path(output_dir).exists():
+        Path(output_dir).mkdir()
+    output_prefix = f"{src_pop}_{tgt_pop}"
+    biophysical_edges.to_csv(
+        Path(output_dir) / f"{output_prefix}_biophysical_edges_with_syn_locations.csv",
+        index=False,
+        columns=[
+            "source_node_id",
+            "target_node_id",
+            "edge_type_id",
+            "nsyns",
+            "sec_id",
+            "sec_x",
+            "syn_weight",
+        ],
+    )
+    output_file = Path(output_dir) / f"{output_prefix}_syn_locations.h5"
+    print(f"write output file {output_file}")
+    with h5py.File(output_file, "w") as h5f:
+        edge_population = f"{src_pop}__{tgt_pop}__chemical"
+        group = h5f.create_group(f"/edges/{edge_population}")
+        group_pop = group.create_group("0")
+        group_pop.create_dataset("sec_id", data=biophysical_edges["sec_id"].to_numpy())
+        group_pop.create_dataset("sec_x", data=biophysical_edges["sec_x"].to_numpy())
+        group_pop.create_dataset("syn_weight", data=biophysical_edges["syn_weight"].to_numpy())
+        group_pop = group.create_group("1")
+        group_pop.create_dataset("syn_weight", data=point_edges["syn_weight"].to_numpy())
+
+
+def find_section_locations(edges_df, nodes_df, morph_dir):
+    from tqdm import tqdm
+
+    all_sec_ids = []
+    all_seg_xs = []
+    for edge_row in tqdm(edges_df.itertuples(index=True, name="Edge"), total=len(edges_df)):
+        gid = edge_row.target_node_id
+        morpho_file = Path(morph_dir) / (nodes_df.iloc[gid]["morphology"] + ".swc")
+        assert morpho_file.exists(), f"Morphology file {morpho_file} does not exist"
+        # if morpho_file != check_file:
+        #     continue
+        distance_range = edge_row.distance_range
+        nsyns = edge_row.nsyns
+        target_sections = edge_row.target_sections
+        if isinstance(distance_range, str):
+            distance_range = distance_range.strip("[]")
+            distance_range = [float(x) for x in distance_range.split(",")]
+        if isinstance(target_sections, str):
+            target_sections = target_sections.strip("[]")
+            target_sections = [
+                x.replace('"', "").replace(" ", "") for x in target_sections.split(",")
+            ]
+        sec_ids, seg_xs = choose_synapse_locations(
+            nsyns, distance_range, target_sections, str(morpho_file)
+        )
+        all_sec_ids.append(sec_ids)
+        all_seg_xs.append(seg_xs)
+    return np.concatenate(all_sec_ids), np.concatenate(all_seg_xs)
+
+
+morphology_cache = {}
+
+
+def choose_synapse_locations(nsyns, distance_range, target_sections, morph_file, rng_seed=None):
+    from bmtk.builder.bionet.swc_reader import SWCReader
+
+    cache_key = (morph_file, tuple(target_sections), tuple(distance_range))
+    if cache_key in morphology_cache:
+        tar_seg_ix, tar_seg_prob, morph_reader = morphology_cache[cache_key]
+    else:
+        morph_reader = SWCReader(morph_file, rng_seed)
+        morph_reader.set_segment_dl(20)
+        # morph_reader.fix_axon() // no apply replace axons to preserve the original indices, align with OBI
+        tar_seg_ix, tar_seg_prob = morph_reader.find_sections(
+            section_names=target_sections, distance_range=distance_range
+        )
+        morphology_cache[cache_key] = (tar_seg_ix, tar_seg_prob, morph_reader)
+
+    # print(f"tar_seg_ix={tar_seg_ix} tar_seg_prob={tar_seg_prob}")
+    secs_ix = morph_reader._prng.choice(tar_seg_ix, nsyns, p=tar_seg_prob)
+    sec_ids = morph_reader.seg_props.sec_id[secs_ix]
+    seg_xs = morph_reader.seg_props.x[secs_ix]
+    assert max(sec_ids) < morph_reader.n_sections, (
+        f"sec_id {max(sec_ids)} exceeds number of sections {SWCReader.n_sections} in morphology {morph_file}"
+    )
+    # sec_ids, seg_xs = morph_reader.choose_sections(
+    #          section_names=target_sections,
+    #          distance_range=distance_range,
+    #          n_sections=nsyns
+    # )
+
+    return sec_ids, seg_xs
