@@ -54,7 +54,8 @@ def from_mvd3(mvd3, output, model_type, mecombo_info, population):
 @click.option(
     "--precomputed-edges-file",
     help="Path to allen's precomputed edges file, for syn weights and locations",
-    required=True,
+    default=None,
+    show_default=True,
 )
 def convert_allen_circuit(
     nodes_file,
@@ -84,12 +85,11 @@ def convert_allen_circuit(
     )
 
     # drop columns not needed for OBI simulator
-    nodes_df.drop(["tuning_angle"], axis=1, inplace=True)
+    nodes_df.drop(["tuning_angle"], axis=1, inplace=True, errors="ignore")
     edges_df.drop(
         [
             "weight_function",
             "weight_sigma",
-            "syn_weight",
             "nsyns",
             "dynamics_params",
             "distance_range",
@@ -97,6 +97,7 @@ def convert_allen_circuit(
         ],
         axis=1,
         inplace=True,
+        errors="ignore",
     )
 
     # save to sonata h5 files
@@ -132,7 +133,8 @@ def convert_allen_circuit(
 @click.option(
     "--precomputed-edges-file",
     help="Path to allen's precomputed edges file, for syn weights and locations",
-    required=True,
+    default=None,
+    show_default=True,
 )
 @click.option("--syn-parameter-dir", help="Directory to synapse parameters files", required=True)
 def convert_allen_projection_edges(
@@ -168,6 +170,7 @@ def convert_allen_projection_edges(
         ],
         axis=1,
         inplace=True,
+        errors="ignore",
     )
 
     # split projecting to src->biophysical, src->point_process
@@ -208,7 +211,7 @@ def convert_allen_projection_edges(
     output_edges = Path(output) / edge_file_name
     with h5py.File(output_edges, "w") as h5f:
         convert_allen_v1.write_edges_from_dataframe(
-            point_edges, src_pop, "point_process", 17400, len(point_gids), h5f
+            point_edges, src_pop, "point_process", n_source_nodes, len(point_gids), h5f
         )
 
 
@@ -225,7 +228,7 @@ def precompute_allen_synapse_locations(
     """Precompute synapse locations for Allen V1 circuit"""
     from brainbuilder.utils.sonata import convert_allen_v1
 
-    convert_allen_v1.compute_synapse_loctations(
+    convert_allen_v1.compute_synapse_locations(
         nodes_file, node_types_file, edges_file, edge_types_file, output_dir, morphology_dir
     )
 

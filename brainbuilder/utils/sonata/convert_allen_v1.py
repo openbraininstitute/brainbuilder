@@ -1,13 +1,14 @@
 import h5py
 import pandas as pd
 import numpy as np
+import re
 from itertools import chain
 from brainbuilder import utils
 from pathlib import Path
+from collections import defaultdict
 
 
 def sonata_to_dataframe(sonata_file, file_type="nodes"):
-    cells_df = pd.DataFrame()
     with h5py.File(sonata_file, "r") as h5f:
         population_names = list(h5f[f"/{file_type}"].keys())
         assert len(population_names) == 1, "Single population is supported only"
@@ -15,10 +16,18 @@ def sonata_to_dataframe(sonata_file, file_type="nodes"):
 
         population = h5f[f"{file_type}/{population_name}"]
         assert "0" in population, "group '0' doesn't exst"
-        group = population["0"]
 
-        for key in group.keys():
-            cells_df[key] = group[key][()]
+        data = defaultdict(list)
+        for group_name in population.keys():
+            # loop through groups /0, /1 ... in allen's sonata files
+            if not group_name.isdigit():
+                continue
+            group = population[group_name]
+            for key in group.keys():
+                data[key].extend(group[key][()])
+
+        cells_df = pd.DataFrame(data)
+        # cells_df = pd.DataFrame.from_dict(data, orient='index').transpose()
         type_id_key = "node_type_id" if file_type == "nodes" else "edge_type_id"
         cells_df[type_id_key] = population[type_id_key][()]
         res_pop = population_name
@@ -96,13 +105,14 @@ def load_allen_edges(edges_file, edge_types_file):
 
 
 def prepare_synapses(edges_df, nodes_df, precomputed_edges_file, syn_parameter_dir):
-    adjust_synapse_weights(edges_df, nodes_df)
     edges_df = add_synapse_parameters(edges_df, syn_parameter_dir)
     add_dummy_values(edges_df, ["depression_time", "n_rrp_vesicles", "syn_type_id"], -1)
-    edges_df_expanded = add_precomputed_synapse_locations(
-        edges_df, nodes_df, precomputed_edges_file
-    )
-    return edges_df_expanded
+    if "weight_function" in edges_df.columns and "weight_sigma" in edges_df.columns:
+        adjust_synapse_weights(edges_df, nodes_df)
+    if precomputed_edges_file:
+        edges_df = add_precomputed_synapse_locations(edges_df, nodes_df, precomputed_edges_file)
+    edges_df.rename(columns={"syn_weight": "conductance"}, inplace=True)
+    return edges_df
 
 
 def add_dummy_values(df, attribute_names, default_value):
@@ -120,9 +130,9 @@ def add_precomputed_synapse_locations(edges_df, nodes_df, precomputed_edges_file
 
     # For edges targeting point cells, multiple syn_weight by nsys
     mask_point = edges_df["target_node_id"].isin(point_gids)
-    edges_df.loc[mask_point, "conductance"] *= edges_df.loc[mask_point, "nsyns"]
+    edges_df.loc[mask_point, "syn_weight"] *= edges_df.loc[mask_point, "nsyns"]
     # cross check with precompuated file to make sure the weights are correct
-    assert np.allclose(edges_df.loc[mask_point, "conductance"], abs(syn_point_df["syn_weight"])), (
+    assert np.allclose(edges_df.loc[mask_point, "syn_weight"], abs(syn_point_df["syn_weight"])), (
         "point syn weight is not consistent with the precomputed file"
     )
 
@@ -131,7 +141,7 @@ def add_precomputed_synapse_locations(edges_df, nodes_df, precomputed_edges_file
     edges_df_expanded = edges_df.loc[edges_df.index.repeat(repeat_counts)].reset_index(drop=True)
     mask_biophysical = edges_df_expanded["target_node_id"].isin(biophysical_gids)
     assert np.allclose(
-        edges_df_expanded.loc[mask_biophysical, "conductance"], syn_biophysical_df["syn_weight"]
+        edges_df_expanded.loc[mask_biophysical, "syn_weight"], syn_biophysical_df["syn_weight"]
     ), "biophysical syn weight is not consistent with the precomputed file"
     edges_df_expanded["afferent_section_id"] = -1
     edges_df_expanded["afferent_section_pos"] = -1.0
@@ -185,12 +195,14 @@ def adjust_synapse_weights(edges_df, nodes_df):
     tgt_df = nodes_df.loc[edges_df["target_node_id"], ["tuning_angle", "x", "z"]].reset_index(
         drop=True
     )
-    edges_df.loc[:, "conductance"] = edges_df["syn_weight"]  # default cond
-    edges_df.loc[edges_df["weight_function"] == "DirectionRule_others", "conductance"] = (
+    edges_df.loc[edges_df["weight_function"] == "DirectionRule_others", "syn_weight"] = (
         DirectionRule_others(edges_df, src_df, tgt_df)
     )
-    edges_df.loc[edges_df["weight_function"] == "DirectionRule_EE", "conductance"] = (
+    edges_df.loc[edges_df["weight_function"] == "DirectionRule_EE", "syn_weight"] = (
         DirectionRule_EE(edges_df, src_df, tgt_df)
+    )
+    edges_df.loc[edges_df["weight_function"] == "gaussianLL", "syn_weight"] = gaussianLL(
+        edges_df, src_df, tgt_df
     )
 
 
@@ -302,7 +314,25 @@ def DirectionRule_EE(edge_props, src_node, trg_node):
     return w_multiplier_180 * phase_scale_ratio * edge_props["syn_weight"]
 
 
-def compute_synapse_loctations(
+def gaussianLL(edge_props, src_props, trg_props):
+    src_tuning = src_props["tuning_angle"]
+    tar_tuning = trg_props["tuning_angle"]
+
+    mask = src_tuning.isna()
+    src_tuning.loc[mask] = np.random.uniform(0.0, 360.0)
+    mask = tar_tuning.isna()
+    tar_tuning.loc[mask] = np.random.uniform(0.0, 360.0)
+
+    w0 = edge_props["syn_weight"]
+    sigma = edge_props["weight_sigma"]
+
+    delta_tuning = abs(abs(abs(180.0 - abs(tar_tuning - src_tuning) % 360.0) - 90.0) - 90.0)
+    weight = w0 * np.exp(-((delta_tuning / sigma) ** 2))
+
+    return weight
+
+
+def compute_synapse_locations(
     nodes_file, node_types_file, edges_file, edge_types_file, output_dir, morphology_dir
 ):
     nodes_df, _node_pop = load_allen_nodes(nodes_file, node_types_file)
@@ -369,9 +399,7 @@ def find_section_locations(edges_df, nodes_df, morph_dir):
             distance_range = [float(x) for x in distance_range.split(",")]
         if isinstance(target_sections, str):
             target_sections = target_sections.strip("[]")
-            target_sections = [
-                x.replace('"', "").replace(" ", "") for x in target_sections.split(",")
-            ]
+            target_sections = [re.sub(r"[\"'\s]", "", x) for x in target_sections.split(",")]
         sec_ids, seg_xs = choose_synapse_locations(
             nsyns, distance_range, target_sections, str(morpho_file)
         )
@@ -392,7 +420,7 @@ def choose_synapse_locations(nsyns, distance_range, target_sections, morph_file,
     else:
         morph_reader = SWCReader(morph_file, rng_seed)
         morph_reader.set_segment_dl(20)
-        # morph_reader.fix_axon() // no apply replace axons to preserve the original indices, align with OBI
+        # morph_reader.fix_axon() // NO replace axons to preserve the original indices, align with OBI
         tar_seg_ix, tar_seg_prob = morph_reader.find_sections(
             section_names=target_sections, distance_range=distance_range
         )
