@@ -553,3 +553,38 @@ def precompute_allen_synapse_locations(
     convert_allen_v1.compute_synapse_locations(
         nodes_file, node_types_file, edges_file, edge_types_file, output_dir, morphology_dir
     )
+
+
+@app.command()
+@click.option("-o", "--output", help="Directory of output SONATA files", required=True)
+@click.option("--nodes-file", help="Path to nodes file", required=True)
+@click.option("--attributes-file", help="Path to the csv of additional attribute , for syn weights and locations",
+    default=None,
+    show_default=True,
+)
+def add_nodes_attributes(
+    nodes_file,
+    attributes_file,
+    output,
+):
+    from voxcell import CellCollection
+    import pandas as pd
+    cells = CellCollection.load(nodes_file)
+    nodes_df = cells.as_dataframe(index_offset=0)
+    attributes_df = pd.read_csv(attributes_file, sep=r",").sort_values(by="node_id")
+    print(nodes_df)
+    print(attributes_df)
+    for name in ["threshold_current", "holding_current"]:
+        nodes_df[name] = attributes_df[name].to_numpy()  # row-to-row, not by index
+
+    nodes_df.rename(
+        columns={"threshold_current": "@dynamics:threshold_current",
+                 "holding_current": "@dynamics:holding_current"},
+        inplace=True,
+    )
+    print(nodes_df)
+    updated_cells = CellCollection.from_dataframe(nodes_df, index_offset=0)
+    updated_cells.population_name = cells.population_name
+    Path(output).mkdir(parents=True, exist_ok=True)
+    filename=Path(nodes_file).name
+    updated_cells.save(f"{output}/{filename}")
