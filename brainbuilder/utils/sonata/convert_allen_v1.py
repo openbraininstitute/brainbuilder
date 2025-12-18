@@ -27,6 +27,7 @@ def sonata_to_dataframe(sonata_file, file_type="nodes"):
                 data[key].extend(group[key][()])
 
         cells_df = pd.DataFrame(data)
+        # # Create DataFrame with NaN for missing values, but very slow
         # cells_df = pd.DataFrame.from_dict(data, orient='index').transpose()
         type_id_key = "node_type_id" if file_type == "nodes" else "edge_type_id"
         cells_df[type_id_key] = population[type_id_key][()]
@@ -401,14 +402,15 @@ def find_section_locations(edges_df, nodes_df, morph_dir):
             target_sections = target_sections.strip("[]")
             target_sections = [re.sub(r"[\"'\s]", "", x) for x in target_sections.split(",")]
         sec_ids, seg_xs = choose_synapse_locations(
-            nsyns, distance_range, target_sections, str(morpho_file)
+            nsyns, distance_range, target_sections, str(morpho_file), rng_seed=gid
         )
         all_sec_ids.append(sec_ids)
         all_seg_xs.append(seg_xs)
     return np.concatenate(all_sec_ids), np.concatenate(all_seg_xs)
 
 
-morphology_cache = {}
+morphology_cache = {} # cache for the same morphology file and target range
+prng_cache = {} # one rng per gid with the seed = gid, as bmtk does
 
 
 def choose_synapse_locations(nsyns, distance_range, target_sections, morph_file, rng_seed=None):
@@ -427,7 +429,13 @@ def choose_synapse_locations(nsyns, distance_range, target_sections, morph_file,
         morphology_cache[cache_key] = (tar_seg_ix, tar_seg_prob, morph_reader)
 
     # print(f"tar_seg_ix={tar_seg_ix} tar_seg_prob={tar_seg_prob}")
-    secs_ix = morph_reader._prng.choice(tar_seg_ix, nsyns, p=tar_seg_prob)
+    if rng_seed in prng_cache:
+        prng = prng_cache[rng_seed]
+    else:
+        prng = np.random.RandomState(rng_seed)
+        prng_cache[rng_seed] = prng
+  
+    secs_ix = prng.choice(tar_seg_ix, nsyns, p=tar_seg_prob)
     sec_ids = morph_reader.seg_props.sec_id[secs_ix]
     seg_xs = morph_reader.seg_props.x[secs_ix]
     assert max(sec_ids) < morph_reader.n_sections, (

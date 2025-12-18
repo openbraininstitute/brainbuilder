@@ -541,18 +541,23 @@ def convert_allen_projection_edges(
 @click.option("-o", "--output-dir", help="Directory of output SONATA files", required=True)
 @click.option("--nodes-file", help="Path to the target nodes file", required=True)
 @click.option("--node-types-file", help="Path to the target node type file", required=True)
-@click.option("--edges-file", help="Path to edges file", required=True)
-@click.option("--edge-types-file", help="Path to edge type file", required=True)
 @click.option("--morphology-dir", help="Directory of morphology file", required=True)
 def precompute_allen_synapse_locations(
-    output_dir, nodes_file, node_types_file, edges_file, edge_types_file, morphology_dir
+    output_dir, nodes_file, node_types_file, morphology_dir
 ):
     """Precompute synapse locations for Allen V1 circuit"""
     from brainbuilder.utils.sonata import convert_allen_v1
 
-    convert_allen_v1.compute_synapse_locations(
-        nodes_file, node_types_file, edges_file, edge_types_file, output_dir, morphology_dir
-    )
+    # nodes_file = "network/v1_nodes.h5"
+    # node_types_file = "network/v1_node_types.csv"
+    # morphology_dir = "/Users/weji/workdir/JIRA/allen_v1/bmtk/examples/bio_components/morphologies"
+    edges = ["network/v1_v1_edges.h5", "network/lgn_v1_edges.h5", "network/bkg_v1_edges.h5"]
+    edges_types = ["network/v1_v1_edge_types.csv", "network/lgn_v1_edge_types.csv", "network/bkg_v1_edge_types.csv"]
+    for edges_file, edge_types_file in zip(edges, edges_types):
+        print(f"Compute synapse locations for edges: {edges_file}")
+        convert_allen_v1.compute_synapse_locations(
+            nodes_file, node_types_file, edges_file, edge_types_file, output_dir, morphology_dir
+        )
 
 
 @app.command()
