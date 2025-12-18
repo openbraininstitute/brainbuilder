@@ -541,20 +541,21 @@ def convert_allen_projection_edges(
 @click.option("-o", "--output-dir", help="Directory of output SONATA files", required=True)
 @click.option("--nodes-file", help="Path to the target nodes file", required=True)
 @click.option("--node-types-file", help="Path to the target node type file", required=True)
+@click.option(
+    "--edges-files",
+    nargs=2,
+    multiple=True,
+    help="Path to v1, lgn, bkg edges and the corresponding edges type files",
+)
 @click.option("--morphology-dir", help="Directory of morphology file", required=True)
 def precompute_allen_synapse_locations(
-    output_dir, nodes_file, node_types_file, morphology_dir
+    output_dir, nodes_file, node_types_file, morphology_dir, edges_files
 ):
     """Precompute synapse locations for Allen V1 circuit"""
     from brainbuilder.utils.sonata import convert_allen_v1
 
-    # nodes_file = "network/v1_nodes.h5"
-    # node_types_file = "network/v1_node_types.csv"
-    # morphology_dir = "/Users/weji/workdir/JIRA/allen_v1/bmtk/examples/bio_components/morphologies"
-    edges = ["network/v1_v1_edges.h5", "network/lgn_v1_edges.h5", "network/bkg_v1_edges.h5"]
-    edges_types = ["network/v1_v1_edge_types.csv", "network/lgn_v1_edge_types.csv", "network/bkg_v1_edge_types.csv"]
-    for edges_file, edge_types_file in zip(edges, edges_types):
-        print(f"Compute synapse locations for edges: {edges_file}")
+    for edges_file, edge_types_file in edges_files:
+        print(f"Compute synapse locations for edges: {edges_file} {edge_types_file}")
         convert_allen_v1.compute_synapse_locations(
             nodes_file, node_types_file, edges_file, edge_types_file, output_dir, morphology_dir
         )
@@ -563,7 +564,9 @@ def precompute_allen_synapse_locations(
 @app.command()
 @click.option("-o", "--output", help="Directory of output SONATA files", required=True)
 @click.option("--nodes-file", help="Path to nodes file", required=True)
-@click.option("--attributes-file", help="Path to the csv of additional attribute , for syn weights and locations",
+@click.option(
+    "--attributes-file",
+    help="Path to the csv of additional attribute , for syn weights and locations",
     default=None,
     show_default=True,
 )
@@ -574,6 +577,7 @@ def add_nodes_attributes(
 ):
     from voxcell import CellCollection
     import pandas as pd
+
     cells = CellCollection.load(nodes_file)
     nodes_df = cells.as_dataframe(index_offset=0)
     attributes_df = pd.read_csv(attributes_file, sep=r",").sort_values(by="node_id")
@@ -583,13 +587,15 @@ def add_nodes_attributes(
         nodes_df[name] = attributes_df[name].to_numpy()  # row-to-row, not by index
 
     nodes_df.rename(
-        columns={"threshold_current": "@dynamics:threshold_current",
-                 "holding_current": "@dynamics:holding_current"},
+        columns={
+            "threshold_current": "@dynamics:threshold_current",
+            "holding_current": "@dynamics:holding_current",
+        },
         inplace=True,
     )
     print(nodes_df)
     updated_cells = CellCollection.from_dataframe(nodes_df, index_offset=0)
     updated_cells.population_name = cells.population_name
     Path(output).mkdir(parents=True, exist_ok=True)
-    filename=Path(nodes_file).name
+    filename = Path(nodes_file).name
     updated_cells.save(f"{output}/{filename}")

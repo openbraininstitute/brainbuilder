@@ -409,24 +409,24 @@ def find_section_locations(edges_df, nodes_df, morph_dir):
     return np.concatenate(all_sec_ids), np.concatenate(all_seg_xs)
 
 
-morphology_cache = {} # cache for the same morphology file and target range
-prng_cache = {} # one rng per gid with the seed = gid, as bmtk does
+morphology_cache = {}  # cache for the same morphology file and target range
+prng_cache = {}  # one rng per gid with the seed = gid, as bmtk does
 
 
 def choose_synapse_locations(nsyns, distance_range, target_sections, morph_file, rng_seed=None):
     from bmtk.builder.bionet.swc_reader import SWCReader
 
-    cache_key = (morph_file, tuple(target_sections), tuple(distance_range))
+    cache_key = morph_file
     if cache_key in morphology_cache:
-        tar_seg_ix, tar_seg_prob, morph_reader = morphology_cache[cache_key]
+        morph_reader = morphology_cache[cache_key]
     else:
         morph_reader = SWCReader(morph_file, rng_seed)
         morph_reader.set_segment_dl(20)
+        morphology_cache[cache_key] = morph_reader
         # morph_reader.fix_axon() // NO replace axons to preserve the original indices, align with OBI
-        tar_seg_ix, tar_seg_prob = morph_reader.find_sections(
-            section_names=target_sections, distance_range=distance_range
-        )
-        morphology_cache[cache_key] = (tar_seg_ix, tar_seg_prob, morph_reader)
+    tar_seg_ix, tar_seg_prob = morph_reader.find_sections(
+        section_names=target_sections, distance_range=distance_range
+    )
 
     # print(f"tar_seg_ix={tar_seg_ix} tar_seg_prob={tar_seg_prob}")
     if rng_seed in prng_cache:
@@ -434,7 +434,7 @@ def choose_synapse_locations(nsyns, distance_range, target_sections, morph_file,
     else:
         prng = np.random.RandomState(rng_seed)
         prng_cache[rng_seed] = prng
-  
+
     secs_ix = prng.choice(tar_seg_ix, nsyns, p=tar_seg_prob)
     sec_ids = morph_reader.seg_props.sec_id[secs_ix]
     seg_xs = morph_reader.seg_props.x[secs_ix]
