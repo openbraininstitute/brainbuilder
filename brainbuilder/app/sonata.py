@@ -559,6 +559,12 @@ def convert_allen_projection_edges(
     point_edges = edges_df[(edges_df["target_node_id"].isin(point_gids))].reset_index(drop=True)
     point_id_map = dict(zip(point_gids, range(len(point_gids))))
     point_edges["target_node_id"] = point_edges["target_node_id"].map(point_id_map)
+    point_edges.drop(
+        ["tau1", "tau2", "erev"],
+        axis=1,
+        inplace=True,
+        errors="ignore",
+    )
 
     if not Path(output).exists():
         Path(output).mkdir(parents=True, exist_ok=True)
@@ -617,7 +623,7 @@ def precompute_allen_synapse_locations(
 @click.option("--nodes-file", help="Path to nodes file", required=True)
 @click.option(
     "--attributes-file",
-    help="Path to the csv of additional attribute , for syn weights and locations",
+    help="Path to the csv of additional attribute, for threshold_current and holding current ",
     default=None,
     show_default=True,
 )
@@ -632,8 +638,6 @@ def add_nodes_attributes(
     cells = CellCollection.load(nodes_file)
     nodes_df = cells.as_dataframe(index_offset=0)
     attributes_df = pd.read_csv(attributes_file, sep=r",").sort_values(by="node_id")
-    print(nodes_df)
-    print(attributes_df)
     for name in ["threshold_current", "holding_current"]:
         nodes_df[name] = attributes_df[name].to_numpy()  # row-to-row, not by index
 
@@ -644,7 +648,6 @@ def add_nodes_attributes(
         },
         inplace=True,
     )
-    print(nodes_df)
     updated_cells = CellCollection.from_dataframe(nodes_df, index_offset=0)
     updated_cells.population_name = cells.population_name
     Path(output).mkdir(parents=True, exist_ok=True)
