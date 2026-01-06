@@ -508,6 +508,16 @@ def convert_allen_projection_edges(
     point_edges = edges_df[(edges_df["target_node_id"].isin(point_gids))].reset_index(drop=True)
     point_id_map = dict(zip(point_gids, range(len(point_gids))))
     point_edges["target_node_id"] = point_edges["target_node_id"].map(point_id_map)
+    point_edges.drop(
+        [
+            "tau1",
+            "tau2",
+            "erev"
+        ],
+        axis=1,
+        inplace=True,
+        errors="ignore",
+    )
 
     if not Path(output).exists():
         Path(output).mkdir(parents=True, exist_ok=True)
@@ -566,7 +576,7 @@ def precompute_allen_synapse_locations(
 @click.option("--nodes-file", help="Path to nodes file", required=True)
 @click.option(
     "--attributes-file",
-    help="Path to the csv of additional attribute , for syn weights and locations",
+    help="Path to the csv of additional attribute, for threshold_current and holding current ",
     default=None,
     show_default=True,
 )

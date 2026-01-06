@@ -107,7 +107,7 @@ def load_allen_edges(edges_file, edge_types_file):
 
 def prepare_synapses(edges_df, nodes_df, precomputed_edges_file, syn_parameter_dir):
     edges_df = add_synapse_parameters(edges_df, syn_parameter_dir)
-    add_dummy_values(edges_df, ["depression_time", "n_rrp_vesicles", "syn_type_id"], -1)
+    # add_dummy_values(edges_df, ["depression_time", "n_rrp_vesicles", "syn_type_id"], -1)
     if "weight_function" in edges_df.columns and "weight_sigma" in edges_df.columns:
         adjust_synapse_weights(edges_df, nodes_df)
     if precomputed_edges_file:
@@ -157,15 +157,14 @@ def add_precomputed_synapse_locations(edges_df, nodes_df, precomputed_edges_file
 
 
 def add_synapse_parameters(edges_df, sym_parameter_dir):
-    # We rename tau1, tau2 and erev with the BBP synapse parameter names in the output file, so that we can run with our simulator directly
-    syn_params_map = {"dynamics_params": [], "facilitation_time": [], "decay_time": [], "u_syn": []}
+    syn_params_map = {"dynamics_params": [], "tau1": [], "tau2": [], "erev": []}
     for json_file in edges_df["dynamics_params"].unique():
         params = utils.load_json(Path(sym_parameter_dir) / json_file)
         if params["level_of_detail"] == "exp2syn":
             syn_params_map["dynamics_params"].append(json_file)
-            syn_params_map["facilitation_time"].append(params["tau1"])
-            syn_params_map["decay_time"].append(params["tau2"])
-            syn_params_map["u_syn"].append(params["erev"])
+            syn_params_map["tau1"].append(params["tau1"])
+            syn_params_map["tau2"].append(params["tau2"])
+            syn_params_map["erev"].append(params["erev"])
     # create a dataframe from syn_params_map
     syn_params_df = pd.DataFrame(syn_params_map)
     return edges_df.merge(syn_params_df, on="dynamics_params", how="left")
