@@ -10,5 +10,3 @@ build
 venv
 dist
 brainbuilder/version.py
-doc/build
-doc/source/submodules
