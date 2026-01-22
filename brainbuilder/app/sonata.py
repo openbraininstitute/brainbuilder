@@ -314,6 +314,17 @@ def simple_split_subcircuit(nodeset, nodeset_path, nodes, edges, output):
 
     module.simple_split_subcircuit(output, nodeset, nodeset_path, nodes, edges)
 
+@app.command()
+@click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
+@click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
+def repair_ngv_circuit(circuit, output):
+    """Repair neuroglial SONATA edge file"""
+    from brainbuilder.utils.sonata import repair_ngv_circuit as module
+
+    module.repair_ngv_circuit(
+        circuit=circuit,
+        output=output,
+    )
 
 @app.command()
 @click.option("--nodeset", required=True, help="Name of nodeset")
@@ -337,7 +348,7 @@ def split_subcircuit(nodeset, circuit, include_virtual, create_external, output)
     module.split_subcircuit(
         output,
         node_set_name=nodeset,
-        circuit_config_path=circuit,
+        circuit=circuit,
         do_virtual=include_virtual,
         create_external=create_external,
     )

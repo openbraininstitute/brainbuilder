@@ -18,6 +18,7 @@ import voxcell
 from joblib import Parallel, delayed
 
 from brainbuilder import utils
+from brainbuilder.utils.sonata import utils as sonata_utils
 
 L = logging.getLogger(__name__)
 
@@ -91,6 +92,28 @@ def _get_node_file_name(new_pop_name):
     """Return the name of the node file split by population."""
     return f"nodes_{new_pop_name}.h5"
 
+#removeme
+# def _repair_groups_for_neuroglial_edges(group: h5py.Group, edge_mappings) -> None:
+#     """Ensure the 'synapse_population' column exists in a neuroglial edge group."""
+
+#     if "synapse_population" not in group:
+#         chemical_candidates = [
+#             name for name, info in edge_mappings.items() if "chemical" in info["type"]
+#         ]
+#         if len(chemical_candidates) != 1:
+#             raise ValueError(
+#                 f"Cannot infer default chemical synapse population, found {len(chemical_candidates)} candidates: {chemical_candidates}"
+#             )
+
+#         # create appendable dataset
+#         ds = utils.create_appendable_dataset(
+#             group, "synapse_population", h5py.string_dtype(encoding="utf-8")
+#         )
+
+#         # fill the column with the default population
+#         n_rows = len(group["synapse_id"])
+#         ds.resize((n_rows,))
+#         ds[:] = np.full(n_rows, chemical_candidates[0], dtype=object)
 
 def _get_unique_population(parent):
     """Return the h5 unique population, raise an exception if not unique."""
@@ -186,6 +209,18 @@ def _h5_get_read_chunk_size():
     """get the desired H5 read size, either from default of from env var"""
     return int(os.environ.get("H5_READ_CHUNKSIZE", H5_READ_CHUNKSIZE))
 
+# removeme
+def print_top_entries(group: h5py.Group, name: str, n: int = 10):
+    print(f"\n{name} top {n} entries:")
+    for key, ds in group.items():
+        if isinstance(ds, h5py.Dataset):
+            print(f"{key}: {ds[:n]}")
+        elif isinstance(ds, h5py.Group):
+            print(f"{key} (group):")
+            for subkey, subds in ds.items():
+                if isinstance(subds, h5py.Dataset):
+                    print(f"  {subkey}: {subds[:n]}")
+
 
 def _copy_edge_attributes(  # pylint: disable=too-many-arguments
     h5in,
@@ -197,11 +232,14 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
     src_mapping,
     dst_mapping,
     h5_read_chunk_size=None,
+    edge_mappings=None
 ):
     """Copy the attributes from the original edges into the new edge populations"""
     # pylint: disable=too-many-locals
     if h5_read_chunk_size is None:
         h5_read_chunk_size = _h5_get_read_chunk_size()
+
+    kept_indices = []
 
     orig_edges = h5in["edges"][src_edge_name]
     orig_group = _get_unique_group(orig_edges)
@@ -213,6 +251,14 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
 
     new_edges["source_node_id"].attrs["node_population"] = src_node_name
     new_edges["target_node_id"].attrs["node_population"] = dst_node_name
+
+    
+    # is is provided this is a neuroglial edge
+    if edge_mappings is not None:
+        default_synapse_population = _repair_groups_for_neuroglial_edges(orig_group, edge_mappings)
+
+        print_top_entries(orig_group, "orig_group")
+        exit()
 
     _init_edge_group(orig_group, new_group)
 
@@ -233,12 +279,41 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
         L.debug("Processing chunk %s", sl)
         sgids = orig_edges["source_node_id"][sl]
         tgids = orig_edges["target_node_id"][sl]
+
         sgid_mask = _isin(sgids, sgids_new)
         tgid_mask = _isin(tgids, tgids_new)
 
         mask = sgid_mask & tgid_mask
 
+        # # additional synapse mapping filtering
+        # if edge_mappings is not None:
+        #     syn_ids = orig_edges["0/synapse_id"][sl]
+        #     # get the synapse population for each row
+        #     if "synapse_population" in orig_group:
+        #         synapse_populations = orig_group["synapse_population"][sl]
+        #     else:
+        #         synapse_populations = np.full(len(syn_ids), default_synapse_population, dtype=object)
+
+        #     print(synapse_populations)
+        #     exit()
+
+        #     # build a boolean mask for which rows are in edge_mappings
+        #     syn_mask = np.zeros_like(syn_ids, dtype=bool)
+        #     new_syn_ids = np.zeros_like(syn_ids, dtype=np.uint64)
+
+        #     for pop_name, mapping in edge_mappings.items():
+        #         idxs = np.where(synapse_populations == pop_name)[0]  # rows belonging to this population
+        #         if len(idxs):
+        #             in_mapping = np.isin(syn_ids[idxs], mapping["new_id"])
+        #             syn_mask[idxs] = in_mapping
+        #             # override synapse_id with mapped new_id
+        #             new_syn_ids[idxs[in_mapping]] = mapping["map"][syn_ids[idxs[in_mapping]]]
+
+        #     mask &= syn_mask
+
         if np.any(mask):
+            chunk_indices = np.nonzero(mask)[0] + sl.start
+            kept_indices.append(chunk_indices)
             utils.append_to_dataset(
                 new_edges["source_node_id"], src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy()
             )
@@ -247,9 +322,21 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
             )
             _populate_edge_group(orig_group, new_group, sl, mask)
 
+            # if edge_mappings is not None:
+            #     # populate synapse_population with default. It is not none only if it was missing and
+            #     # we could infer a default value
+            #     if default_synapse_population is not None:
+            #         utils.append_to_dataset(new_group["synapse_population"], np.full(mask.sum(), default_synapse_population, dtype=object))
+
+            #     new_group["synapse_id"][-mask.sum():] = new_syn_ids[mask]
+
+
+
+
     L.debug("Finalize edges")
     _finalize_edges(new_edges)
 
+    return np.concatenate(kept_indices) if kept_indices else None
 
 def _get_node_counts(h5out, new_edge_pop_name, src_mapping, dst_mapping):
     """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
@@ -474,6 +561,7 @@ def _write_subcircuit_edges(
     dst_edge_pop_name,
     src_mapping,
     dst_mapping,
+    edge_mappings=None
 ):
     """copy a population to an edge file
 
@@ -484,9 +572,10 @@ def _write_subcircuit_edges(
     with h5py.File(edges_path, "r") as h5in:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         is_file_empty = False
+        kept_indexes = None
 
         with h5py.File(output_path, "a") as h5out:
-            _copy_edge_attributes(
+            kept_indexes = _copy_edge_attributes(
                 h5in=h5in,
                 h5out=h5out,
                 src_node_name=src_node_pop,
@@ -495,6 +584,7 @@ def _write_subcircuit_edges(
                 dst_edge_name=dst_edge_pop_name,
                 src_mapping=src_mapping,
                 dst_mapping=dst_mapping,
+                edge_mappings=edge_mappings,
             )
             edge_count, sgid_count, tgid_count = _get_node_counts(
                 h5out, dst_edge_pop_name, src_mapping, dst_mapping
@@ -514,48 +604,8 @@ def _write_subcircuit_edges(
         else:  # population empty, but not file
             output_path = DELETED_EMPTY_EDGES_POPULATION
 
-        return output_path
-
-
-def _gather_layout_from_networks(networks):
-    """find the layout of the nodes and edges files, return a dict of the name -> relative path"""
-
-    # Note: we are 'prioritizing' the layout of the config over the layout of the files on disk:
-    # 1) the `nodes`/`edges` network keys will still have the same number of elements
-    #    after writing the new config (unless populations aren't used)
-    # 2) The layout of the files may be slightly different; if the config has a single population
-    #    in the dict, the output population will be writen to $population_name/$original_filename.h5
-    #    if it has multiple elements, it will be written to
-    #    $original_parent_dir/$original_filename.h5
-    #
-    # See tests for more clarity
-    node_populations_to_paths, edge_populations_to_paths = {}, {}
-
-    def _extract_population_paths(key):
-        """extract populations from `network_base`; return dictionary with their file path"""
-        key_name = f"{key}_file"
-        ret = {}
-        for stanza in networks[key]:
-            filename = Path(stanza[key_name]).name
-            if len(stanza["populations"]) == 1:
-                population = next(iter(stanza["populations"]))
-                ret[population] = str(Path(population) / filename)
-            else:
-                # multiple populations; need to group them into the same file
-                base_path = Path(stanza[key_name]).parent.name
-                for population in stanza["populations"]:
-                    ret[population] = str(Path(base_path) / filename)
-        return ret
-
-    node_populations_to_paths = _extract_population_paths("nodes")
-    edge_populations_to_paths = _extract_population_paths("edges")
-
-    return node_populations_to_paths, edge_populations_to_paths
-
-
-def _get_storage_path(edge):
-    """Return the storage path."""
-    return edge.h5_filepath
+        return output_path, kept_indexes
+    return None, None
 
 
 def _write_subcircuit_biological(
@@ -580,8 +630,15 @@ def _write_subcircuit_biological(
     """
     new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
 
+    # synapse_astrocyte edges are special because they refer other edge files
+    # we need to handle them after the normal ones
+    # we record the new edge mappings for possible later use
+    edge_mappings = {}
     new_edges_files = {}
     for edge_pop_name, edge in circuit.edges.items():
+        # skip tripartite connections and record 
+        if edge.type == "synapse_astrocyte":
+            continue
         if edge.source.name in id_mapping and edge.target.name in id_mapping:
             output_path = output / edge_pop_to_paths[edge_pop_name]
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -592,9 +649,9 @@ def _write_subcircuit_biological(
                 edge.target.name,
                 output_path,
             )
-            new_edges_files[edge_pop_name] = _write_subcircuit_edges(
+            new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
                 output_path=str(output_path),
-                edges_path=_get_storage_path(edge),
+                edges_path=edge.h5_filepath,
                 src_node_pop=edge.source.name,
                 dst_node_pop=edge.target.name,
                 src_edge_pop_name=edge_pop_name,
@@ -602,6 +659,27 @@ def _write_subcircuit_biological(
                 src_mapping=id_mapping[edge.source.name],
                 dst_mapping=id_mapping[edge.target.name],
             )
+            edge_mappings[edge_pop_name] = {"new_id": kept_indexes, "type": edge.type}
+    
+    for edge_pop_name, edge in circuit.edges.items():
+        if edge.type != "synapse_astrocyte":
+            continue
+
+        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
+            output_path=str(output_path),
+            edges_path=edge.h5_filepath,
+            src_node_pop=edge.source.name,
+            dst_node_pop=edge.target.name,
+            src_edge_pop_name=edge_pop_name,
+            dst_edge_pop_name=edge_pop_name,
+            src_mapping=id_mapping[edge.source.name],
+            dst_mapping=id_mapping[edge.target.name],
+            edge_mappings=edge_mappings
+        )
+        edge_mappings[edge_pop_name] = {"new_id": kept_indexes, "type": edge.type}
+
+    print("we stop here bau")
+    exit()
 
     return new_node_files, new_edges_files
 
@@ -674,7 +752,7 @@ def _write_subcircuit_external(
             # only keep ids that are used; this is duplicating work in _copy_edge_attributes
             # but the alternative is that it keeps track of the new id_mapping; which
             # seemed less ideal
-            with h5py.File(_get_storage_path(edge)) as h5:
+            with h5py.File(edge.h5_filepath) as h5:
                 all_sgids = h5[f"edges/{name}/source_node_id"]
                 all_tgids = h5[f"edges/{name}/target_node_id"]
 
@@ -731,9 +809,10 @@ def _write_subcircuit_external(
             else:
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
-            new_edges_files[new_name] = _write_subcircuit_edges(
+             #TODO tripartite connection
+            new_edges_files[new_name], _ = _write_subcircuit_edges(
                 output_path=str(output_path),
-                edges_path=_get_storage_path(edge),
+                edges_path=edge.h5_filepath,
                 src_node_pop=new_source_pop_name,
                 dst_node_pop=edge.target.name,
                 src_edge_pop_name=name,
@@ -818,11 +897,12 @@ def _write_subcircuit_virtual(
 
     # write the edges that have the virtual populations as source
     for edge_pop_name, edge in virtual_populations.items():
-        new_edges_files[edge_pop_name] = _write_subcircuit_edges(
+        #TODO write 
+        new_edges_files[edge_pop_name], _ = _write_subcircuit_edges(
             output_path=os.path.join(
                 output, edge_populations_to_paths[edge_pop_name]
             ),  # Where to write to
-            edges_path=_get_storage_path(edge),  # Where to read from
+            edges_path=edge.h5_filepath,  # Where to read from
             src_node_pop=edge.source.name,
             dst_node_pop=edge.target.name,
             src_edge_pop_name=edge_pop_name,
@@ -972,7 +1052,7 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
     """write the id mappings between the old and new populations for future analysis"""
     this_mapping = _mapping_to_parent_dict(id_mapping, node_pop_name_mapping)
 
-    provenance = parent_circ.config["components"].get("provenance", {})
+    provenance = parent_circ.config.get("components",{}).get("provenance", {})
     if "id_mapping" in provenance:
         # Currently, bluepysnap does not seem to resolve $BASE_DIR for entries in "provenance".
         # Therefore I decided to not prepend it and just assume the file exists near the circuit config.
@@ -1017,7 +1097,7 @@ def split_subcircuit(
     else:
         assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
 
-    node_pop_to_paths, edge_pop_to_paths = _gather_layout_from_networks(circuit.config["networks"])
+    node_pop_to_paths, edge_pop_to_paths = sonata_utils.gather_layout_from_networks(circuit.config["networks"])
 
     # TODO: remove backward compatibility with snap 1.0, when the dependency can be updated.
     #  In snap 2.0 it's possible to simplify:
@@ -1032,6 +1112,7 @@ def split_subcircuit(
     split_populations = {pop_name: df for pop_name, df in split_populations.items() if not df.empty}
 
     id_mapping = _get_node_id_mapping(split_populations)
+
     # Intrinsic input sources retain their name unchanged
     node_pop_name_mapping = {pop_name: pop_name for pop_name in split_populations.keys()}
 
@@ -1042,6 +1123,9 @@ def split_subcircuit(
     new_node_files, new_edge_files = _write_subcircuit_biological(
         output, circuit, node_pop_to_paths, edge_pop_to_paths, split_populations, id_mapping
     )
+    # TODO
+    print("we end here!")
+    exit()
 
     if do_virtual:
         new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_virtual(
@@ -1085,5 +1169,9 @@ def split_subcircuit(
 
     # TODO: Should be "$BASE_DIR/" + mapping_fn. But bluepysnap does not seem to resolve
     # $BASE_DIR for entries in "provenance"..? So I don't even try.
-    config["components"].setdefault("provenance", {})["id_mapping"] = mapping_fn
+    config.setdefault("components", {}).setdefault("provenance", {})["id_mapping"] = mapping_fn
     utils.dump_json(output / "circuit_config.json", config)
+
+
+                
+        

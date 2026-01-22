@@ -45,3 +45,4 @@ def dump_yaml(filepath, data):
     """Dump to YAML file."""
     with open(filepath, "w", encoding="utf-8") as f:
         yaml.safe_dump(data, f)
+
