@@ -139,7 +139,7 @@ def test_create_projection_source_nodes(tmp_path):
         "projections",
     ] == curate.get_population_names(source_nodes_file)
     with h5py.File(source_nodes_file, "r") as h5f:
-        assert ["virtual".encode("utf-8")]*12 == h5f["/nodes/projections/0/model_type"][
+        assert [0]*12 == h5f["/nodes/projections/0/model_type"][
             :
         ].tolist()
 
