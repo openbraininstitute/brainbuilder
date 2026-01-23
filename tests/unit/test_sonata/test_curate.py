@@ -9,6 +9,7 @@ import pytest
 
 from brainbuilder.utils import bbp
 from brainbuilder.utils.sonata import curate
+from brainbuilder.utils.sonata import utils as sonata_utils
 
 TEST_DATA_PATH = Path(__file__).parent.parent / "data"
 DATA_PATH = TEST_DATA_PATH / "sonata" / "curate"
@@ -139,9 +140,8 @@ def test_create_projection_source_nodes(tmp_path):
         "projections",
     ] == curate.get_population_names(source_nodes_file)
     with h5py.File(source_nodes_file, "r") as h5f:
-        assert [0]*12 == h5f["/nodes/projections/0/model_type"][
-            :
-        ].tolist()
+        model_types = sonata_utils.get_property(h5f["/nodes/projections/0"], h5f["/nodes/projections/0/model_type"][:].tolist(), "model_type")
+        assert [b"virtual"]*12 == model_types
 
     source_nodes_file = curate.create_projection_source_nodes(
         projection_file, tmp_path, "projections", fix_offset=True

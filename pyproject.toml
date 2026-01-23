@@ -42,8 +42,9 @@ dependencies = [
 ]
 dynamic = ["version"]
 
-[tool.setuptools]
-packages = ["brainbuilder"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["brainbuilder*"]
 
 [project.optional-dependencies]
 all = []  # for compatibility
