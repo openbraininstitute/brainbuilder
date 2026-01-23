@@ -137,26 +137,27 @@ def _save_sonata_nodes(nodes_path, df, population_name):
 
 
 def _init_edge_group(orig_group, new_group):
-    """Copy the empty datasets from orig_group to new_group.
+    """Copy the empty structure of orig_group into new_group.
 
-    Args:
-        orig_group (h5py.Group): original group, e.g. /edges/default/0
-        new_group (h5py.Group): new group, e.g. /edges/L2_X__L6_Y__chemical/0
+    Datasets are created appendable with the same dtype.
+    Subgroups (e.g. @library) are created recursively.
     """
-    for name, attr in orig_group.items():
-        if isinstance(attr, h5py.Dataset):
-            utils.create_appendable_dataset(new_group, name, attr.dtype)
-        elif isinstance(attr, h5py.Group) and name == "dynamics_params":
-            new_group.create_group(name)
-            for k, values in attr.items():
-                assert isinstance(values, h5py.Dataset), f"dynamics_params has an h5 subgroup: {k}"
-                utils.create_appendable_dataset(new_group[name], k, values.dtype)
+    for name, obj in orig_group.items():
+        if isinstance(obj, h5py.Dataset):
+            utils.create_appendable_dataset(new_group, name, obj.dtype)
+
+        elif isinstance(obj, h5py.Group):
+            subgrp = new_group.create_group(name)
+            _init_edge_group(obj, subgrp)
+
         else:
-            raise ValueError('Only "dynamics_params" group is expected')
+            raise TypeError(f"Unsupported HDF5 object: {name}")
 
 
 def _populate_edge_group(orig_group, new_group, sl, mask):
-    """Populate the datasets from orig_group to new_group.
+    """Populate the datasets from orig_group into new_group.
+
+    Supports nested groups recursively (e.g., @library).
 
     Args:
         orig_group (h5py.Group): original group, e.g. /edges/default/0
@@ -164,15 +165,15 @@ def _populate_edge_group(orig_group, new_group, sl, mask):
         sl (slice): slice used to select the dataset range
         mask (np.ndarray): mask used to filter the dataset
     """
-    for name, attr in orig_group.items():
-        if isinstance(attr, h5py.Dataset):
-            utils.append_to_dataset(new_group[name], attr[sl][mask])
-        elif isinstance(attr, h5py.Group) and name == "dynamics_params":
-            for k, values in attr.items():
-                if isinstance(values, h5py.Dataset):
-                    utils.append_to_dataset(new_group[name][k], values[sl][mask])
+    for name, obj in orig_group.items():
+        if isinstance(obj, h5py.Dataset):
+            utils.append_to_dataset(new_group[name], obj[sl][mask])
+
+        elif isinstance(obj, h5py.Group):
+            _populate_edge_group(obj, new_group[name], sl, mask)
+
         else:
-            raise ValueError('Only "dynamics_params" group is expected')
+            raise TypeError(f"Unsupported HDF5 object: {name}")
 
 
 def _finalize_edges(new_edges):
@@ -309,7 +310,7 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
 
         if edge_mappings is not None:
             syn_ids = orig_edges["0/synapse_id"][sl]
-            syn_pops = orig_edges["0/synapse_population"][sl]
+            syn_pops = sonata_utils.get_property(orig_edges["0"], orig_edges["0/synapse_population"][sl], "synapse_population")
 
             mask0, new_syn_ids0 = _compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
 

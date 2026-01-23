@@ -45,20 +45,29 @@ def _repair_neuroglial_edge_file(output, circuit, edge_pop_to_paths):
                 L.info(f"`{edge_pop_name}` already contains synapse_population, skipping")
                 continue
 
-            # --- copy full file ---
             with h5py.File(output_path, "w") as h5out:
                 for name in h5in:
                     h5in.copy(name, h5out)
 
                 out_group = h5out["edges"][edge_pop_name]["0"]
+                lib_group = h5out["edges"][edge_pop_name]["0"].require_group("@library")
 
                 n = out_group["synapse_id"].shape[0]
 
+                # indices into @library (all identical → 0)
                 out_group.create_dataset(
                     "synapse_population",
                     shape=(n,),
+                    dtype=np.int32,
+                    data=np.zeros(n, dtype=np.int32),
+                )
+
+                # actual string stored once in @library
+                lib_group.create_dataset(
+                    "synapse_population",
+                    shape=(1,),
                     dtype=h5py.string_dtype(encoding="utf-8"),
-                    data=np.full(n, syn_pop, dtype=object),
+                    data=np.array([syn_pop], dtype=object),
                 )
 
         L.info("Neuroglial edge file repaired from %s to %s", edge_path, output_path)
