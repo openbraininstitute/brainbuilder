@@ -314,6 +314,7 @@ def simple_split_subcircuit(nodeset, nodeset_path, nodes, edges, output):
 
     module.simple_split_subcircuit(output, nodeset, nodeset_path, nodes, edges)
 
+
 @app.command()
 @click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
@@ -325,6 +326,7 @@ def repair_ngv_circuit(circuit, output):
         circuit=circuit,
         output=output,
     )
+
 
 @app.command()
 @click.option("--nodeset", required=True, help="Name of nodeset")

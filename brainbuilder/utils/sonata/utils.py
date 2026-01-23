@@ -1,5 +1,5 @@
-
 from pathlib import Path
+
 
 def gather_layout_from_networks(networks):
     """find the layout of the nodes and edges files, return a dict of the name -> relative path"""
@@ -35,9 +35,3 @@ def gather_layout_from_networks(networks):
     edge_populations_to_paths = _extract_population_paths("edges")
 
     return node_populations_to_paths, edge_populations_to_paths
-
-def _get_unique_group(parent):
-    """Return the h5 group 0, raise an exception if non present."""
-    if GROUP_NAME not in parent:
-        raise ValueError(f"Single group {GROUP_NAME!r} is required")
-    return parent[GROUP_NAME]
