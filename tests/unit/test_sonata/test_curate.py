@@ -141,7 +141,7 @@ def test_create_projection_source_nodes(tmp_path):
     ] == curate.get_population_names(source_nodes_file)
     with h5py.File(source_nodes_file, "r") as h5f:
         model_types = sonata_utils.get_property(h5f["/nodes/projections/0"], h5f["/nodes/projections/0/model_type"][:], "model_type")
-        assert [b"virtual"]*12 == model_types
+        assert np.all([model_types == b"virtual"])
 
     source_nodes_file = curate.create_projection_source_nodes(
         projection_file, tmp_path, "projections", fix_offset=True
