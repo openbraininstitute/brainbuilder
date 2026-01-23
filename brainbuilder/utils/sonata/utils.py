@@ -26,9 +26,9 @@ def get_property(node_group, data, prop_name):
             return library_ds[data]
 
         # sort indices to satisfy h5py
-        order = np.argsort(data)
+        order = np.argsort(data, kind="stable")
         sorted_indices = data[order]
         fetched = library_ds[sorted_indices]
-        return fetched[np.argsort(order)]
+        return fetched[np.argsort(order, kind="stable")]
 
     return data
