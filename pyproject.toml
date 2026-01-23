@@ -9,7 +9,10 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "Blue Brain Project, EPFL" },
+    { name = "Blue Brain Project, EPFL" }
+]
+maintainers = [
+  { name = "Open Brain Institute" }
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -42,18 +45,19 @@ dependencies = [
 ]
 dynamic = ["version"]
 
-[tool.setuptools]
-packages = ["brainbuilder"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["brainbuilder*"]
 
 [project.optional-dependencies]
 all = []  # for compatibility
 reindex = []  # for compatibility
 
 [project.urls]
-Homepage = "https://github.com/BlueBrain/brainbuilder"
-Repository = "https://github.com/BlueBrain/brainbuilder.git"
-Documentation = "https://github.com/BlueBrain/brainbuilder"
-Tracker = "https://github.com/BlueBrain/brainbuilder/issues"
+Homepage = "https://openbraininstitute/brainbuilder"
+Repository = "https://openbraininstitute/brainbuilder.git"
+Documentation = "https://github.com/openbraininstitute/brainbuilder"
+Tracker = "https://openbraininstitute/brainbuilder/issues"
 
 [project.scripts]
 brainbuilder = "brainbuilder.app.__main__:main"
