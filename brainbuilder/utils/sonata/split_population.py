@@ -249,18 +249,17 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
 
     chunk_indices = [sl.start + rel_idxs for sl, rel_idxs, _ in sl_mask]
     flat_idxs = np.hstack(chunk_indices).astype(int) if len(chunk_indices) else np.array([])
-    keep_indexes = pd.DataFrame({NEW_IDS: np.arange(len(flat_idxs), dtype=np.int64)}, index=flat_idxs)
+    keep_indexes = pd.DataFrame(
+        {NEW_IDS: np.arange(len(flat_idxs), dtype=np.int64)}, index=flat_idxs
+    )
 
     lib_id_mapping = _collect_lib_id_mapping(sl_mask, orig_group)
-
-
 
     # write @library datasets and stuff overrides with the new indexes
     _populate_lib(lib_id_mapping, new_group, orig_group, sl_mask, h5_read_chunk_size)
 
     if edge_mappings is not None:
         _add_synapse_id_override(sl_mask, edge_mappings, orig_group=orig_group)
-    
 
     for sl, rel_idxs, override_map in sl_mask:
         sgids = orig_edges["source_node_id"][sl]
@@ -284,15 +283,15 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
 
     return keep_indexes
 
+
 def _compute_syn_mask(syn_ids, syn_pops, edge_mappings):
     mask = np.zeros(len(syn_ids), dtype=bool)
 
     for pop in np.unique(syn_pops):
         pop_idx = np.flatnonzero(syn_pops == pop)
 
-        
         ids_in_pop = syn_ids[pop_idx]
-        
+
         mapping = edge_mappings[pop]  # must be a DataFrame
 
         print(edge_mappings)
@@ -311,23 +310,19 @@ def _add_synapse_id_override(sl_mask, edge_mappings, orig_group):
     for sl, rel_idxs, override_map in sl_mask:
         # slice only the relevant synapses
         old_ids = orig_group["synapse_id"][sl][rel_idxs]
-        syn_pops = utils.get_property(
-            orig_group, orig_group["synapse_population"][sl][rel_idxs], "synapse_population"
-        )
 
         # prepare array for new IDs
         new_syn_ids = np.empty_like(old_ids, dtype=int)
 
         # build a Series: old_id -> new_id
-        mapping_series = pd.concat(
-            [df["new_id"] for df in edge_mappings.values()]
-        )
+        mapping_series = pd.concat([df["new_id"] for df in edge_mappings.values()])
 
         # map all old_ids at once
         new_syn_ids = mapping_series.reindex(old_ids).to_numpy(dtype=int)
 
         # store in override_map
         override_map["synapse_id"] = new_syn_ids
+
 
 def _populate_lib(name_to_lib_ids, new_group0, orig_group0, sl_idxs, h5_read_chunk_size):
     for name, df in name_to_lib_ids.items():
@@ -336,21 +331,19 @@ def _populate_lib(name_to_lib_ids, new_group0, orig_group0, sl_idxs, h5_read_chu
         # append @library slices to the new group
         for sl in _create_chunked_slices(len(old_ids_sorted), h5_read_chunk_size):
             utils.append_to_dataset(
-                new_group0["@library"][name],
-                orig_group0["@library"][name][old_ids_sorted[sl]]
+                new_group0["@library"][name], orig_group0["@library"][name][old_ids_sorted[sl]]
             )
 
         # remap overrides
         for sl, rel_idxs, override in sl_idxs:
-            old_idx = orig_group0[name][sl][rel_idxs]        # old IDs in this slice
+            old_idx = orig_group0[name][sl][rel_idxs]  # old IDs in this slice
             new_idx = df.loc[old_idx, NEW_IDS].to_numpy()  # lookup via DataFrame
             override[name] = new_idx
 
-def _collect_sl_and_masks(
-    orig_edges, h5_read_chunk_size, sgids_new, tgids_new, edge_mappings
-):
+
+def _collect_sl_and_masks(orig_edges, h5_read_chunk_size, sgids_new, tgids_new, edge_mappings):
     ans = []
-    
+
     for sl in _create_chunked_slices(len(orig_edges["source_node_id"]), h5_read_chunk_size):
         L.debug("Collect chunk idexes %s", sl)
         sgids = orig_edges["source_node_id"][sl]
@@ -362,7 +355,6 @@ def _collect_sl_and_masks(
         mask = sgid_mask & tgid_mask
 
         if edge_mappings is not None:
-
             syn_ids = orig_edges["0/synapse_id"][sl]
             syn_pops = utils.get_property(
                 orig_edges["0"], orig_edges["0/synapse_population"][sl], "synapse_population"
@@ -376,6 +368,7 @@ def _collect_sl_and_masks(
 
     return ans
 
+
 def _collect_lib_id_mapping(sl_mask, group0):
     """
     Collect library IDs and store directly as DataFrames with new_id column.
@@ -383,10 +376,8 @@ def _collect_lib_id_mapping(sl_mask, group0):
     lib_id_mapping = {}
 
     for name, obj in group0.items():
-
         if isinstance(obj, h5py.Dataset) and "@library" in group0 and name in group0["@library"]:
             all_ids = []
-            
 
             # collect all IDs across slices
             for sl, mask, _ in sl_mask:
@@ -397,11 +388,11 @@ def _collect_lib_id_mapping(sl_mask, group0):
             if all_ids:
                 all_ids = np.unique(np.concatenate(all_ids))
                 lib_id_mapping[name] = pd.DataFrame(
-                    {"new_id": np.arange(len(all_ids), dtype=np.int64)},
-                    index=all_ids
+                    {"new_id": np.arange(len(all_ids), dtype=np.int64)}, index=all_ids
                 )
 
     return lib_id_mapping
+
 
 def _get_node_counts(h5out, new_edge_pop_name, src_mapping, dst_mapping):
     """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
@@ -1247,7 +1238,3 @@ def print_top_entries(group: h5py.Group, name: str, n: int = 10):
             for subkey, subds in ds.items():
                 if isinstance(subds, h5py.Dataset):
                     print(f"  {subkey}: {subds[:n]}")
-
-
-
-
