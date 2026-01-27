@@ -142,36 +142,7 @@ def test_create_projection_source_nodes(tmp_path):
     with h5py.File(source_nodes_file, "r") as h5f:
         node_group = h5f["/nodes/projections/0"]
         data = node_group["model_type"][:]
-
-        print("=== DEBUG START ===")
-        print("data dtype:", data.dtype)
-        print("data shape:", data.shape)
-        print("data contents (first 20):", data[:20])
-        assert data is not None
-        assert len(data) > 0, "data appears empty"
-
-        has_library = "@library" in node_group
-        print("@library exists?", has_library)
-        if has_library:
-            library_ds = node_group["@library/model_type"]
-            print("library dtype:", library_ds.dtype)
-            print("library shape:", library_ds.shape)
-            assert library_ds.shape[0] > 0, "library dataset appears empty"
-        
         model_types = sonata_utils.get_property(node_group, data, "model_type")
-        print("model_types dtype:", model_types.dtype)
-        print("model_types shape:", model_types.shape)
-        print("model_types contents (first 20):", model_types[:20])
-        assert model_types is not None
-        assert len(model_types) == len(data), "resolved array length mismatch"
-
-        # Optional: check values
-        if has_library and np.issubdtype(data.dtype, np.integer):
-            # all resolved values must be in library
-            for v in model_types[:20]:
-                assert v in library_ds[:], f"value {v} not found in @library/model_type"
-
-        print("=== DEBUG END ===")
         assert np.all([model_types == b"virtual"])
 
     source_nodes_file = curate.create_projection_source_nodes(
