@@ -20,6 +20,10 @@ def apply_rotation(A, angles, axis):
         (N, 3, 3) array of mutated rotation matrices
         (i.e., [A[k] * ROTATE(angles[k], axis) for k in 0..N-1])
     """
+    angles = np.asarray(angles)
+    if angles.ndim == 1:
+        angles = angles[:, np.newaxis]  # reshape to (N,1) for single-axis rotation
+
     rotations = angles_to_matrices(angles, axis=axis)
     return np.einsum("...ij,...jk->...ik", A, rotations)
 

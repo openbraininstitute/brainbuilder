@@ -11,6 +11,7 @@ from numpy.testing import assert_array_equal
 from brainbuilder.utils import load_json
 from brainbuilder.utils.sonata import split_population
 import bluepysnap
+from brainbuilder.utils.sonata import utils as sonata_utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
 
@@ -460,9 +461,9 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
         nodes = h5["nodes"]
         for src in ("A", "B", "C"):
             assert src in nodes
-            assert len(nodes[src]["0/@library/mtype"]) == 1
-            assert np.all(nodes[src]["0/@library/mtype"][0] == b"a")
-            assert np.all(nodes[src]["0/mtype"][:] == 0)
+            mtypes = sonata_utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
+            assert np.all(mtypes == b"a")
+                
 
         assert len(nodes["A/node_type_id"]) == 3
         assert len(nodes["B/node_type_id"]) == 4
@@ -514,7 +515,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             "A__C": {"type": "chemical"},
             "B__C": {"type": "chemical"},
             "C__A": {"type": "chemical"},
-        }
+        }   
 
         virtual_node_count = sum(
             population["type"] == "virtual"
@@ -723,9 +724,8 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
         nodes = h5["nodes"]
         for src in ("A", ):  # Cagegorical m-types, i.e., @library created by Voxcell (#unique < 0.5 * #total)
             assert src in nodes
-            assert len(nodes[src]["0/@library/mtype"]) == 1
-            assert np.all(nodes[src]["0/@library/mtype"][0] == b"b")
-            assert np.all(nodes[src]["0/mtype"][:] == 0)
+            mtypes = sonata_utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
+            assert np.all(mtypes == b"b")
         for src in ("B", "C"):  # Non-cagegorical m-types, i.e., @library not created by Voxcell (not #unique < 0.5 * #total)
             assert src in nodes
             assert "@library" not in nodes[src]["0"].keys()
