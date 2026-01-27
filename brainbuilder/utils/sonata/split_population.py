@@ -17,8 +17,7 @@ import pandas as pd
 import voxcell
 from joblib import Parallel, delayed
 
-from brainbuilder import utils
-from brainbuilder.utils.sonata import utils as sonata_utils
+from brainbuilder.utils import utils
 
 L = logging.getLogger(__name__)
 
@@ -154,7 +153,7 @@ def _init_edge_group(orig_group, new_group):
             raise TypeError(f"Unsupported HDF5 object: {name}")
 
 
-def _populate_edge_group(orig_group, new_group, sl, mask):
+def _populate_edge_group(orig_group, new_group, sl, rel_idxs, override_map):
     """Populate the datasets from orig_group into new_group.
 
     Supports nested groups recursively (e.g., @library).
@@ -163,14 +162,25 @@ def _populate_edge_group(orig_group, new_group, sl, mask):
         orig_group (h5py.Group): original group, e.g. /edges/default/0
         new_group (h5py.Group): new group, e.g. /edges/L2_X__L6_Y__chemical/0
         sl (slice): slice used to select the dataset range
-        mask (np.ndarray): mask used to filter the dataset
+        rel_idxs (np.ndarray): rel_idxs used to filter the dataset
+
+        TODO
     """
     for name, obj in orig_group.items():
         if isinstance(obj, h5py.Dataset):
-            utils.append_to_dataset(new_group[name], obj[sl][mask])
+            if name in override_map:
+                utils.append_to_dataset(new_group[name], override_map[name])
+            else:
+                utils.append_to_dataset(new_group[name], obj[sl][rel_idxs])
 
-        elif isinstance(obj, h5py.Group):
-            _populate_edge_group(obj, new_group[name], sl, mask)
+        # we handle library explicitly outside
+        elif name == "@library":
+            continue
+
+        elif isinstance(obj, h5py.Group) and name == "dynamics_params":
+            for k, values in obj.items():
+                if isinstance(values, h5py.Dataset):
+                    utils.append_to_dataset(new_group[name][k], values[sl][rel_idxs])
 
         else:
             raise TypeError(f"Unsupported HDF5 object: {name}")
@@ -189,70 +199,6 @@ def _h5_get_read_chunk_size():
     return int(os.environ.get("H5_READ_CHUNKSIZE", H5_READ_CHUNKSIZE))
 
 
-# removeme
-def print_top_entries(group: h5py.Group, name: str, n: int = 10):
-    print(f"\n{name} top {n} entries:")
-    for key, ds in group.items():
-        if isinstance(ds, h5py.Dataset):
-            print(f"{key}: {ds[:n]}")
-        elif isinstance(ds, h5py.Group):
-            print(f"{key} (group):")
-            for subkey, subds in ds.items():
-                if isinstance(subds, h5py.Dataset):
-                    print(f"  {subkey}: {subds[:n]}")
-
-
-def _compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings):
-    """
-    Vectorized replacement for per-synapse loop, robust to out-of-bounds.
-
-    Parameters
-    ----------
-    syn_ids : np.ndarray
-        Array of synapse IDs for the chunk.
-    syn_pops : np.ndarray
-        Array of corresponding synapse populations for the chunk.
-    edge_mappings : dict
-        Mapping: syn_pop -> {"type": ..., "new_id": sorted np.ndarray}
-
-    Returns
-    -------
-    mask : np.ndarray
-        Boolean array, True where syn_id exists in the mapping.
-    new_syn_ids : np.ndarray
-        Array of indices of syn_id in edge_mappings[syn_pop]["new_id"]
-    """
-    mask = np.zeros(syn_ids.shape[0], dtype=bool)
-    new_syn_ids = np.empty(syn_ids.shape[0], dtype=int)
-
-    for pop in np.unique(syn_pops):
-        pop_idx = np.flatnonzero(syn_pops == pop)
-        ids_in_pop = syn_ids[pop_idx]
-        new_ids = edge_mappings[pop]["new_id"]
-
-        # searchsorted finds candidate positions
-        pos = np.searchsorted(new_ids, ids_in_pop)
-
-        # Safe check: only positions within bounds
-        in_bounds = pos < len(new_ids)
-        pos_in_bounds = pos[in_bounds]
-        ids_in_bounds = ids_in_pop[in_bounds]
-
-        # Compare values at those positions
-        matches = new_ids[pos_in_bounds] == ids_in_bounds
-
-        # Build final valid mask for this population
-        valid = np.zeros_like(ids_in_pop, dtype=bool)
-        valid[in_bounds] = matches
-
-        # Assign to overall mask and new_syn_ids
-        mask[pop_idx] = valid
-        new_syn_ids[pop_idx[valid]] = pos[valid]
-
-    # Return only valid new_syn_ids
-    return mask, new_syn_ids[mask]
-
-
 def _copy_edge_attributes(  # pylint: disable=too-many-arguments
     h5in,
     h5out,
@@ -269,8 +215,6 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
     # pylint: disable=too-many-locals
     if h5_read_chunk_size is None:
         h5_read_chunk_size = _h5_get_read_chunk_size()
-
-    kept_indices = []
 
     orig_edges = h5in["edges"][src_edge_name]
     orig_group = _get_unique_group(orig_edges)
@@ -298,66 +242,89 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
         h5_read_chunk_size,
         src_edge_name,
     )
-    for sl in _create_chunked_slices(len(orig_edges["source_node_id"]), h5_read_chunk_size):
-        L.debug("Processing chunk %s", sl)
+
+    sl_idxs, name_to_lib_ids = _collect_sl_and_idxs(
+        orig_edges, orig_group, h5_read_chunk_size, sgids_new, tgids_new, edge_mappings
+    )
+
+    chunk_indices = [sl.start + rel_idxs for sl, rel_idxs, _ in sl_idxs]
+    keep_indexes = np.hstack(chunk_indices).astype(int) if len(chunk_indices) else np.array([])
+
+    # write @library datasets and stuff overrides with the new indexes
+    for name, ids in name_to_lib_ids.items():
+        for sl in _create_chunked_slices(len(ids), h5_read_chunk_size):
+            utils.append_to_dataset(
+                new_group["@library"][name], orig_group["@library"][name][ids[sl]]
+            )
+        for sl, rel_idxs, override_map in sl_idxs:
+            old_idx = orig_group[name][sl][rel_idxs]
+            new_idx = np.searchsorted(ids, old_idx)
+            override_map[name] = new_idx
+
+    for sl, rel_idxs, override_map in sl_idxs:
         sgids = orig_edges["source_node_id"][sl]
         tgids = orig_edges["target_node_id"][sl]
-
-        sgid_mask = _isin(sgids, sgids_new)
-        tgid_mask = _isin(tgids, tgids_new)
-
-        mask = sgid_mask & tgid_mask
-
-        if edge_mappings is not None:
-            syn_ids = orig_edges["0/synapse_id"][sl]
-            syn_pops = sonata_utils.get_property(orig_edges["0"], orig_edges["0/synapse_population"][sl], "synapse_population")
-
-            mask0, new_syn_ids0 = _compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
-
-            mask1 = np.zeros(syn_ids.shape[0], dtype=bool)
-            new_syn_ids1 = []
-
-            for idx in range(syn_ids.shape[0]):
-                syn_id = syn_ids[idx]
-                syn_pop = syn_pops[idx]
-                if syn_id in edge_mappings[syn_pop]["new_id"]:
-                    mask1[idx] = True
-                    new_syn_ids1.append(np.where(edge_mappings[syn_pop]["new_id"] == syn_id)[0][0])
-
-            # Convert the list to an array to match types
-            new_syn_ids1_arr = np.array(new_syn_ids1, dtype=int)
-
-            # Check masks
-            assert np.array_equal(mask0, mask1), "Masks differ!"
-
-            # Check new_syn_ids (only valid entries)
-            assert np.array_equal(new_syn_ids0, new_syn_ids1_arr), "New synapse IDs differ!"
-
-            exit()
-
-        if np.any(mask):
-            chunk_indices = np.nonzero(mask)[0] + sl.start
-            kept_indices.append(chunk_indices)
-            utils.append_to_dataset(
-                new_edges["source_node_id"], src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy()
-            )
-            utils.append_to_dataset(
-                new_edges["target_node_id"], dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy()
-            )
-            _populate_edge_group(orig_group, new_group, sl, mask)
-
-            # if edge_mappings is not None:
-            #     # populate synapse_population with default. It is not none only if it was missing and
-            #     # we could infer a default value
-            #     if default_synapse_population is not None:
-            #         utils.append_to_dataset(new_group["synapse_population"], np.full(mask.sum(), default_synapse_population, dtype=object))
-
-            #     new_group["synapse_id"][-mask.sum():] = new_syn_ids[mask]
+        utils.append_to_dataset(
+            new_edges["source_node_id"], src_mapping.loc[sgids[rel_idxs]][NEW_IDS].to_numpy()
+        )
+        utils.append_to_dataset(
+            new_edges["target_node_id"], dst_mapping.loc[tgids[rel_idxs]][NEW_IDS].to_numpy()
+        )
+        _populate_edge_group(
+            orig_group=orig_group,
+            new_group=new_group,
+            sl=sl,
+            rel_idxs=rel_idxs,
+            override_map=override_map,
+        )
 
     L.debug("Finalize edges")
     _finalize_edges(new_edges)
 
-    return np.concatenate(kept_indices) if kept_indices else None
+    return keep_indexes
+
+
+def _collect_sl_and_idxs(
+    orig_edges, orig_group, h5_read_chunk_size, sgids_new, tgids_new, edge_mappings
+):
+    ans = []
+    name_to_lib_ids = collections.defaultdict(list)
+    for sl in _create_chunked_slices(len(orig_edges["source_node_id"]), h5_read_chunk_size):
+        L.debug("Collect chunk idexes %s", sl)
+        sgids = orig_edges["source_node_id"][sl]
+        tgids = orig_edges["target_node_id"][sl]
+
+        sgid_mask = np.flatnonzero(_isin(sgids, sgids_new))
+        tgid_mask = np.flatnonzero(_isin(tgids, tgids_new))
+
+        mask = np.intersect1d(sgid_mask, tgid_mask)
+
+        if edge_mappings is not None:
+            syn_ids = orig_edges["0/synapse_id"][sl]
+            syn_pops = utils.get_property(
+                orig_edges["0"], orig_edges["0/synapse_population"][sl], "synapse_population"
+            )
+
+            syn_mask, new_syn_ids = _compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
+            mask = np.intersect1d(mask, np.flatnonzero(syn_mask))
+
+            if len(mask):
+                ans.append((sl, mask, {"synapse_id": new_syn_ids[mask]}))
+        else:
+            if len(mask):
+                ans.append((sl, mask, {}))
+
+        for name, obj in orig_group.items():
+            if isinstance(obj, h5py.Dataset):
+                if "@library" in orig_group and name in orig_group["@library"]:
+                    lib_ids = np.unique(obj[sl][mask])
+                    name_to_lib_ids[name].append(lib_ids)
+
+    # merge name_to_lib_ids
+    name_to_lib_ids = {
+        k: u for k, v in name_to_lib_ids.items() if (u := np.unique(np.concatenate(v))).size > 0
+    }
+    return ans, name_to_lib_ids
 
 
 def _get_node_counts(h5out, new_edge_pop_name, src_mapping, dst_mapping):
@@ -689,7 +656,8 @@ def _write_subcircuit_biological(
     for edge_pop_name, edge in circuit.edges.items():
         if edge.type != "synapse_astrocyte":
             continue
-
+        output_path = output / edge_pop_to_paths[edge_pop_name]
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
             output_path=str(output_path),
             edges_path=edge.h5_filepath,
@@ -702,9 +670,6 @@ def _write_subcircuit_biological(
             edge_mappings=edge_mappings,
         )
         edge_mappings[edge_pop_name.encode("utf-8")] = {"new_id": kept_indexes, "type": edge.type}
-
-    print("we stop here bau")
-    exit()
 
     return new_node_files, new_edges_files
 
@@ -1122,7 +1087,7 @@ def split_subcircuit(
     else:
         assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
 
-    node_pop_to_paths, edge_pop_to_paths = sonata_utils.gather_layout_from_networks(
+    node_pop_to_paths, edge_pop_to_paths = utils.gather_layout_from_networks(
         circuit.config["networks"]
     )
 
@@ -1150,9 +1115,6 @@ def split_subcircuit(
     new_node_files, new_edge_files = _write_subcircuit_biological(
         output, circuit, node_pop_to_paths, edge_pop_to_paths, split_populations, id_mapping
     )
-    # TODO
-    print("we end here!")
-    exit()
 
     if do_virtual:
         new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_virtual(
@@ -1198,3 +1160,67 @@ def split_subcircuit(
     # $BASE_DIR for entries in "provenance"..? So I don't even try.
     config.setdefault("components", {}).setdefault("provenance", {})["id_mapping"] = mapping_fn
     utils.dump_json(output / "circuit_config.json", config)
+
+
+# removeme
+def print_top_entries(group: h5py.Group, name: str, n: int = 10):
+    print(f"\n{name} top {n} entries:")
+    for key, ds in group.items():
+        if isinstance(ds, h5py.Dataset):
+            print(f"{key}: {ds[:n]}")
+        elif isinstance(ds, h5py.Group):
+            print(f"{key} (group):")
+            for subkey, subds in ds.items():
+                if isinstance(subds, h5py.Dataset):
+                    print(f"  {subkey}: {subds[:n]}")
+
+
+def _compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings):
+    """
+    Vectorized replacement for per-synapse loop, robust to out-of-bounds.
+
+    Parameters
+    ----------
+    syn_ids : np.ndarray
+        Array of synapse IDs for the chunk.
+    syn_pops : np.ndarray
+        Array of corresponding synapse populations for the chunk.
+    edge_mappings : dict
+        Mapping: syn_pop -> {"type": ..., "new_id": sorted np.ndarray}
+
+    Returns
+    -------
+    mask : np.ndarray
+        Boolean array, True where syn_id exists in the mapping.
+    new_syn_ids : np.ndarray
+        Array of indices of syn_id in edge_mappings[syn_pop]["new_id"]
+    """
+    mask = np.zeros(syn_ids.shape[0], dtype=bool)
+    new_syn_ids = np.empty(syn_ids.shape[0], dtype=int)
+
+    for pop in np.unique(syn_pops):
+        pop_idx = np.flatnonzero(syn_pops == pop)
+        ids_in_pop = syn_ids[pop_idx]
+        new_ids = edge_mappings[pop]["new_id"]
+
+        # searchsorted finds candidate positions
+        pos = np.searchsorted(new_ids, ids_in_pop)
+
+        # Safe check: only positions within bounds
+        in_bounds = pos < len(new_ids)
+        pos_in_bounds = pos[in_bounds]
+        ids_in_bounds = ids_in_pop[in_bounds]
+
+        # Compare values at those positions
+        matches = new_ids[pos_in_bounds] == ids_in_bounds
+
+        # Build final valid mask for this population
+        valid = np.zeros_like(ids_in_pop, dtype=bool)
+        valid[in_bounds] = matches
+
+        # Assign to overall mask and new_syn_ids
+        mask[pop_idx] = valid
+        new_syn_ids[pop_idx[valid]] = pos[valid]
+
+    # Return only valid new_syn_ids
+    return mask, np.array(new_syn_ids[mask], dtype=int)

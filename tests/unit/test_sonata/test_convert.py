@@ -10,7 +10,7 @@ from pandas.testing import assert_frame_equal
 from utils import TEST_DATA_PATH
 
 from brainbuilder.exceptions import BrainBuilderError
-from brainbuilder.utils import load_json
+from brainbuilder.utils.utils import load_json
 from brainbuilder.utils.sonata import convert
 
 HAVE_BLUEPY = importlib.util.find_spec("bluepy") is not None

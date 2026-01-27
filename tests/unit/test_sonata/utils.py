@@ -4,7 +4,7 @@ from pathlib import Path
 
 from numpy.testing import assert_equal
 
-from brainbuilder.utils import load_json
+from brainbuilder.utils.utils import load_json
 
 TEST_DATA_PATH = Path(__file__).parent.parent / "data"
 

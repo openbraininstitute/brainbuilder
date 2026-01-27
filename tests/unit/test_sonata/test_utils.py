@@ -1,5 +1,53 @@
 
-from brainbuilder.utils.sonata import utils
+from brainbuilder.utils import utils
+
+import pytest
+
+import numpy as np
+
+# Mock h5py.Group
+class MockGroup(dict):
+    def __getitem__(self, key):
+        val = super().__getitem__(key)
+        if isinstance(val, dict):
+            return MockGroup(val)
+        return val
+
+@pytest.fixture
+def node_group():
+    return MockGroup({
+        "@library": {
+            "prop1": np.array([10, 20, 30, 40, 50])
+        }
+    })
+
+def test_integer_indices(node_group):
+    data = np.array([0, 2, 1, 2])
+    expected = np.array([10, 30, 20, 30])
+    result = utils.get_property(node_group, data, "prop1")
+    np.testing.assert_array_equal(result, expected)
+
+def test_non_integer_data(node_group):
+    data = np.array([5.5, 1.1])
+    result = utils.get_property(node_group, data, "prop1")
+    np.testing.assert_array_equal(result, data)
+
+def test_missing_library():
+    node_group = MockGroup({})
+    data = np.array([0, 1])
+    result = utils.get_property(node_group, data, "prop1")
+    np.testing.assert_array_equal(result, data)
+
+def test_empty_data(node_group):
+    data = np.array([])
+    result = utils.get_property(node_group, data, "prop1")
+    np.testing.assert_array_equal(result, data)
+
+def test_repeated_indices(node_group):
+    data = np.array([2, 2, 0, 4, 2])
+    expected = np.array([30, 30, 10, 50, 30])
+    result = utils.get_property(node_group, data, "prop1")
+    np.testing.assert_array_equal(result, expected)
 
 def test__gather_layout_from_networks():
     res = utils.gather_layout_from_networks({"nodes": [], "edges": []})

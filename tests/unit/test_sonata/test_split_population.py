@@ -5,15 +5,66 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-import utils
+import utils as test_utils
 from numpy.testing import assert_array_equal
 
-from brainbuilder.utils import load_json
+from brainbuilder.utils.utils import load_json
 from brainbuilder.utils.sonata import split_population
 import bluepysnap
-from brainbuilder.utils.sonata import utils as sonata_utils
+from brainbuilder.utils import utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
+
+
+
+def test_basic_mapping():
+    syn_ids = np.array([10, 20, 30, 40])
+    syn_pops = np.array(["A", "A", "B", "B"])
+    edge_mappings = {
+        "A": {"type": "exc", "new_id": np.array([10, 15, 20])},
+        "B": {"type": "inh", "new_id": np.array([30, 35, 40])},
+    }
+
+    mask, new_ids = split_population._compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
+    
+    assert np.all(mask == np.array([True, True, True, True]))
+    assert np.all(new_ids == np.array([0, 2, 0, 2]))
+
+def test_out_of_bounds_ids():
+    syn_ids = np.array([5, 25, 50])
+    syn_pops = np.array(["A", "A", "B"])
+    edge_mappings = {
+        "A": {"type": "exc", "new_id": np.array([10, 20])},
+        "B": {"type": "inh", "new_id": np.array([30, 40])},
+    }
+
+    mask, new_ids = split_population._compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
+    
+    assert np.all(mask == np.array([False, False, False]))
+    assert len(new_ids) == 0
+
+def test_partial_matches():
+    syn_ids = np.array([10, 25, 30])
+    syn_pops = np.array(["A", "A", "B"])
+    edge_mappings = {
+        "A": {"type": "exc", "new_id": np.array([10, 20])},
+        "B": {"type": "inh", "new_id": np.array([30, 40])},
+    }
+
+    mask, new_ids = split_population._compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
+    
+    assert np.all(mask == np.array([True, False, True]))
+    assert np.all(new_ids == np.array([0, 0]))
+
+def test_empty_input():
+    syn_ids = np.array([], dtype=int)
+    syn_pops = np.array([], dtype=str)
+    edge_mappings = {"A": {"type": "exc", "new_id": np.array([10, 20])}}
+
+    mask, new_ids = split_population._compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
+    
+    assert mask.size == 0
+    assert new_ids.size == 0
 
 
 def _check_edge_indices(nodes_file, edges_file):
@@ -205,7 +256,7 @@ def test__write_edges(tmp_path, id_mapping, h5_read_chunk_size, expected_dir):
         expect_to_use_all_edges=True,
         h5_read_chunk_size=h5_read_chunk_size,
     )
-    utils.assert_h5_dirs_equal(tmp_path, expected_dir, pattern="edges_*.h5")
+    test_utils.assert_h5_dirs_equal(tmp_path, expected_dir, pattern="edges_*.h5")
 
 
 def test_split_population(tmp_path):
@@ -215,8 +266,8 @@ def test_split_population(tmp_path):
     expected_dir = DATA_PATH / "00"
 
     split_population.split_population(tmp_path, attribute, nodes_path, edges_path)
-    utils.assert_h5_dirs_equal(tmp_path, expected_dir)
-    utils.assert_json_files_equal(
+    test_utils.assert_h5_dirs_equal(tmp_path, expected_dir)
+    test_utils.assert_json_files_equal(
         tmp_path / "circuit_config.json", expected_dir / "circuit_config.json"
     )
     _check_edge_indices(nodes_path, edges_path)
@@ -357,7 +408,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
         nodes = h5["nodes"]
         for src in ("A", "B", "C"):
             assert src in nodes
-            mtypes = sonata_utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
+            mtypes = utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
             assert np.all(mtypes == b"a")
                 
 
@@ -620,7 +671,7 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
         nodes = h5["nodes"]
         for src in ("A", ):  # Cagegorical m-types, i.e., @library created by Voxcell (#unique < 0.5 * #total)
             assert src in nodes
-            mtypes = sonata_utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
+            mtypes = utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
             assert np.all(mtypes == b"b")
         for src in ("B", "C"):  # Non-cagegorical m-types, i.e., @library not created by Voxcell (not #unique < 0.5 * #total)
             assert src in nodes
@@ -727,3 +778,169 @@ def test_split_subcircuit_edge_indices(tmp_path):
     nodes_path = tmp_path / "nodes" / "nodes.h5"
     edges_path = tmp_path / "edges" / "edges.h5"
     _check_edge_indices(nodes_path, edges_path)
+
+# TODO removeme
+def print_h5_structure(h5obj, prefix=""):
+    for key in h5obj:
+        item = h5obj[key]
+        path = f"{prefix}/{key}"
+        if isinstance(item, h5py.Dataset):
+            print(f"Dataset: {path}, shape={item.shape}, dtype={item.dtype}")
+            print(item[:])  # show contents
+        elif isinstance(item, h5py.Group):
+            print(f"Group: {path}")
+            print_h5_structure(item, path)
+
+
+def test_copy_edge_attributes_advanced(tmp_path):
+    """
+    Test the _copy_edge_attributes function with a non-trivial edge population,
+    including edge groups, edge attributes, and a library dataset.
+
+    This test verifies that:
+    1. Edges are correctly filtered according to the provided source/target node mappings.
+    2. Source and target node IDs are remapped to new IDs as specified in the mapping DataFrame.
+    3. Edge group datasets (e.g., 'weight', 'lib_var') are correctly copied and sliced.
+    4. Library datasets in '@library' are correctly filtered and preserved, including string datasets.
+    5. Chunked reading (h5_read_chunk_size=3) does not affect correctness.
+
+    Steps performed:
+    - Creates a minimal SONATA-style HDF5 input with 10 edges, a weight dataset, an integer library 
+      dataset, and a string library dataset.
+    - Defines an identity mapping for a subset of nodes to simulate filtering.
+    - Calls _copy_edge_attributes to copy and filter edges to a new HDF5 output file.
+    - Verifies that:
+        * 'keep' indexes match the filtered edges.
+        * source_node_id and target_node_id are correctly remapped.
+        * edge group attributes and library datasets are copied and filtered as expected.
+
+    The test ensures that both numeric and string library datasets are correctly handled
+    when edges are filtered and remapped, making it a comprehensive verification of
+    the edge-copying logic.
+    """
+    infile = tmp_path / "in.h5"
+    outfile = tmp_path / "out.h5"
+
+    # ----------------------
+    # Build minimal SONATA input
+    # ----------------------
+    with h5py.File(infile, "w") as f:
+        edges = f.create_group("edges/pop_name")
+        edges.create_dataset(
+            "source_node_id",
+            data=np.arange(10, dtype=np.uint64),
+            maxshape=(None,),
+        )
+        edges.create_dataset(
+            "target_node_id",
+            data=np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 0], dtype=np.uint64),
+            maxshape=(None,),
+        )
+
+        # mandatory edge group
+        egrp = edges.create_group('0')
+        egrp.create_dataset(
+            "weight",
+            data=np.arange(10, dtype=np.uint64),
+            maxshape=(None,),
+        )
+        egrp.create_dataset(
+            "lib_var",
+            data=np.array([0, 0, 2, 1, 1, 1, 1, 1, 1, 1], dtype=np.uint64),
+            maxshape=(None,),
+        )
+        lib_group = egrp.create_group('@library')
+        lib_group.create_dataset(
+            "lib_var",
+            data=np.array(["0", "01", "2"], dtype=h5py.string_dtype(encoding="utf-8")),
+            maxshape=(None,),
+        )
+
+        egrp.create_dataset(
+            "synapse_id",
+            data=np.arange(100, 110, dtype=np.uint64),
+            maxshape=(None,),
+        )
+        egrp.create_dataset(
+            "synapse_population",
+            data=np.array([0, 0, 0, 2, 1, 1, 1, 1, 1, 1], dtype=np.uint64),
+            maxshape=(None,),
+        )
+        lib_group.create_dataset(
+            "synapse_population",
+            data=np.array(["parent_edge_pop", "parent_edge_pop2", "parent_edge_pop3"], dtype=h5py.string_dtype(encoding="utf-8")),
+            maxshape=(None,),
+        )
+
+    # ----------------------
+    # Identity mappings
+    # ----------------------
+    mapping = pd.DataFrame(
+        {"new_id": np.arange(5, dtype=np.uint64)},
+        index=np.array([2, 3, 4, 7, 8], dtype=np.uint64),
+    )
+
+    edge_mappings = {b"parent_edge_pop": {"new_id": np.array([100, 101, 102], dtype=np.uint64), "type": "chemical"},
+                     b"parent_edge_pop2": {"new_id": np.array([104, 105, 106, 107, 108, 109], dtype=np.uint64), "type": "chemical"},
+                     b"parent_edge_pop3": {"new_id": np.array([], dtype=np.uint64), "type": "chemical"}}
+
+
+    # ----------------------
+    # Run
+    # ----------------------
+    with h5py.File(infile, "r") as h5in, h5py.File(outfile, "w") as h5out:
+        keep = split_population._copy_edge_attributes(
+            h5in=h5in,
+            h5out=h5out,
+            src_node_name="src",
+            dst_node_name="dst",
+            src_edge_name="pop_name",
+            dst_edge_name="pop_name_var",
+            src_mapping=mapping,
+            dst_mapping=mapping,
+            h5_read_chunk_size=3,  # FORCE chunking
+            edge_mappings=edge_mappings
+        )
+
+        # print_h5_structure(h5out)
+
+    # ----------------------
+    # Verification
+    # ----------------------
+    with h5py.File(outfile, "r") as f:
+        out_edges = f["edges/pop_name_var"]
+        src_ids = out_edges["source_node_id"][:]
+        tgt_ids = out_edges["target_node_id"][:]
+
+        # keep should match the indices in the original dataset that were kept
+        orig_src = np.arange(10, dtype=np.uint64)
+        orig_tgt = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 0], dtype=np.uint64)
+        # 3 is erased by the synapse_id. the others by the nodes
+        expected_keep = np.array([2, 7])  # indices of edges whose source nodes are in mapping.index
+        np.testing.assert_array_equal(keep, expected_keep)
+
+        # source_node_id remapped correctly
+        expected_src = mapping.loc[orig_src[expected_keep]]["new_id"].to_numpy()
+        np.testing.assert_array_equal(src_ids, expected_src)
+
+        # target_node_id remapped correctly
+        expected_tgt = mapping.loc[orig_tgt[expected_keep]]["new_id"].to_numpy()
+        np.testing.assert_array_equal(tgt_ids, expected_tgt)
+
+        # --- Library datasets ---
+        lib_grp = out_edges['0']["@library"]
+        lib_data = lib_grp["lib_var"][:]
+        np.testing.assert_array_equal(lib_data, [b'01', b'2'])
+        lib_var_ds = out_edges['0']["lib_var"][:]
+        np.testing.assert_array_equal(lib_var_ds, [1, 0])
+        lib_data = lib_grp["synapse_population"][:]
+        np.testing.assert_array_equal(lib_data, [b"parent_edge_pop", b"parent_edge_pop2"])
+        lib_var_ds = out_edges['0']["synapse_population"][:]
+        np.testing.assert_array_equal(lib_var_ds, [0, 1])
+
+        print_h5_structure(out_edges)
+
+        lib_var_ds = out_edges['0']["synapse_id"][:]
+        # 102 is the 3rd element of "parent_edge_pop"
+        # 107 is the 4th element of "parent_edge_pop2"
+        np.testing.assert_array_equal(lib_var_ds, [2, 3])

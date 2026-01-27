@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 
 from brainbuilder.app._utils import REQUIRED_PATH, REQUIRED_PATH_DIR
-from brainbuilder.utils import dump_json, load_json
+from brainbuilder.utils.utils import dump_json, load_json
 
 
 def _get_morphs_with_full_path(nodes_path, morph_path):

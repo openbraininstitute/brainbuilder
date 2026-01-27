@@ -57,7 +57,8 @@ from voxcell.nexus.voxelbrain import Atlas
 from brainbuilder import BrainBuilderError
 from brainbuilder.app._utils import REQUIRED_PATH
 from brainbuilder.cell_positions import create_cell_positions
-from brainbuilder.utils import bbp, deprecate, load_yaml
+from brainbuilder.utils import bbp, deprecate
+from brainbuilder.utils.utils import load_yaml
 from brainbuilder.utils.bbp import load_cell_composition
 
 L = logging.getLogger("brainbuilder")

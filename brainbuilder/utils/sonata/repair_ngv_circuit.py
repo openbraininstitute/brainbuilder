@@ -1,4 +1,4 @@
-from brainbuilder.utils.sonata import utils as sonata_utils
+from brainbuilder.utils import utils
 from pathlib import Path
 import bluepysnap
 import logging
@@ -17,7 +17,7 @@ def repair_ngv_circuit(output, circuit):
     else:
         assert isinstance(circuit, bluepysnap.Circuit)
 
-    _, edge_pop_to_paths = sonata_utils.gather_layout_from_networks(circuit.config["networks"])
+    _, edge_pop_to_paths = utils.gather_layout_from_networks(circuit.config["networks"])
 
     _repair_neuroglial_edge_file(output, circuit, edge_pop_to_paths)
 

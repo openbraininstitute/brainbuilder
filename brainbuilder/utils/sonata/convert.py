@@ -15,7 +15,7 @@ import pandas as pd
 from voxcell import CellCollection
 
 from brainbuilder.exceptions import BrainBuilderError
-from brainbuilder.utils import dump_json
+from brainbuilder.utils.utils import dump_json
 
 L = logging.getLogger("brainbuilder")
 

@@ -7,9 +7,8 @@ import morphio
 import numpy as np
 import pytest
 
-from brainbuilder.utils import bbp
+from brainbuilder.utils import utils, bbp
 from brainbuilder.utils.sonata import curate
-from brainbuilder.utils.sonata import utils as sonata_utils
 
 TEST_DATA_PATH = Path(__file__).parent.parent / "data"
 DATA_PATH = TEST_DATA_PATH / "sonata" / "curate"
@@ -158,7 +157,7 @@ def test_create_projection_source_nodes(tmp_path):
             print("library shape:", library_ds.shape)
             assert library_ds.shape[0] > 0, "library dataset appears empty"
         
-        model_types = sonata_utils.get_property(node_group, data, "model_type")
+        model_types = utils.get_property(node_group, data, "model_type")
         print("model_types dtype:", model_types.dtype)
         print("model_types shape:", model_types.shape)
         print("model_types contents (first 20):", model_types[:20])
