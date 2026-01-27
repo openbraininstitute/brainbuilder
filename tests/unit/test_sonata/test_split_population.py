@@ -15,56 +15,161 @@ from brainbuilder.utils import utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
 
+def make_edge_mapping_df(old_ids):
+    """
+    Convert a list/array of old IDs into a DataFrame suitable for edge_mappings.
+    
+    Parameters
+    ----------
+    old_ids : list or np.ndarray
+        Array of old IDs.
+    
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by old IDs, column 'new_id' = 0..N-1
+    """
+    old_ids = np.asarray(old_ids)  # ensure NumPy array
+    return pd.DataFrame(
+        {"new_id": np.arange(len(old_ids), dtype=np.int64)},
+        index=old_ids
+    )
 
+# -------------------------------
+# Fixtures / Test data
+# -------------------------------
+@pytest.fixture
+def edge_mappings():
+    return {
+        "A": make_edge_mapping_df([10, 15, 20]),
+        "B": make_edge_mapping_df([30, 35, 40])
+    }
+
+@pytest.fixture
+def orig_group_mock():
+    return {
+        "synapse_id": np.array([10, 15, 20, 30, 35, 40]),
+        "synapse_population": np.array(["A", "A", "A", "B", "B", "B"])
+    }
+
+@pytest.fixture
+def sl_mask_mock():
+    override_map = {}
+    return [(slice(0, 6), np.arange(6), override_map)]
+
+# -------------------------------
+# Tests
+# -------------------------------
+def test_add_synapse_id_override_basic(edge_mappings, orig_group_mock, sl_mask_mock):
+    split_population._add_synapse_id_override(sl_mask_mock, edge_mappings, orig_group_mock)
+    override_map = sl_mask_mock[0][2]
+    expected_new_ids = np.array([0, 1, 2, 0, 1, 2], dtype=int)
+    np.testing.assert_array_equal(override_map["synapse_id"], expected_new_ids)
+
+
+def test_collect_sl_and_masks_basic():
+    orig_edges = {
+        "source_node_id": np.array([1, 2, 3, 4]),
+        "target_node_id": np.array([10, 20, 30, 40]),
+        "0/synapse_id": np.array([100, 101, 102, 103]),
+        "0/synapse_population": np.array(["A", "A", "B", "B"]),
+        "0": {}  # placeholder for utils.get_property
+    }
+    sgids_new = np.array([1, 3])
+    tgids_new = np.array([10, 30])
+
+    # temporarily replace _compute_syn_mask in split_population
+    old_func = split_population._compute_syn_mask
+    split_population._compute_syn_mask = lambda syn_ids, syn_pops, edge_mappings: np.ones_like(syn_ids, dtype=bool)
+
+    ans = split_population._collect_sl_and_masks(
+        orig_edges,
+        h5_read_chunk_size=2,
+        sgids_new=sgids_new,
+        tgids_new=tgids_new,
+        edge_mappings={}
+    )
+
+    # restore original function
+    split_population._compute_syn_mask = old_func
+
+    # expect slices and indices where both sgid and tgid are in the new sets
+    expected_indices = [
+        (slice(0, 2), np.array([0])),
+        (slice(2, 4), np.array([0]))
+    ]
+
+    # flatten ans to slices + indices
+    flat_ans = [(sl, idxs) for sl, idxs, _ in ans]
+
+    # just check that returned indices match expected
+    for (sl, idxs), (exp_sl, exp_idxs) in zip(flat_ans, expected_indices):
+        assert sl.start == exp_sl.start and sl.stop == exp_sl.stop
+        np.testing.assert_array_equal(idxs, exp_idxs)
+
+def test_collect_lib_id_mapping_basic_h5(tmp_path):
+    file = h5py.File(tmp_path / "test.h5", "w")
+    dset = file.create_dataset("pop", data=[10, 20, 30])
+    group0 = {
+        "@library": {"pop": None},
+        "pop": dset
+    }
+    sl_mask = [(slice(0, 3), np.array([0, 1, 2]), {})]
+
+    lib_map = split_population._collect_lib_id_mapping(sl_mask, group0)
+    df = lib_map["pop"]
+    np.testing.assert_array_equal(df.index.to_numpy(), [10, 20, 30])
+    np.testing.assert_array_equal(df["new_id"].to_numpy(), [0, 1, 2])
+    
 
 def test_basic_mapping():
     syn_ids = np.array([10, 20, 30, 40])
     syn_pops = np.array(["A", "A", "B", "B"])
     edge_mappings = {
-        "A": {"type": "exc", "new_id": np.array([10, 15, 20])},
-        "B": {"type": "inh", "new_id": np.array([30, 35, 40])},
+        "A": make_edge_mapping_df([10, 15, 20]),
+        "B": make_edge_mapping_df([30, 35, 40]),
     }
 
-    mask, new_ids = split_population._compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
+    mask = split_population._compute_syn_mask(syn_ids, syn_pops, edge_mappings)
     
     assert np.all(mask == np.array([True, True, True, True]))
-    assert np.all(new_ids == np.array([0, 2, 0, 2]))
+    
 
 def test_out_of_bounds_ids():
     syn_ids = np.array([5, 25, 50])
     syn_pops = np.array(["A", "A", "B"])
     edge_mappings = {
-        "A": {"type": "exc", "new_id": np.array([10, 20])},
-        "B": {"type": "inh", "new_id": np.array([30, 40])},
+        "A": make_edge_mapping_df([10, 20]),
+        "B": make_edge_mapping_df([30, 40]),
     }
 
-    mask, new_ids = split_population._compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
+    mask = split_population._compute_syn_mask(syn_ids, syn_pops, edge_mappings)
     
     assert np.all(mask == np.array([False, False, False]))
-    assert len(new_ids) == 0
 
 def test_partial_matches():
     syn_ids = np.array([10, 25, 30])
     syn_pops = np.array(["A", "A", "B"])
     edge_mappings = {
-        "A": {"type": "exc", "new_id": np.array([10, 20])},
-        "B": {"type": "inh", "new_id": np.array([30, 40])},
+        "A": make_edge_mapping_df([10, 20]),
+        "B": make_edge_mapping_df([30, 40]),
     }
 
-    mask, new_ids = split_population._compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
+    mask = split_population._compute_syn_mask(syn_ids, syn_pops, edge_mappings)
     
     assert np.all(mask == np.array([True, False, True]))
-    assert np.all(new_ids == np.array([0, 0]))
 
 def test_empty_input():
     syn_ids = np.array([], dtype=int)
     syn_pops = np.array([], dtype=str)
-    edge_mappings = {"A": {"type": "exc", "new_id": np.array([10, 20])}}
+    edge_mappings = {"A": make_edge_mapping_df([10, 20])}
 
-    mask, new_ids = split_population._compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
+    mask = split_population._compute_syn_mask(syn_ids, syn_pops, edge_mappings)
     
     assert mask.size == 0
-    assert new_ids.size == 0
+
+
+
 
 
 def _check_edge_indices(nodes_file, edges_file):
@@ -779,18 +884,6 @@ def test_split_subcircuit_edge_indices(tmp_path):
     edges_path = tmp_path / "edges" / "edges.h5"
     _check_edge_indices(nodes_path, edges_path)
 
-# TODO removeme
-def print_h5_structure(h5obj, prefix=""):
-    for key in h5obj:
-        item = h5obj[key]
-        path = f"{prefix}/{key}"
-        if isinstance(item, h5py.Dataset):
-            print(f"Dataset: {path}, shape={item.shape}, dtype={item.dtype}")
-            print(item[:])  # show contents
-        elif isinstance(item, h5py.Group):
-            print(f"Group: {path}")
-            print_h5_structure(item, path)
-
 
 def test_copy_edge_attributes_advanced(tmp_path):
     """
@@ -880,9 +973,9 @@ def test_copy_edge_attributes_advanced(tmp_path):
         index=np.array([2, 3, 4, 7, 8], dtype=np.uint64),
     )
 
-    edge_mappings = {b"parent_edge_pop": {"new_id": np.array([100, 101, 102], dtype=np.uint64), "type": "chemical"},
-                     b"parent_edge_pop2": {"new_id": np.array([104, 105, 106, 107, 108, 109], dtype=np.uint64), "type": "chemical"},
-                     b"parent_edge_pop3": {"new_id": np.array([], dtype=np.uint64), "type": "chemical"}}
+    edge_mappings = {b"parent_edge_pop": make_edge_mapping_df([100, 101, 102]),
+                     b"parent_edge_pop2": make_edge_mapping_df([104, 105, 106, 107, 108, 109]),
+                     b"parent_edge_pop3": make_edge_mapping_df([])}
 
 
     # ----------------------
@@ -902,8 +995,6 @@ def test_copy_edge_attributes_advanced(tmp_path):
             edge_mappings=edge_mappings
         )
 
-        # print_h5_structure(h5out)
-
     # ----------------------
     # Verification
     # ----------------------
@@ -917,7 +1008,7 @@ def test_copy_edge_attributes_advanced(tmp_path):
         orig_tgt = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 0], dtype=np.uint64)
         # 3 is erased by the synapse_id. the others by the nodes
         expected_keep = np.array([2, 7])  # indices of edges whose source nodes are in mapping.index
-        np.testing.assert_array_equal(keep, expected_keep)
+        np.testing.assert_array_equal(keep.index.to_numpy(), expected_keep)
 
         # source_node_id remapped correctly
         expected_src = mapping.loc[orig_src[expected_keep]]["new_id"].to_numpy()
@@ -937,8 +1028,6 @@ def test_copy_edge_attributes_advanced(tmp_path):
         np.testing.assert_array_equal(lib_data, [b"parent_edge_pop", b"parent_edge_pop2"])
         lib_var_ds = out_edges['0']["synapse_population"][:]
         np.testing.assert_array_equal(lib_var_ds, [0, 1])
-
-        print_h5_structure(out_edges)
 
         lib_var_ds = out_edges['0']["synapse_id"][:]
         # 102 is the 3rd element of "parent_edge_pop"

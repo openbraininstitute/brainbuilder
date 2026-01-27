@@ -243,25 +243,26 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
         src_edge_name,
     )
 
-    sl_idxs, name_to_lib_ids = _collect_sl_and_idxs(
-        orig_edges, orig_group, h5_read_chunk_size, sgids_new, tgids_new, edge_mappings
+    sl_mask = _collect_sl_and_masks(
+        orig_edges, h5_read_chunk_size, sgids_new, tgids_new, edge_mappings
     )
 
-    chunk_indices = [sl.start + rel_idxs for sl, rel_idxs, _ in sl_idxs]
-    keep_indexes = np.hstack(chunk_indices).astype(int) if len(chunk_indices) else np.array([])
+    chunk_indices = [sl.start + rel_idxs for sl, rel_idxs, _ in sl_mask]
+    flat_idxs = np.hstack(chunk_indices).astype(int) if len(chunk_indices) else np.array([])
+    keep_indexes = pd.DataFrame({NEW_IDS: np.arange(len(flat_idxs), dtype=np.int64)}, index=flat_idxs)
+
+    lib_id_mapping = _collect_lib_id_mapping(sl_mask, orig_group)
+
+
 
     # write @library datasets and stuff overrides with the new indexes
-    for name, ids in name_to_lib_ids.items():
-        for sl in _create_chunked_slices(len(ids), h5_read_chunk_size):
-            utils.append_to_dataset(
-                new_group["@library"][name], orig_group["@library"][name][ids[sl]]
-            )
-        for sl, rel_idxs, override_map in sl_idxs:
-            old_idx = orig_group[name][sl][rel_idxs]
-            new_idx = np.searchsorted(ids, old_idx)
-            override_map[name] = new_idx
+    _populate_lib(lib_id_mapping, new_group, orig_group, sl_mask, h5_read_chunk_size)
 
-    for sl, rel_idxs, override_map in sl_idxs:
+    if edge_mappings is not None:
+        _add_synapse_id_override(sl_mask, edge_mappings, orig_group=orig_group)
+    
+
+    for sl, rel_idxs, override_map in sl_mask:
         sgids = orig_edges["source_node_id"][sl]
         tgids = orig_edges["target_node_id"][sl]
         utils.append_to_dataset(
@@ -283,49 +284,124 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
 
     return keep_indexes
 
+def _compute_syn_mask(syn_ids, syn_pops, edge_mappings):
+    mask = np.zeros(len(syn_ids), dtype=bool)
 
-def _collect_sl_and_idxs(
-    orig_edges, orig_group, h5_read_chunk_size, sgids_new, tgids_new, edge_mappings
+    for pop in np.unique(syn_pops):
+        pop_idx = np.flatnonzero(syn_pops == pop)
+
+        
+        ids_in_pop = syn_ids[pop_idx]
+        
+        mapping = edge_mappings[pop]  # must be a DataFrame
+
+        print(edge_mappings)
+
+        mask[pop_idx] = _isin(ids_in_pop, mapping.index.to_numpy())
+
+    return mask
+
+
+def _add_synapse_id_override(sl_mask, edge_mappings, orig_group):
+    """
+    Map synapse old IDs to new IDs for selected relative indices in each slice
+    and store in override_map under "synapse_id".
+    Fully vectorized using Pandas, no per-pop loop.
+    """
+    for sl, rel_idxs, override_map in sl_mask:
+        # slice only the relevant synapses
+        old_ids = orig_group["synapse_id"][sl][rel_idxs]
+        syn_pops = utils.get_property(
+            orig_group, orig_group["synapse_population"][sl][rel_idxs], "synapse_population"
+        )
+
+        # prepare array for new IDs
+        new_syn_ids = np.empty_like(old_ids, dtype=int)
+
+        # build a Series: old_id -> new_id
+        mapping_series = pd.concat(
+            [df["new_id"] for df in edge_mappings.values()]
+        )
+
+        # map all old_ids at once
+        new_syn_ids = mapping_series.reindex(old_ids).to_numpy(dtype=int)
+
+        # store in override_map
+        override_map["synapse_id"] = new_syn_ids
+
+def _populate_lib(name_to_lib_ids, new_group0, orig_group0, sl_idxs, h5_read_chunk_size):
+    for name, df in name_to_lib_ids.items():
+        old_ids_sorted = df.index.to_numpy()  # still used for chunked HDF5 writes
+
+        # append @library slices to the new group
+        for sl in _create_chunked_slices(len(old_ids_sorted), h5_read_chunk_size):
+            utils.append_to_dataset(
+                new_group0["@library"][name],
+                orig_group0["@library"][name][old_ids_sorted[sl]]
+            )
+
+        # remap overrides
+        for sl, rel_idxs, override in sl_idxs:
+            old_idx = orig_group0[name][sl][rel_idxs]        # old IDs in this slice
+            new_idx = df.loc[old_idx, NEW_IDS].to_numpy()  # lookup via DataFrame
+            override[name] = new_idx
+
+def _collect_sl_and_masks(
+    orig_edges, h5_read_chunk_size, sgids_new, tgids_new, edge_mappings
 ):
     ans = []
-    name_to_lib_ids = collections.defaultdict(list)
+    
     for sl in _create_chunked_slices(len(orig_edges["source_node_id"]), h5_read_chunk_size):
         L.debug("Collect chunk idexes %s", sl)
         sgids = orig_edges["source_node_id"][sl]
         tgids = orig_edges["target_node_id"][sl]
 
-        sgid_mask = np.flatnonzero(_isin(sgids, sgids_new))
-        tgid_mask = np.flatnonzero(_isin(tgids, tgids_new))
+        sgid_mask = _isin(sgids, sgids_new)
+        tgid_mask = _isin(tgids, tgids_new)
 
-        mask = np.intersect1d(sgid_mask, tgid_mask)
+        mask = sgid_mask & tgid_mask
 
         if edge_mappings is not None:
+
             syn_ids = orig_edges["0/synapse_id"][sl]
             syn_pops = utils.get_property(
                 orig_edges["0"], orig_edges["0/synapse_population"][sl], "synapse_population"
             )
 
-            syn_mask, new_syn_ids = _compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings)
-            mask = np.intersect1d(mask, np.flatnonzero(syn_mask))
+            syn_mask = _compute_syn_mask(syn_ids, syn_pops, edge_mappings)
+            mask &= syn_mask
 
-            if len(mask):
-                ans.append((sl, mask, {"synapse_id": new_syn_ids[mask]}))
-        else:
-            if len(mask):
-                ans.append((sl, mask, {}))
+        if np.any(mask):
+            ans.append((sl, np.flatnonzero(mask), {}))
 
-        for name, obj in orig_group.items():
-            if isinstance(obj, h5py.Dataset):
-                if "@library" in orig_group and name in orig_group["@library"]:
-                    lib_ids = np.unique(obj[sl][mask])
-                    name_to_lib_ids[name].append(lib_ids)
+    return ans
 
-    # merge name_to_lib_ids
-    name_to_lib_ids = {
-        k: u for k, v in name_to_lib_ids.items() if (u := np.unique(np.concatenate(v))).size > 0
-    }
-    return ans, name_to_lib_ids
+def _collect_lib_id_mapping(sl_mask, group0):
+    """
+    Collect library IDs and store directly as DataFrames with new_id column.
+    """
+    lib_id_mapping = {}
 
+    for name, obj in group0.items():
+
+        if isinstance(obj, h5py.Dataset) and "@library" in group0 and name in group0["@library"]:
+            all_ids = []
+            
+
+            # collect all IDs across slices
+            for sl, mask, _ in sl_mask:
+                ids = np.unique(obj[sl][mask])
+                if ids.size > 0:
+                    all_ids.append(ids)
+
+            if all_ids:
+                all_ids = np.unique(np.concatenate(all_ids))
+                lib_id_mapping[name] = pd.DataFrame(
+                    {"new_id": np.arange(len(all_ids), dtype=np.int64)},
+                    index=all_ids
+                )
+
+    return lib_id_mapping
 
 def _get_node_counts(h5out, new_edge_pop_name, src_mapping, dst_mapping):
     """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
@@ -648,14 +724,12 @@ def _write_subcircuit_biological(
                 src_mapping=id_mapping[edge.source.name],
                 dst_mapping=id_mapping[edge.target.name],
             )
-            edge_mappings[edge_pop_name.encode("utf-8")] = {
-                "new_id": kept_indexes,
-                "type": edge.type,
-            }
+            edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
 
     for edge_pop_name, edge in circuit.edges.items():
         if edge.type != "synapse_astrocyte":
             continue
+
         output_path = output / edge_pop_to_paths[edge_pop_name]
         output_path.parent.mkdir(parents=True, exist_ok=True)
         new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
@@ -669,7 +743,7 @@ def _write_subcircuit_biological(
             dst_mapping=id_mapping[edge.target.name],
             edge_mappings=edge_mappings,
         )
-        edge_mappings[edge_pop_name.encode("utf-8")] = {"new_id": kept_indexes, "type": edge.type}
+        edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
 
     return new_node_files, new_edges_files
 
@@ -1175,52 +1249,5 @@ def print_top_entries(group: h5py.Group, name: str, n: int = 10):
                     print(f"  {subkey}: {subds[:n]}")
 
 
-def _compute_new_syn_ids_and_mask(syn_ids, syn_pops, edge_mappings):
-    """
-    Vectorized replacement for per-synapse loop, robust to out-of-bounds.
 
-    Parameters
-    ----------
-    syn_ids : np.ndarray
-        Array of synapse IDs for the chunk.
-    syn_pops : np.ndarray
-        Array of corresponding synapse populations for the chunk.
-    edge_mappings : dict
-        Mapping: syn_pop -> {"type": ..., "new_id": sorted np.ndarray}
 
-    Returns
-    -------
-    mask : np.ndarray
-        Boolean array, True where syn_id exists in the mapping.
-    new_syn_ids : np.ndarray
-        Array of indices of syn_id in edge_mappings[syn_pop]["new_id"]
-    """
-    mask = np.zeros(syn_ids.shape[0], dtype=bool)
-    new_syn_ids = np.empty(syn_ids.shape[0], dtype=int)
-
-    for pop in np.unique(syn_pops):
-        pop_idx = np.flatnonzero(syn_pops == pop)
-        ids_in_pop = syn_ids[pop_idx]
-        new_ids = edge_mappings[pop]["new_id"]
-
-        # searchsorted finds candidate positions
-        pos = np.searchsorted(new_ids, ids_in_pop)
-
-        # Safe check: only positions within bounds
-        in_bounds = pos < len(new_ids)
-        pos_in_bounds = pos[in_bounds]
-        ids_in_bounds = ids_in_pop[in_bounds]
-
-        # Compare values at those positions
-        matches = new_ids[pos_in_bounds] == ids_in_bounds
-
-        # Build final valid mask for this population
-        valid = np.zeros_like(ids_in_pop, dtype=bool)
-        valid[in_bounds] = matches
-
-        # Assign to overall mask and new_syn_ids
-        mask[pop_idx] = valid
-        new_syn_ids[pop_idx[valid]] = pos[valid]
-
-    # Return only valid new_syn_ids
-    return mask, np.array(new_syn_ids[mask], dtype=int)
