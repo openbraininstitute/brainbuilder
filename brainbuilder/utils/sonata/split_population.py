@@ -247,10 +247,12 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
         orig_edges, h5_read_chunk_size, sgids_new, tgids_new, edge_mappings
     )
 
+    # in case virtual or external append edges, we need the correct counting
+    offset = new_edges["source_node_id"].shape[0]
     chunk_indices = [sl.start + rel_idxs for sl, rel_idxs, _ in sl_mask]
     flat_idxs = np.hstack(chunk_indices).astype(int) if len(chunk_indices) else np.array([])
     keep_indexes = pd.DataFrame(
-        {NEW_IDS: np.arange(len(flat_idxs), dtype=np.int64)}, index=flat_idxs
+        {NEW_IDS: np.arange(len(flat_idxs), dtype=np.int64) + offset}, index=flat_idxs
     )
 
     lib_id_mapping = _collect_lib_id_mapping(sl_mask, orig_group)
@@ -325,6 +327,24 @@ def _add_synapse_id_override(sl_mask, edge_mappings, orig_group):
 
 
 def _populate_lib(name_to_lib_ids, new_group0, orig_group0, sl_idxs, h5_read_chunk_size):
+    # HARD GUARD:
+    # If we append to an existing @library dataset, we may duplicate entries
+    # that were already copied earlier. Other variables may already refer to
+    # those entries, and without extra bookkeeping we cannot tell what is
+    # already present and what is not. Since handling this correctly would
+    # require additional tracking, we explicitly refuse to append.
+    # This can be relaxed with additional bookkeping
+    if "@library" in new_group0:
+        for name in name_to_lib_ids:
+            if name in new_group0["@library"]:
+                ds = new_group0["@library"][name]
+                if ds.shape[0] != 0:
+                    raise RuntimeError(
+                        f"Refusing to append to existing @library/{name}: "
+                        f"destination already contains data"
+                    )
+                
+    
     for name, df in name_to_lib_ids.items():
         old_ids_sorted = df.index.to_numpy()  # still used for chunked HDF5 writes
 
@@ -775,6 +795,8 @@ def _get_subcircuit_external_ids(all_sgids, all_tgids, wanted_src_ids, wanted_ds
     return ret.sort_index()
 
 
+
+
 def _write_subcircuit_external(
     output,
     circuit,
@@ -793,6 +815,8 @@ def _write_subcircuit_external(
     new_nodes = {}
 
     new_edges_files = {}
+
+    edge_info = {}
     for name, edge in circuit.edges.items():
         if edge.source.type != "virtual" and edge.target.name in id_mapping:
             wanted_src_ids = circuit.nodes[edge.source.name].ids()
@@ -832,15 +856,7 @@ def _write_subcircuit_external(
                 new_source_pop_name = "external_" + new_source_pop_name
             node_pop_name_mapping[new_source_pop_name] = edge.source.name
 
-            output_path = output / (new_name + ".h5")
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            L.debug(
-                "Writing edges %s for %s -> %s [%s]",
-                name,
-                edge.source.name,
-                edge.target.name,
-                output_path,
-            )
+
 
             if new_source_pop_name in id_mapping:
                 # If mapping already exists, only add new IDs w/o changing existing!
@@ -864,21 +880,12 @@ def _write_subcircuit_external(
             else:
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
-            # TODO tripartite connection
-            new_edges_files[new_name], _ = _write_subcircuit_edges(
-                output_path=str(output_path),
-                edges_path=edge.h5_filepath,
-                src_node_pop=new_source_pop_name,
-                dst_node_pop=edge.target.name,
-                src_edge_pop_name=name,
-                dst_edge_pop_name=new_name,
-                src_mapping=wanted_src_ids,
-                dst_mapping=id_mapping[edge.target.name],
-            )
             new_nodes[new_source_pop_name] = (
                 edge.source.name,
                 wanted_src_ids.index.to_numpy(),
             )
+
+            edge_info[name] = (new_source_pop_name, wanted_src_ids, new_name)
 
     new_node_files = {}
     # write new virtual nodes from originally non-virtual populations
@@ -890,7 +897,77 @@ def _write_subcircuit_external(
         Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
+    for name, (new_source_pop_name, wanted_src_ids, new_name) in edge_info.items():
+        edge = circuit.edges[name]
+        output_path = output / (new_name + ".h5")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        L.debug(
+            "Writing edges %s for %s -> %s [%s]",
+            name,
+            edge.source.name,
+            edge.target.name,
+            output_path,
+        )
+
+        # TODO tripartite connection
+        new_edges_files[new_name], _ = _write_subcircuit_edges(
+            output_path=str(output_path),
+            edges_path=edge.h5_filepath,
+            src_node_pop=new_source_pop_name,
+            dst_node_pop=edge.target.name,
+            src_edge_pop_name=name,
+            dst_edge_pop_name=new_name,
+            src_mapping=wanted_src_ids,
+            dst_mapping=id_mapping[edge.target.name],
+        )
+
+
+
     return new_node_files, new_edges_files
+
+
+
+
+    # edge_mappings = {}
+    # # write the edges that have the virtual populations as source
+    # for edge_pop_name, edge in virtual_populations.items():
+    #     if edge.type == "synapse_astrocyte":
+    #         continue
+    #     # TODO write
+    #     new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
+    #         output_path=os.path.join(
+    #             output, edge_populations_to_paths[edge_pop_name]
+    #         ),  # Where to write to
+    #         edges_path=edge.h5_filepath,  # Where to read from
+    #         src_node_pop=edge.source.name,
+    #         dst_node_pop=edge.target.name,
+    #         src_edge_pop_name=edge_pop_name,
+    #         dst_edge_pop_name=edge_pop_name,
+    #         src_mapping=id_mapping[edge.source.name],
+    #         dst_mapping=id_mapping[edge.target.name],
+    #     )
+    #     edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
+
+    # for edge_pop_name, edge in circuit.edges.items():
+    #     if edge.type != "synapse_astrocyte":
+    #         continue
+    #     new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
+    #         output_path=os.path.join(
+    #             output, edge_populations_to_paths[edge_pop_name]
+    #         ),  # Where to write to
+    #         edges_path=edge.h5_filepath,
+    #         src_node_pop=edge.source.name,
+    #         dst_node_pop=edge.target.name,
+    #         src_edge_pop_name=edge_pop_name,
+    #         dst_edge_pop_name=edge_pop_name,
+    #         src_mapping=id_mapping[edge.source.name],
+    #         dst_mapping=id_mapping[edge.target.name],
+    #         edge_mappings=edge_mappings,
+    #     )
+    #     edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
+
+
+
 
 
 def _write_subcircuit_virtual(
@@ -950,10 +1027,21 @@ def _write_subcircuit_virtual(
         # Virtual input sources retain their name unchanged
         node_pop_name_mapping[name] = name
 
+    # write virtual nodes based on virtual populations
+    for population_name, ids in pop_used_source_node_ids.items():
+        # Get all properties of the subset of the node population that is relevant
+        df = circuit.nodes[population_name].get(ids).reset_index(drop=True)
+        nodes_path = os.path.join(output, population_name, "nodes.h5")
+        Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
+        new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
+
+    edge_mappings = {}
     # write the edges that have the virtual populations as source
     for edge_pop_name, edge in virtual_populations.items():
+        if edge.type == "synapse_astrocyte":
+            continue
         # TODO write
-        new_edges_files[edge_pop_name], _ = _write_subcircuit_edges(
+        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
             output_path=os.path.join(
                 output, edge_populations_to_paths[edge_pop_name]
             ),  # Where to write to
@@ -965,16 +1053,29 @@ def _write_subcircuit_virtual(
             src_mapping=id_mapping[edge.source.name],
             dst_mapping=id_mapping[edge.target.name],
         )
+        edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
 
-    # write virtual nodes based on virtual populations
-    for population_name, ids in pop_used_source_node_ids.items():
-        # Get all properties of the subset of the node population that is relevant
-        df = circuit.nodes[population_name].get(ids).reset_index(drop=True)
-        nodes_path = os.path.join(output, population_name, "nodes.h5")
-        Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
-        new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
+    for edge_pop_name, edge in circuit.edges.items():
+        if edge.type != "synapse_astrocyte":
+            continue
+        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
+            output_path=os.path.join(
+                output, edge_populations_to_paths[edge_pop_name]
+            ),  # Where to write to
+            edges_path=edge.h5_filepath,
+            src_node_pop=edge.source.name,
+            dst_node_pop=edge.target.name,
+            src_edge_pop_name=edge_pop_name,
+            dst_edge_pop_name=edge_pop_name,
+            src_mapping=id_mapping[edge.source.name],
+            dst_mapping=id_mapping[edge.target.name],
+            edge_mappings=edge_mappings,
+        )
+        edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
 
     return new_node_files, new_edges_files
+
+
 
 
 def _update_config_with_new_paths(output, config, new_population_files, type_):
