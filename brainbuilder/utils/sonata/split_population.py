@@ -343,8 +343,7 @@ def _populate_lib(name_to_lib_ids, new_group0, orig_group0, sl_idxs, h5_read_chu
                         f"Refusing to append to existing @library/{name}: "
                         f"destination already contains data"
                     )
-                
-    
+
     for name, df in name_to_lib_ids.items():
         old_ids_sorted = df.index.to_numpy()  # still used for chunked HDF5 writes
 
@@ -795,8 +794,6 @@ def _get_subcircuit_external_ids(all_sgids, all_tgids, wanted_src_ids, wanted_ds
     return ret.sort_index()
 
 
-
-
 def _write_subcircuit_external(
     output,
     circuit,
@@ -856,8 +853,6 @@ def _write_subcircuit_external(
                 new_source_pop_name = "external_" + new_source_pop_name
             node_pop_name_mapping[new_source_pop_name] = edge.source.name
 
-
-
             if new_source_pop_name in id_mapping:
                 # If mapping already exists, only add new IDs w/o changing existing!
                 # (May happen if different target populations have same external source population)
@@ -897,8 +892,11 @@ def _write_subcircuit_external(
         Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
+    edge_mappings = {}
     for name, (new_source_pop_name, wanted_src_ids, new_name) in edge_info.items():
         edge = circuit.edges[name]
+        if edge.type == "synapse_astrocyte":
+            continue
         output_path = output / (new_name + ".h5")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         L.debug(
@@ -910,7 +908,7 @@ def _write_subcircuit_external(
         )
 
         # TODO tripartite connection
-        new_edges_files[new_name], _ = _write_subcircuit_edges(
+        new_edges_files[new_name], kept_indexes = _write_subcircuit_edges(
             output_path=str(output_path),
             edges_path=edge.h5_filepath,
             src_node_pop=new_source_pop_name,
@@ -920,54 +918,37 @@ def _write_subcircuit_external(
             src_mapping=wanted_src_ids,
             dst_mapping=id_mapping[edge.target.name],
         )
+        edge_mappings[edge.target.name.encode("utf-8")] = kept_indexes
 
+    for name, (new_source_pop_name, wanted_src_ids, new_name) in edge_info.items():
+        edge = circuit.edges[name]
+        if edge.type != "synapse_astrocyte":
+            continue
+        output_path = output / (new_name + ".h5")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        L.debug(
+            "Writing edges %s for %s -> %s [%s]",
+            name,
+            edge.source.name,
+            edge.target.name,
+            output_path,
+        )
 
+        # TODO tripartite connection
+        new_edges_files[new_name], kept_indexes = _write_subcircuit_edges(
+            output_path=str(output_path),
+            edges_path=edge.h5_filepath,
+            src_node_pop=new_source_pop_name,
+            dst_node_pop=edge.target.name,
+            src_edge_pop_name=name,
+            dst_edge_pop_name=new_name,
+            src_mapping=wanted_src_ids,
+            dst_mapping=id_mapping[edge.target.name],
+            edge_mappings=edge_mappings,
+        )
+        edge_mappings[edge.target.name.encode("utf-8")] = kept_indexes
 
     return new_node_files, new_edges_files
-
-
-
-
-    # edge_mappings = {}
-    # # write the edges that have the virtual populations as source
-    # for edge_pop_name, edge in virtual_populations.items():
-    #     if edge.type == "synapse_astrocyte":
-    #         continue
-    #     # TODO write
-    #     new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
-    #         output_path=os.path.join(
-    #             output, edge_populations_to_paths[edge_pop_name]
-    #         ),  # Where to write to
-    #         edges_path=edge.h5_filepath,  # Where to read from
-    #         src_node_pop=edge.source.name,
-    #         dst_node_pop=edge.target.name,
-    #         src_edge_pop_name=edge_pop_name,
-    #         dst_edge_pop_name=edge_pop_name,
-    #         src_mapping=id_mapping[edge.source.name],
-    #         dst_mapping=id_mapping[edge.target.name],
-    #     )
-    #     edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
-
-    # for edge_pop_name, edge in circuit.edges.items():
-    #     if edge.type != "synapse_astrocyte":
-    #         continue
-    #     new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
-    #         output_path=os.path.join(
-    #             output, edge_populations_to_paths[edge_pop_name]
-    #         ),  # Where to write to
-    #         edges_path=edge.h5_filepath,
-    #         src_node_pop=edge.source.name,
-    #         dst_node_pop=edge.target.name,
-    #         src_edge_pop_name=edge_pop_name,
-    #         dst_edge_pop_name=edge_pop_name,
-    #         src_mapping=id_mapping[edge.source.name],
-    #         dst_mapping=id_mapping[edge.target.name],
-    #         edge_mappings=edge_mappings,
-    #     )
-    #     edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
-
-
-
 
 
 def _write_subcircuit_virtual(
@@ -1074,8 +1055,6 @@ def _write_subcircuit_virtual(
         edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
 
     return new_node_files, new_edges_files
-
-
 
 
 def _update_config_with_new_paths(output, config, new_population_files, type_):
