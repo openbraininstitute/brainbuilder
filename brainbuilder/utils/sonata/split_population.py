@@ -154,17 +154,20 @@ def _init_edge_group(orig_group, new_group):
 
 
 def _populate_edge_group(orig_group, new_group, sl, rel_idxs, override_map):
-    """Populate the datasets from orig_group into new_group.
+    """
+    Copy datasets from orig_group to new_group, filtering by slice and relative indices.
 
-    Supports nested groups recursively (e.g., @library).
+    - Datasets in override_map are appended from the override values.
+    - `dynamics_params` nested group is copied recursively.
+    - `@library` is skipped and handled separately.
+    - Raises TypeError for unsupported objects.
 
     Args:
-        orig_group (h5py.Group): original group, e.g. /edges/default/0
-        new_group (h5py.Group): new group, e.g. /edges/L2_X__L6_Y__chemical/0
-        sl (slice): slice used to select the dataset range
-        rel_idxs (np.ndarray): rel_idxs used to filter the dataset
-
-        TODO
+        orig_group (h5py.Group): source group
+        new_group (h5py.Group): destination group
+        sl (slice): slice to select rows
+        rel_idxs (np.ndarray): indices to filter the slice
+        override_map (dict): datasets to override
     """
     for name, obj in orig_group.items():
         if isinstance(obj, h5py.Dataset):
@@ -249,6 +252,12 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
 
     # in case virtual or external append edges, we need the correct counting
     offset = new_edges["source_node_id"].shape[0]
+    if offset != 0:
+        raise RuntimeError(
+            f"It may be unsafe to append edges with a nonzero offset ({offset}). "
+            "Edge IDs may become inconsistent."
+        )
+
     chunk_indices = [sl.start + rel_idxs for sl, rel_idxs, _ in sl_mask]
     flat_idxs = np.hstack(chunk_indices).astype(int) if len(chunk_indices) else np.array([])
     keep_indexes = pd.DataFrame(
@@ -295,8 +304,6 @@ def _compute_syn_mask(syn_ids, syn_pops, edge_mappings):
         ids_in_pop = syn_ids[pop_idx]
 
         mapping = edge_mappings[pop]  # must be a DataFrame
-
-        print(edge_mappings)
 
         mask[pop_idx] = _isin(ids_in_pop, mapping.index.to_numpy())
 
@@ -918,7 +925,7 @@ def _write_subcircuit_external(
             src_mapping=wanted_src_ids,
             dst_mapping=id_mapping[edge.target.name],
         )
-        edge_mappings[edge.target.name.encode("utf-8")] = kept_indexes
+        edge_mappings[name.encode('utf-8')] = kept_indexes
 
     for name, (new_source_pop_name, wanted_src_ids, new_name) in edge_info.items():
         edge = circuit.edges[name]
@@ -946,7 +953,7 @@ def _write_subcircuit_external(
             dst_mapping=id_mapping[edge.target.name],
             edge_mappings=edge_mappings,
         )
-        edge_mappings[edge.target.name.encode("utf-8")] = kept_indexes
+        edge_mappings[name.encode('utf-8')] = kept_indexes
 
     return new_node_files, new_edges_files
 
@@ -1021,6 +1028,7 @@ def _write_subcircuit_virtual(
     for edge_pop_name, edge in virtual_populations.items():
         if edge.type == "synapse_astrocyte":
             continue
+
         # TODO write
         new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
             output_path=os.path.join(
@@ -1036,7 +1044,7 @@ def _write_subcircuit_virtual(
         )
         edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
 
-    for edge_pop_name, edge in circuit.edges.items():
+    for edge_pop_name, edge in virtual_populations.items():
         if edge.type != "synapse_astrocyte":
             continue
         new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
@@ -1307,14 +1315,3 @@ def split_subcircuit(
     utils.dump_json(output / "circuit_config.json", config)
 
 
-# removeme
-def print_top_entries(group: h5py.Group, name: str, n: int = 10):
-    print(f"\n{name} top {n} entries:")
-    for key, ds in group.items():
-        if isinstance(ds, h5py.Dataset):
-            print(f"{key}: {ds[:n]}")
-        elif isinstance(ds, h5py.Group):
-            print(f"{key} (group):")
-            for subkey, subds in ds.items():
-                if isinstance(subds, h5py.Dataset):
-                    print(f"  {subkey}: {subds[:n]}")

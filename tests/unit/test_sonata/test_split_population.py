@@ -1033,3 +1033,111 @@ def test_copy_edge_attributes_advanced(tmp_path):
         # 102 is the 3rd element of "parent_edge_pop"
         # 107 is the 4th element of "parent_edge_pop2"
         np.testing.assert_array_equal(lib_var_ds, [2, 3])
+
+
+def test_copy_edge_attributes_empty_edge_mapping(tmp_path):
+    """
+    Test _copy_edge_attributes with edge_mappings containing empty DataFrames.
+    Verifies that edges with no mapping are correctly ignored and no errors occur.
+    """
+    infile = tmp_path / "in_empty.h5"
+    outfile = tmp_path / "out_empty.h5"
+
+    # ----------------------
+    # Build minimal SONATA input
+    # ----------------------
+    with h5py.File(infile, "w") as f:
+        edges = f.create_group("edges/pop_name")
+        edges.create_dataset(
+            "source_node_id",
+            data=np.arange(10, dtype=np.uint64),
+            maxshape=(None,),
+        )
+        edges.create_dataset(
+            "target_node_id",
+            data=np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 0], dtype=np.uint64),
+            maxshape=(None,),
+        )
+
+        egrp = edges.create_group('0')
+        egrp.create_dataset(
+            "weight",
+            data=np.arange(10, dtype=np.uint64),
+            maxshape=(None,),
+        )
+        egrp.create_dataset(
+            "lib_var",
+            data=np.array([0, 0, 2, 1, 1, 1, 1, 1, 1, 1], dtype=np.uint64),
+            maxshape=(None,),
+        )
+        lib_group = egrp.create_group('@library')
+        lib_group.create_dataset(
+            "lib_var",
+            data=np.array(["0", "01", "2"], dtype=h5py.string_dtype(encoding="utf-8")),
+            maxshape=(None,),
+        )
+
+        egrp.create_dataset(
+            "synapse_id",
+            data=np.arange(100, 110, dtype=np.uint64),
+            maxshape=(None,),
+        )
+        egrp.create_dataset(
+            "synapse_population",
+            data=np.array([0, 0, 0, 2, 1, 1, 1, 1, 1, 1], dtype=np.uint64),
+            maxshape=(None,),
+        )
+        lib_group.create_dataset(
+            "synapse_population",
+            data=np.array(["parent_edge_pop", "parent_edge_pop2", "parent_edge_pop3"], dtype=h5py.string_dtype(encoding="utf-8")),
+            maxshape=(None,),
+        )
+
+    # ----------------------
+    # Identity mapping
+    # ----------------------
+    mapping = pd.DataFrame(
+        {"new_id": np.arange(5, dtype=np.uint64)},
+        index=np.array([2, 3, 4, 7, 8], dtype=np.uint64),
+    )
+
+    # Empty edge mappings
+    edge_mappings = {
+        b"parent_edge_pop": make_edge_mapping_df([]),
+        b"parent_edge_pop2": make_edge_mapping_df([]),
+        b"parent_edge_pop3": make_edge_mapping_df([])
+    }
+
+    # ----------------------
+    # Run
+    # ----------------------
+    with h5py.File(infile, "r") as h5in, h5py.File(outfile, "w") as h5out:
+        keep = split_population._copy_edge_attributes(
+            h5in=h5in,
+            h5out=h5out,
+            src_node_name="src",
+            dst_node_name="dst",
+            src_edge_name="pop_name",
+            dst_edge_name="pop_name_var",
+            src_mapping=mapping,
+            dst_mapping=mapping,
+            h5_read_chunk_size=3,
+            edge_mappings=edge_mappings
+        )
+
+    # ----------------------
+    # Verification
+    # ----------------------
+    with h5py.File(outfile, "r") as f:
+        out_edges = f["edges/pop_name_var"]
+
+        # All edge library mappings are empty, so no edges should be kept
+        assert len(keep) == 0
+        assert out_edges["source_node_id"][:].size == 0
+        assert out_edges["target_node_id"][:].size == 0
+
+        # Edge group datasets should also be empty
+        for ds_name in ["weight", "lib_var", "synapse_id", "synapse_population"]:
+            assert out_edges['0'][ds_name][:].size == 0
+        for ds_name in ["lib_var", "synapse_population"]:
+            assert out_edges['0']["@library"][ds_name][:].size == 0
