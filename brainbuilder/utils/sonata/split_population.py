@@ -974,14 +974,12 @@ def _write_subcircuit_external(
     return new_node_files, new_edges_files
 
 
-def _collect_edge_write_config_virtual(
-    output, edge_populations_to_paths, virtual_edges, id_mapping
-):
+def _collect_edge_write_config_virtual(output, edge_pop_to_paths, virtual_edges, id_mapping):
     """TODO"""
     edge_write_configs = []
     for edge_pop_name, edge in virtual_edges.items():
         edge_write_config = EdgeWriteConfig(
-            output_path=output / edge_populations_to_paths[edge_pop_name],
+            output_path=output / edge_pop_to_paths[edge_pop_name],
             input_path=edge.h5_filepath,
             src_node_name=edge.source.name,
             dst_node_name=edge.target.name,
@@ -1009,28 +1007,17 @@ def _write_virtual_nodes(circuit, virtual_node_pop_ids, output):
     return new_node_files
 
 
-def _write_subcircuit_virtual(
-    output,
-    circuit,
-    edge_populations_to_paths,
-    id_mapping,
-    node_pop_name_mapping,
-    list_of_sources_to_ignore=(),
+def _compute_virtual_edges_and_pop_ids(
+    circuit, id_mapping, list_of_virtual_sources_to_ignore, node_pop_name_mapping
 ):
-    """write all node/edge populations that have virtual nodes as source
-
-    Note: the id_mapping dictionary is updated with the used virtual nodes
-    """
-    # pylint: disable=too-many-locals
-    new_node_files, new_edges_files = {}, {}
-
+    """TODO"""
     virtual_edges = {
         name: edge
         for name, edge in circuit.edges.items()
         if (
             edge.source.type == "virtual"
             and edge.target.name in id_mapping
-            and edge.source.name not in list_of_sources_to_ignore
+            and edge.source.name not in list_of_virtual_sources_to_ignore
         )
     }
 
@@ -1066,20 +1053,7 @@ def _write_subcircuit_virtual(
         # Virtual input sources retain their name unchanged
         node_pop_name_mapping[name] = name
 
-    new_node_files = _write_virtual_nodes(
-        circuit=circuit, virtual_node_pop_ids=virtual_node_pop_ids, output=output
-    )
-
-    edge_write_configs = _collect_edge_write_config_virtual(
-        output=output,
-        edge_populations_to_paths=edge_populations_to_paths,
-        virtual_edges=virtual_edges,
-        id_mapping=id_mapping,
-    )
-
-    new_edges_files = _orchestrate_write_subcircuit_edges(edge_write_configs=edge_write_configs)
-
-    return new_node_files, new_edges_files
+    return virtual_edges, virtual_node_pop_ids
 
 
 def _update_config_with_new_paths(output, config, new_population_files, type_):
@@ -1279,24 +1253,36 @@ def split_subcircuit(
     node_pop_name_mapping = {pop_name: pop_name for pop_name in split_populations.keys()}
 
     # write subcircuit biological
-    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
+
     edge_write_configs = _collect_edge_write_config_biological(
         output, circuit, edge_pop_to_paths, id_mapping
     )
-    new_edge_files = _orchestrate_write_subcircuit_edges(edge_write_configs=edge_write_configs)
 
+    virtual_node_pop_ids = {}
     if do_virtual:
-        new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_virtual(
-            output,
-            circuit,
-            edge_pop_to_paths,
-            id_mapping,
-            node_pop_name_mapping,
-            list_of_virtual_sources_to_ignore,
+        virtual_edges, virtual_node_pop_ids = _compute_virtual_edges_and_pop_ids(
+            circuit=circuit,
+            id_mapping=id_mapping,
+            list_of_virtual_sources_to_ignore=list_of_virtual_sources_to_ignore,
+            node_pop_name_mapping=node_pop_name_mapping,
+        )
+        edge_write_configs.extend(
+            _collect_edge_write_config_virtual(
+                output=output,
+                edge_pop_to_paths=edge_pop_to_paths,
+                virtual_edges=virtual_edges,
+                id_mapping=id_mapping,
+            )
         )
 
-        new_node_files.update(new_virtual_node_files)
-        new_edge_files.update(new_virtual_edge_files)
+    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
+    new_node_files.update(
+        _write_virtual_nodes(
+            circuit=circuit, virtual_node_pop_ids=virtual_node_pop_ids, output=output
+        )
+    )
+
+    new_edge_files = _orchestrate_write_subcircuit_edges(edge_write_configs=edge_write_configs)
 
     existing_node_pop_names = list(new_node_files.keys())
     existing_edge_pop_names = list(new_edge_files.keys())
