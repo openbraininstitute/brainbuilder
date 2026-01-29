@@ -53,9 +53,9 @@ class EdgeWriteConfig:
     src_mapping: pd.DataFrame
     dst_mapping: pd.DataFrame
     h5_read_chunk_size: int | None = None
-    edge_mappings: dict[pd.DataFrame] | None = None
     input_path: str | Path | None = None
     output_path: str | Path | None = None
+    edge_type: str | None = None
 
     def __post_init__(self):
             self.input_path = Path(self.input_path) if isinstance(self.input_path, str) else self.input_path
@@ -222,7 +222,7 @@ def _h5_get_read_chunk_size():
     return int(os.environ.get("H5_READ_CHUNKSIZE", H5_READ_CHUNKSIZE))
 
 
-def _copy_edge_attributes(h5in: h5py.File, h5out: h5py.File, edge_write_config: EdgeWriteConfig):
+def _copy_edge_attributes(h5in: h5py.File, h5out: h5py.File, edge_write_config: EdgeWriteConfig, edge_mappings: dict[pd.DataFrame]):
     src_node_name = edge_write_config.src_node_name
     dst_node_name = edge_write_config.dst_node_name
     src_edge_name = edge_write_config.src_edge_name
@@ -230,7 +230,6 @@ def _copy_edge_attributes(h5in: h5py.File, h5out: h5py.File, edge_write_config: 
     src_mapping = edge_write_config.src_mapping
     dst_mapping = edge_write_config.dst_mapping
     h5_read_chunk_size = edge_write_config.h5_read_chunk_size
-    edge_mappings = edge_write_config.edge_mappings
 
     """Copy the attributes from the original edges into the new edge populations"""
     # pylint: disable=too-many-locals
@@ -469,7 +468,7 @@ def _get_node_counts(h5out, new_edge_pop_name, src_mapping, dst_mapping):
 def _write_indexes(edge_file_name, new_pop_name, source_node_count, target_node_count):
     """ibid"""
     libsonata.EdgePopulation.write_indices(
-        edge_file_name, new_pop_name, source_node_count, target_node_count
+        str(edge_file_name), new_pop_name, source_node_count, target_node_count
     )
 
 
@@ -509,7 +508,7 @@ def _write_edges(
                     h5_read_chunk_size=h5_read_chunk_size,
                 )
 
-                _copy_edge_attributes(h5in=h5in, h5out=h5out, edge_write_config=edge_write_config)
+                _copy_edge_attributes(h5in=h5in, h5out=h5out, edge_write_config=edge_write_config, edge_mappings=None)
                 edge_count, sgid_count, tgid_count = _get_node_counts(
                     h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
                 )
@@ -665,15 +664,8 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
 
 
 def _write_subcircuit_edges(
-    output_path,
-    input_path,
-    src_node_pop,
-    dst_node_pop,
-    src_edge_pop_name,
-    dst_edge_pop_name,
-    src_mapping,
-    dst_mapping,
-    edge_mappings=None,
+    edge_write_config: EdgeWriteConfig,
+    edge_mappings: dict[pd.DataFrame] | None = None
 ):
     """copy a population to an edge file
 
@@ -681,39 +673,35 @@ def _write_subcircuit_edges(
     populations existed in it any more
     If DELETED_EMPTY_EDGES_POPULATION is returned, the population was removed
     """
+    output_path = edge_write_config.output_path
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    L.debug(
+        "Writing edges %s -> %s [%s]",
+        edge_write_config.src_edge_name,
+        edge_write_config.dst_edge_name,
+        output_path,
+    )
 
-    edge_write_config = EdgeWriteConfig(
-                src_node_name=src_node_pop,
-                dst_node_name=dst_node_pop,
-                src_edge_name=src_edge_pop_name,
-                dst_edge_name=dst_edge_pop_name,
-                src_mapping=src_mapping,
-                dst_mapping=dst_mapping,
-                edge_mappings=edge_mappings,
-                output_path=output_path,
-                input_path=input_path
-            )
-
-    with h5py.File(input_path, "r") as h5in:
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with h5py.File(str(edge_write_config.input_path), "r") as h5in:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         is_file_empty = False
         kept_indexes = None
 
-        with h5py.File(output_path, "a") as h5out:
+        with h5py.File(str(output_path), "a") as h5out:
             kept_indexes = _copy_edge_attributes(
-                h5in=h5in, h5out=h5out, edge_write_config=edge_write_config
+                h5in=h5in, h5out=h5out, edge_write_config=edge_write_config, edge_mappings=edge_mappings
             )
             edge_count, sgid_count, tgid_count = _get_node_counts(
-                h5out, dst_edge_pop_name, src_mapping, dst_mapping
+                h5out, edge_write_config.dst_edge_name, edge_write_config.src_mapping, edge_write_config.dst_mapping
             )
 
             if edge_count == 0:
-                del h5out[f"/edges/{dst_edge_pop_name}"]
+                del h5out[f"/edges/{edge_write_config.dst_edge_name}"]
                 is_file_empty = len(h5out["/edges"]) == 0
 
         # after the h5 file is closed, it's indexed if valid, or it's removed if empty
         if edge_count > 0:
-            _write_indexes(output_path, dst_edge_pop_name, sgid_count, tgid_count)
+            _write_indexes(output_path, edge_write_config.dst_edge_name, sgid_count, tgid_count)
             L.debug("Wrote %s edges to %s", edge_count, output_path)
         elif is_file_empty:
             os.unlink(output_path)
@@ -724,6 +712,24 @@ def _write_subcircuit_edges(
         return output_path, kept_indexes
     return None, None
 
+def _collect_edge_write_config_biological(output, circuit, edge_pop_to_paths, id_mapping):
+    edge_write_configs = []
+    for edge_pop_name, edge in circuit.edges.items():
+        if edge.source.name in id_mapping and edge.target.name in id_mapping:
+            edge_write_config = EdgeWriteConfig(
+                    output_path=output / edge_pop_to_paths[edge_pop_name],
+                    input_path=edge.h5_filepath,
+                    src_node_name=edge.source.name,
+                    dst_node_name=edge.target.name,
+                    src_edge_name=edge_pop_name,
+                    dst_edge_name=edge_pop_name,
+                    src_mapping=id_mapping[edge.source.name],
+                    dst_mapping=id_mapping[edge.target.name],
+                    edge_type=edge.type
+                )
+            edge_write_configs.append(edge_write_config)
+        
+    return edge_write_configs
 
 def _write_subcircuit_biological(
     output,
@@ -750,52 +756,29 @@ def _write_subcircuit_biological(
     # synapse_astrocyte edges are special because they refer other edge files
     # we need to handle them after the normal ones
     # we record the new edge mappings for possible later use
+
+    edge_write_configs = _collect_edge_write_config_biological(output, circuit, edge_pop_to_paths, id_mapping)
+
     edge_mappings = {}
     new_edges_files = {}
-    for edge_pop_name, edge in circuit.edges.items():
-        # skip tripartite connections and record
-        if edge.type == "synapse_astrocyte":
+    assert all(config.edge_type is not None for config in edge_write_configs)
+    for edge_write_config in edge_write_configs:
+        # skip neuroglial. It depends on other edges. We will with it later
+        if edge_write_config.edge_type == "synapse_astrocyte":
             continue
-        if edge.source.name in id_mapping and edge.target.name in id_mapping:
-            output_path = output / edge_pop_to_paths[edge_pop_name]
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            L.debug(
-                "Writing edges %s for %s -> %s [%s]",
-                edge_pop_name,
-                edge.source.name,
-                edge.target.name,
-                output_path,
-            )
-            new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
-                output_path=str(output_path),
-                input_path=edge.h5_filepath,
-                src_node_pop=edge.source.name,
-                dst_node_pop=edge.target.name,
-                src_edge_pop_name=edge_pop_name,
-                dst_edge_pop_name=edge_pop_name,
-                src_mapping=id_mapping[edge.source.name],
-                dst_mapping=id_mapping[edge.target.name],
-            )
-            edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
-
-    for edge_pop_name, edge in circuit.edges.items():
-        if edge.type != "synapse_astrocyte":
-            continue
-
-        output_path = output / edge_pop_to_paths[edge_pop_name]
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
-            output_path=str(output_path),
-            input_path=edge.h5_filepath,
-            src_node_pop=edge.source.name,
-            dst_node_pop=edge.target.name,
-            src_edge_pop_name=edge_pop_name,
-            dst_edge_pop_name=edge_pop_name,
-            src_mapping=id_mapping[edge.source.name],
-            dst_mapping=id_mapping[edge.target.name],
-            edge_mappings=edge_mappings,
+        new_edges_files[edge_write_config.src_edge_name], kept_indexes = _write_subcircuit_edges(
+            edge_write_config=edge_write_config
         )
-        edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
+        edge_mappings[edge_write_config.src_edge_name.encode("utf-8")] = kept_indexes
+
+    for edge_write_config in edge_write_configs:
+        # process only the remaining neuroglial
+        if edge_write_config.edge_type != "synapse_astrocyte":
+            continue
+        new_edges_files[edge_write_config.src_edge_name], kept_indexes = _write_subcircuit_edges(
+            edge_write_config=edge_write_config, edge_mappings=edge_mappings
+        )
+        edge_mappings[edge_write_config.src_edge_name.encode("utf-8")] = kept_indexes
 
     return new_node_files, new_edges_files
 
@@ -939,25 +922,20 @@ def _write_subcircuit_external(
         edge = circuit.edges[name]
         if edge.type == "synapse_astrocyte":
             continue
-        output_path = output / (new_name + ".h5")
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        L.debug(
-            "Writing edges %s for %s -> %s [%s]",
-            name,
-            edge.source.name,
-            edge.target.name,
-            output_path,
+
+        edge_write_config = EdgeWriteConfig(
+            output_path=output / (new_name + ".h5"),
+            input_path=edge.h5_filepath,
+            src_node_name=new_source_pop_name,
+            dst_node_name=edge.target.name,
+            src_edge_name=name,
+            dst_edge_name=new_name,
+            src_mapping=wanted_src_ids,
+            dst_mapping=id_mapping[edge.target.name],
         )
 
         new_edges_files[new_name], kept_indexes = _write_subcircuit_edges(
-            output_path=str(output_path),
-            input_path=edge.h5_filepath,
-            src_node_pop=new_source_pop_name,
-            dst_node_pop=edge.target.name,
-            src_edge_pop_name=name,
-            dst_edge_pop_name=new_name,
-            src_mapping=wanted_src_ids,
-            dst_mapping=id_mapping[edge.target.name],
+            edge_write_config=edge_write_config
         )
         edge_mappings[name.encode("utf-8")] = kept_indexes
 
@@ -965,26 +943,20 @@ def _write_subcircuit_external(
         edge = circuit.edges[name]
         if edge.type != "synapse_astrocyte":
             continue
-        output_path = output / (new_name + ".h5")
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        L.debug(
-            "Writing edges %s for %s -> %s [%s]",
-            name,
-            edge.source.name,
-            edge.target.name,
-            output_path,
+
+        edge_write_config = EdgeWriteConfig(
+            output_path=output / (new_name + ".h5"),
+            input_path=edge.h5_filepath,
+            src_node_name=new_source_pop_name,
+            dst_node_name=edge.target.name,
+            src_edge_name=name,
+            dst_edge_name=new_name,
+            src_mapping=wanted_src_ids,
+            dst_mapping=id_mapping[edge.target.name],
         )
 
         new_edges_files[new_name], kept_indexes = _write_subcircuit_edges(
-            output_path=str(output_path),
-            input_path=edge.h5_filepath,
-            src_node_pop=new_source_pop_name,
-            dst_node_pop=edge.target.name,
-            src_edge_pop_name=name,
-            dst_edge_pop_name=new_name,
-            src_mapping=wanted_src_ids,
-            dst_mapping=id_mapping[edge.target.name],
-            edge_mappings=edge_mappings,
+            edge_write_config=edge_write_config, edge_mappings=edge_mappings
         )
         edge_mappings[name.encode("utf-8")] = kept_indexes
 
@@ -1062,35 +1034,37 @@ def _write_subcircuit_virtual(
         if edge.type == "synapse_astrocyte":
             continue
 
-        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
-            output_path=os.path.join(
-                output, edge_populations_to_paths[edge_pop_name]
-            ),  # Where to write to
+        output_path = output / edge_populations_to_paths[edge_pop_name]
+        edge_write_config = EdgeWriteConfig(
+            output_path=output_path,
             input_path=edge.h5_filepath,  # Where to read from
-            src_node_pop=edge.source.name,
-            dst_node_pop=edge.target.name,
-            src_edge_pop_name=edge_pop_name,
-            dst_edge_pop_name=edge_pop_name,
+            src_node_name=edge.source.name,
+            dst_node_name=edge.target.name,
+            src_edge_name=edge_pop_name,
+            dst_edge_name=edge_pop_name,
             src_mapping=id_mapping[edge.source.name],
             dst_mapping=id_mapping[edge.target.name],
+        )
+        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
+            edge_write_config=edge_write_config
         )
         edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
 
     for edge_pop_name, edge in virtual_populations.items():
         if edge.type != "synapse_astrocyte":
             continue
-        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
-            output_path=os.path.join(
-                output, edge_populations_to_paths[edge_pop_name]
-            ),  # Where to write to
-            input_path=edge.h5_filepath,
-            src_node_pop=edge.source.name,
-            dst_node_pop=edge.target.name,
-            src_edge_pop_name=edge_pop_name,
-            dst_edge_pop_name=edge_pop_name,
+        edge_write_config = EdgeWriteConfig(
+            output_path=output / edge_populations_to_paths[edge_pop_name],
+            input_path=edge.h5_filepath,  # Where to read from
+            src_node_name=edge.source.name,
+            dst_node_name=edge.target.name,
+            src_edge_name=edge_pop_name,
+            dst_edge_name=edge_pop_name,
             src_mapping=id_mapping[edge.source.name],
             dst_mapping=id_mapping[edge.target.name],
-            edge_mappings=edge_mappings,
+        )
+        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
+            edge_write_config=edge_write_config, edge_mappings=edge_mappings
         )
         edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
 

@@ -1018,12 +1018,12 @@ def test_copy_edge_attributes_advanced(tmp_path):
             src_mapping=mapping,
             dst_mapping=mapping,
             h5_read_chunk_size=3,  # FORCE chunking
-            edge_mappings=edge_mappings
         )
         keep = split_population._copy_edge_attributes(
             h5in=h5in,
             h5out=h5out,
-edge_write_config=edge_write_config
+edge_write_config=edge_write_config,
+edge_mappings=edge_mappings
         )
 
     # ----------------------
@@ -1151,12 +1151,13 @@ def test_copy_edge_attributes_empty_edge_mapping(tmp_path):
             src_mapping=mapping,
             dst_mapping=mapping,
             h5_read_chunk_size=3,
-            edge_mappings=edge_mappings
+            
         )
         keep = split_population._copy_edge_attributes(
             h5in=h5in,
             h5out=h5out,
-edge_write_config=edge_write_config
+edge_write_config=edge_write_config,
+edge_mappings=edge_mappings
         )
 
     # ----------------------
