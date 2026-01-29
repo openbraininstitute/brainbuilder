@@ -45,7 +45,6 @@ ORIG_NAME = "original_name"
 
 @dataclass
 class EdgeWriteConfig:
-
     src_node_name: str
     dst_node_name: str
     src_edge_name: str
@@ -58,8 +57,12 @@ class EdgeWriteConfig:
     edge_type: str | None = None
 
     def __post_init__(self):
-            self.input_path = Path(self.input_path) if isinstance(self.input_path, str) else self.input_path
-            self.output_path = Path(self.output_path) if isinstance(self.output_path, str) else self.output_path
+        self.input_path = (
+            Path(self.input_path) if isinstance(self.input_path, str) else self.input_path
+        )
+        self.output_path = (
+            Path(self.output_path) if isinstance(self.output_path, str) else self.output_path
+        )
 
 
 def _create_chunked_slices(length, chunk_size):
@@ -222,7 +225,12 @@ def _h5_get_read_chunk_size():
     return int(os.environ.get("H5_READ_CHUNKSIZE", H5_READ_CHUNKSIZE))
 
 
-def _copy_edge_attributes(h5in: h5py.File, h5out: h5py.File, edge_write_config: EdgeWriteConfig, edge_mappings: dict[pd.DataFrame]):
+def _copy_edge_attributes(
+    h5in: h5py.File,
+    h5out: h5py.File,
+    edge_write_config: EdgeWriteConfig,
+    edge_mappings: dict[pd.DataFrame],
+):
     src_node_name = edge_write_config.src_node_name
     dst_node_name = edge_write_config.dst_node_name
     src_edge_name = edge_write_config.src_edge_name
@@ -508,7 +516,9 @@ def _write_edges(
                     h5_read_chunk_size=h5_read_chunk_size,
                 )
 
-                _copy_edge_attributes(h5in=h5in, h5out=h5out, edge_write_config=edge_write_config, edge_mappings=None)
+                _copy_edge_attributes(
+                    h5in=h5in, h5out=h5out, edge_write_config=edge_write_config, edge_mappings=None
+                )
                 edge_count, sgid_count, tgid_count = _get_node_counts(
                     h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
                 )
@@ -664,8 +674,7 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
 
 
 def _write_subcircuit_edges(
-    edge_write_config: EdgeWriteConfig,
-    edge_mappings: dict[pd.DataFrame] | None = None
+    edge_write_config: EdgeWriteConfig, edge_mappings: dict[pd.DataFrame] | None = None
 ):
     """copy a population to an edge file
 
@@ -689,10 +698,16 @@ def _write_subcircuit_edges(
 
         with h5py.File(str(output_path), "a") as h5out:
             kept_indexes = _copy_edge_attributes(
-                h5in=h5in, h5out=h5out, edge_write_config=edge_write_config, edge_mappings=edge_mappings
+                h5in=h5in,
+                h5out=h5out,
+                edge_write_config=edge_write_config,
+                edge_mappings=edge_mappings,
             )
             edge_count, sgid_count, tgid_count = _get_node_counts(
-                h5out, edge_write_config.dst_edge_name, edge_write_config.src_mapping, edge_write_config.dst_mapping
+                h5out,
+                edge_write_config.dst_edge_name,
+                edge_write_config.src_mapping,
+                edge_write_config.dst_mapping,
             )
 
             if edge_count == 0:
@@ -712,32 +727,29 @@ def _write_subcircuit_edges(
         return output_path, kept_indexes
     return None, None
 
+
 def _collect_edge_write_config_biological(output, circuit, edge_pop_to_paths, id_mapping):
     edge_write_configs = []
     for edge_pop_name, edge in circuit.edges.items():
         if edge.source.name in id_mapping and edge.target.name in id_mapping:
             edge_write_config = EdgeWriteConfig(
-                    output_path=output / edge_pop_to_paths[edge_pop_name],
-                    input_path=edge.h5_filepath,
-                    src_node_name=edge.source.name,
-                    dst_node_name=edge.target.name,
-                    src_edge_name=edge_pop_name,
-                    dst_edge_name=edge_pop_name,
-                    src_mapping=id_mapping[edge.source.name],
-                    dst_mapping=id_mapping[edge.target.name],
-                    edge_type=edge.type
-                )
+                output_path=output / edge_pop_to_paths[edge_pop_name],
+                input_path=edge.h5_filepath,
+                src_node_name=edge.source.name,
+                dst_node_name=edge.target.name,
+                src_edge_name=edge_pop_name,
+                dst_edge_name=edge_pop_name,
+                src_mapping=id_mapping[edge.source.name],
+                dst_mapping=id_mapping[edge.target.name],
+                edge_type=edge.type,
+            )
             edge_write_configs.append(edge_write_config)
-        
+
     return edge_write_configs
 
-def _write_subcircuit_biological(
-    output,
-    circuit,
-    node_pop_to_paths,
-    edge_pop_to_paths,
-    split_populations,
-    id_mapping,
+
+def _orchestrate_write_subcircuit_edges(
+    edge_write_configs: list[EdgeWriteConfig],
 ):
     """write node and edge population that belong in a subcircuit
 
@@ -750,14 +762,13 @@ def _write_subcircuit_biological(
         id_mapping(dict): population name -> df with index old_ids, and colunm new_id
 
     returns `new_node_files`, `new_edges_files`: the paths to node & edges files that were created
+
+    TODO
     """
-    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
 
     # synapse_astrocyte edges are special because they refer other edge files
     # we need to handle them after the normal ones
     # we record the new edge mappings for possible later use
-
-    edge_write_configs = _collect_edge_write_config_biological(output, circuit, edge_pop_to_paths, id_mapping)
 
     edge_mappings = {}
     new_edges_files = {}
@@ -780,7 +791,7 @@ def _write_subcircuit_biological(
         )
         edge_mappings[edge_write_config.src_edge_name.encode("utf-8")] = kept_indexes
 
-    return new_node_files, new_edges_files
+    return new_edges_files
 
 
 def _get_subcircuit_external_ids(all_sgids, all_tgids, wanted_src_ids, wanted_dst_ids):
@@ -963,6 +974,41 @@ def _write_subcircuit_external(
     return new_node_files, new_edges_files
 
 
+def _collect_edge_write_config_virtual(
+    output, edge_populations_to_paths, virtual_edges, id_mapping
+):
+    """TODO"""
+    edge_write_configs = []
+    for edge_pop_name, edge in virtual_edges.items():
+        edge_write_config = EdgeWriteConfig(
+            output_path=output / edge_populations_to_paths[edge_pop_name],
+            input_path=edge.h5_filepath,
+            src_node_name=edge.source.name,
+            dst_node_name=edge.target.name,
+            src_edge_name=edge_pop_name,
+            dst_edge_name=edge_pop_name,
+            src_mapping=id_mapping[edge.source.name],
+            dst_mapping=id_mapping[edge.target.name],
+            edge_type=edge.type,
+        )
+        edge_write_configs.append(edge_write_config)
+    return edge_write_configs
+
+
+def _write_virtual_nodes(circuit, virtual_node_pop_ids, output):
+    """TODO"""
+    new_node_files = {}
+    # write virtual nodes based on virtual populations
+    for population_name, ids in virtual_node_pop_ids.items():
+        # Get all properties of the subset of the node population that is relevant
+        df = circuit.nodes[population_name].get(ids).reset_index(drop=True)
+        nodes_path = output / population_name / "nodes.h5"
+        nodes_path.parent.mkdir(parents=True, exist_ok=True)
+        new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
+
+    return new_node_files
+
+
 def _write_subcircuit_virtual(
     output,
     circuit,
@@ -978,7 +1024,7 @@ def _write_subcircuit_virtual(
     # pylint: disable=too-many-locals
     new_node_files, new_edges_files = {}, {}
 
-    virtual_populations = {
+    virtual_edges = {
         name: edge
         for name, edge in circuit.edges.items()
         if (
@@ -990,83 +1036,48 @@ def _write_subcircuit_virtual(
 
     # gather the ids of the virtual populations that are used; within a circuit
     # it's possible that a virtual population points to multiple target populations
-    pop_used_source_node_ids = collections.defaultdict(list)
-    for name, edge in virtual_populations.items():
+    virtual_node_pop_ids = collections.defaultdict(list)
+    for name, edge in virtual_edges.items():
         target_node_ids = id_mapping[edge.target.name].index.to_numpy()
         target_node_ids = bluepysnap.circuit_ids.CircuitNodeIds.from_dict(
             {edge.target.name: target_node_ids}
         )
 
-        pop_used_source_node_ids[edge.source.name].append(
+        virtual_node_pop_ids[edge.source.name].append(
             edge.afferent_nodes(target_node_ids, unique=True)
         )
 
-    pop_used_source_node_ids = {
+    virtual_node_pop_ids = {
         name: np.unique(np.concatenate(ids))
-        for name, ids in pop_used_source_node_ids.items()
+        for name, ids in virtual_node_pop_ids.items()
         if len(np.concatenate(ids)) > 0  # Exclude empty sources
     }
 
     # Remove edge populations with empty sources
-    virtual_populations = {
+    virtual_edges = {
         name: edge
-        for name, edge in virtual_populations.items()
-        if edge.source.name in pop_used_source_node_ids
+        for name, edge in virtual_edges.items()
+        if edge.source.name in virtual_node_pop_ids
     }
 
     # update the mappings with the virtual nodes
-    for name, ids in pop_used_source_node_ids.items():
+    for name, ids in virtual_node_pop_ids.items():
         id_mapping[name] = pd.DataFrame({NEW_IDS: range(len(ids))}, index=ids)
         # Virtual input sources retain their name unchanged
         node_pop_name_mapping[name] = name
 
-    # write virtual nodes based on virtual populations
-    for population_name, ids in pop_used_source_node_ids.items():
-        # Get all properties of the subset of the node population that is relevant
-        df = circuit.nodes[population_name].get(ids).reset_index(drop=True)
-        nodes_path = os.path.join(output, population_name, "nodes.h5")
-        Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
-        new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
+    new_node_files = _write_virtual_nodes(
+        circuit=circuit, virtual_node_pop_ids=virtual_node_pop_ids, output=output
+    )
 
-    edge_mappings = {}
-    # write the edges that have the virtual populations as source
-    for edge_pop_name, edge in virtual_populations.items():
-        if edge.type == "synapse_astrocyte":
-            continue
+    edge_write_configs = _collect_edge_write_config_virtual(
+        output=output,
+        edge_populations_to_paths=edge_populations_to_paths,
+        virtual_edges=virtual_edges,
+        id_mapping=id_mapping,
+    )
 
-        output_path = output / edge_populations_to_paths[edge_pop_name]
-        edge_write_config = EdgeWriteConfig(
-            output_path=output_path,
-            input_path=edge.h5_filepath,  # Where to read from
-            src_node_name=edge.source.name,
-            dst_node_name=edge.target.name,
-            src_edge_name=edge_pop_name,
-            dst_edge_name=edge_pop_name,
-            src_mapping=id_mapping[edge.source.name],
-            dst_mapping=id_mapping[edge.target.name],
-        )
-        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
-            edge_write_config=edge_write_config
-        )
-        edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
-
-    for edge_pop_name, edge in virtual_populations.items():
-        if edge.type != "synapse_astrocyte":
-            continue
-        edge_write_config = EdgeWriteConfig(
-            output_path=output / edge_populations_to_paths[edge_pop_name],
-            input_path=edge.h5_filepath,  # Where to read from
-            src_node_name=edge.source.name,
-            dst_node_name=edge.target.name,
-            src_edge_name=edge_pop_name,
-            dst_edge_name=edge_pop_name,
-            src_mapping=id_mapping[edge.source.name],
-            dst_mapping=id_mapping[edge.target.name],
-        )
-        new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
-            edge_write_config=edge_write_config, edge_mappings=edge_mappings
-        )
-        edge_mappings[edge_pop_name.encode("utf-8")] = kept_indexes
+    new_edges_files = _orchestrate_write_subcircuit_edges(edge_write_configs=edge_write_configs)
 
     return new_node_files, new_edges_files
 
@@ -1267,13 +1278,12 @@ def split_subcircuit(
     # Intrinsic input sources retain their name unchanged
     node_pop_name_mapping = {pop_name: pop_name for pop_name in split_populations.keys()}
 
-    # TODO: should function `_write_subcircuit_biological`,
-    # `_write_subcircuit_external`, `_write_subcircuit_virtual`
-    # handle node updates and config updates?
-
-    new_node_files, new_edge_files = _write_subcircuit_biological(
-        output, circuit, node_pop_to_paths, edge_pop_to_paths, split_populations, id_mapping
+    # write subcircuit biological
+    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
+    edge_write_configs = _collect_edge_write_config_biological(
+        output, circuit, edge_pop_to_paths, id_mapping
     )
+    new_edge_files = _orchestrate_write_subcircuit_edges(edge_write_configs=edge_write_configs)
 
     if do_virtual:
         new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_virtual(
