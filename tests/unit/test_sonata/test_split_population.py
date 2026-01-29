@@ -64,6 +64,163 @@ def dict_to_h5_group(data: dict, tmp_path, root_name="root"):
     f = h5py.File(h5file, "r")
     return f[root_name]
 
+def _find_populations_by_path(networks, key, name):
+    populations = {
+        k: v
+        for population in networks[key]
+        for k, v in population["populations"].items()
+        if population[f"{key}_file"] == name
+    }
+    return populations
+
+def _check_edge_indices(nodes_file, edges_file):
+    def check_index_consistency(node2range, range2edge, ids):
+        for id_ in range(node2range.shape[0]):
+            range_start, range_end = node2range[id_, :]
+            for edge_start, edge_end in range2edge[range_start:range_end, :]:
+                assert all(ids[edge_start:edge_end] == id_)
+
+    with h5py.File(edges_file, "r") as h5edges, h5py.File(nodes_file, "r") as h5nodes:
+        for pop_name in h5edges["edges"]:
+            base_path = "edges/" + pop_name
+
+            src_pop = h5edges[base_path + "/source_node_id"].attrs["node_population"]
+            tgt_pop = h5edges[base_path + "/target_node_id"].attrs["node_population"]
+
+            src_node2range = h5edges[base_path + "/indices/source_to_target/node_id_to_ranges"][:]
+            tgt_node2range = h5edges[base_path + "/indices/target_to_source/node_id_to_ranges"][:]
+
+            # check index length is equal to population size
+            assert src_node2range.shape[0] == h5nodes["nodes"][src_pop]["node_type_id"].shape[0]
+            assert tgt_node2range.shape[0] == h5nodes["nodes"][tgt_pop]["node_type_id"].shape[0]
+
+            src_range2edge = h5edges[base_path + "/indices/source_to_target/range_to_edge_id"][:]
+            tgt_range2edge = h5edges[base_path + "/indices/target_to_source/range_to_edge_id"][:]
+
+            src_ids = h5edges[base_path + "/source_node_id"][:]
+            tgt_ids = h5edges[base_path + "/target_node_id"][:]
+
+            check_index_consistency(src_node2range, src_range2edge, src_ids)
+            check_index_consistency(tgt_node2range, tgt_range2edge, tgt_ids)
+
+def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=False):
+    mapping = load_json(path / "id_mapping.json")
+
+    def _orig_id_map(ids, pop):
+        orig_offset = {"A": 1000, "B": 2000, "C": 3000, "V1": 8000, "V2": 9000}
+        if from_subcircuit:
+            return [_id + orig_offset[pop] for _id in ids]
+        else:
+            return ids
+
+    def _orig_name_map(name):
+        if from_subcircuit:
+            return "All" + name
+        else:
+            return name
+
+    assert mapping["A"] == {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": _orig_id_map([0, 2, 4], "A"), "original_name": _orig_name_map("A")}
+    assert mapping["B"] == {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "B", "original_id": _orig_id_map([0, 2, 4, 5], "B"), "original_name": _orig_name_map("B")}
+    assert mapping["C"] == {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "C", "original_id": _orig_id_map([0, 2, 4, 5], "C"), "original_name": _orig_name_map("C")}
+
+    with h5py.File(path / "nodes" / "nodes.h5", "r") as h5:
+        nodes = h5["nodes"]
+        for src in ("A", "B", "C"):
+            assert src in nodes
+            mtypes = utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
+            assert np.all(mtypes == b"a")
+                
+
+        assert len(nodes["A/node_type_id"]) == 3
+        assert len(nodes["B/node_type_id"]) == 4
+        assert len(nodes["C/node_type_id"]) == 4
+
+    with h5py.File(path / "edges" / "edges.h5", "r") as h5:
+        edges = h5["edges"]
+
+        assert "A__B" in edges
+        assert list(edges["A__B"]["source_node_id"]) == [0, 0, 0]
+        assert list(edges["A__B"]["target_node_id"]) == [0, 0, 1]  # 2nd is duplicate edge
+
+        assert "B__A" not in edges
+
+        assert "A__C" in edges
+        assert list(edges["A__C"]["source_node_id"]) == [2]
+        assert list(edges["A__C"]["target_node_id"]) == [2]
+
+        assert "B__C" in edges
+        assert list(edges["B__C"]["source_node_id"]) == [1]
+        assert list(edges["B__C"]["target_node_id"]) == [1]
+
+        assert "C__A" in edges
+        assert list(edges["C__A"]["source_node_id"]) == [2]
+        assert list(edges["C__A"]["target_node_id"]) == [2]
+
+        assert "C__B" not in edges
+
+        config = load_json(path / "circuit_config.json")
+
+        assert "manifest" in config
+        assert config["manifest"]["$BASE_DIR"] == "./"
+        assert "networks" in config
+        assert "nodes" in config["networks"]
+        node_pops = _find_populations_by_path(
+            config["networks"], "nodes", "$BASE_DIR/nodes/nodes.h5"
+        )
+        assert node_pops == {
+            "A": {"type": "biophysical"},
+            "B": {"type": "biophysical"},
+            "C": {"type": "biophysical"},
+        }
+        assert "edges" in config["networks"]
+        edge_pops = _find_populations_by_path(
+            config["networks"], "edges", "$BASE_DIR/edges/edges.h5"
+        )
+        assert edge_pops == {
+            "A__B": {"type": "chemical"},
+            "A__C": {"type": "chemical"},
+            "B__C": {"type": "chemical"},
+            "C__A": {"type": "chemical"},
+        }   
+
+        virtual_node_count = sum(
+            population["type"] == "virtual"
+            for node in config["networks"]["nodes"]
+            for population in node["populations"].values()
+        )
+        if has_virtual or has_external:
+            assert virtual_node_count > 0
+        else:
+            assert virtual_node_count == 0
+            assert len(node_pops) == 3
+            assert len(edge_pops) == 4
+
+        node_sets = load_json(path / "node_sets.json")
+        assert node_sets == {
+            "mtype_a": {"mtype": "a"},
+            "mtype_b": {"mtype": "b"},
+            "someA": {"node_id": [0, 1], "population": "A"},
+            "allB": {"node_id": [0, 1, 2, 3], "population": "B"},
+            "someB": {"node_id": [1, 2], "population": "B"},
+            "noC": {"node_id": [], "population": "C"},
+        }
+
+        expected_mapping = {
+            "A": {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": _orig_id_map([0, 2, 4], "A"), "original_name": _orig_name_map("A")},
+            "B": {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "B", "original_id": _orig_id_map([0, 2, 4, 5], "B"), "original_name": _orig_name_map("B")},
+            "C": {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "C", "original_id": _orig_id_map([0, 2, 4, 5], "C"), "original_name": _orig_name_map("C")},
+        }
+
+        if has_virtual:
+            expected_mapping["V1"] = {"new_id": [0, 1, 2], "parent_id": [0, 2, 3], "parent_name": "V1", "original_id": _orig_id_map([0, 2, 3], "V1"), "original_name": _orig_name_map("V1")}
+            expected_mapping["V2"] = {"new_id": [0], "parent_id": [0], "parent_name": "V2", "original_id": _orig_id_map([0], "V2"), "original_name": _orig_name_map("V2")}
+
+        if has_external:
+            expected_mapping["external_A"] = {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": _orig_id_map([5, 3], "A"), "original_name": _orig_name_map("A")}
+
+        mapping = load_json(path / "id_mapping.json")
+        assert mapping == expected_mapping
+
 # -------------------------------
 # Fixtures / Test data
 # -------------------------------
@@ -86,9 +243,57 @@ def sl_mask_mock():
     override_map = {}
     return [(slice(0, 6), np.arange(6), override_map)]
 
-# -------------------------------
-# Tests
-# -------------------------------
+# # -------------------------------
+# # Tests
+# # -------------------------------
+
+
+def test__get_population_name():
+    assert "src__dst__chemical" == split_population._get_population_name(src="src", dst="dst")
+    assert "src" == split_population._get_population_name(src="src", dst="src")
+
+
+def test__get_unique_population():
+    nodes = DATA_PATH / "split_subcircuit" / "networks" / "nodes" / "nodes.h5"
+    with h5py.File(nodes, "r") as h5:
+        with pytest.raises(ValueError):
+            split_population._get_unique_population(h5["nodes"])
+
+    nodes = DATA_PATH / "nodes.h5"
+    with h5py.File(nodes, "r") as h5:
+        assert split_population._get_unique_population(h5["nodes"]) == "default"
+
+
+def test__get_unique_group(tmp_path):
+    nodes = DATA_PATH / "nodes.h5"
+    with h5py.File(nodes, "r") as h5:
+        parent = h5["nodes/default"]
+        assert split_population._get_unique_group(parent)
+
+    with h5py.File(tmp_path / "nodes.h5", "w") as h5:
+        parent = h5.create_group("/edges/")
+        parent.create_group("/pop_name/0")
+        parent.create_group("/pop_name/1")
+        with pytest.raises(ValueError):
+            split_population._get_unique_group(parent)
+
+
+def test__write_nodes(tmp_path):
+    split_nodes = {
+        "A": pd.DataFrame({"fake_prop": range(10)}, index=np.arange(10)),
+        "B": pd.DataFrame({"fake_prop": range(5)}, index=np.arange(10, 15)),
+    }
+    split_population._write_nodes(tmp_path, split_nodes)
+    assert (tmp_path / "nodes_A.h5").exists()
+    assert (tmp_path / "nodes_B.h5").exists()
+
+    with h5py.File(tmp_path / "nodes_A.h5", "r") as h5:
+        assert_array_equal(h5["/nodes/A/0/fake_prop"], np.arange(10))
+        assert_array_equal(h5["/nodes/A/node_type_id"], np.full(10, -1))
+    with h5py.File(tmp_path / "nodes_B.h5", "r") as h5:
+        assert_array_equal(h5["/nodes/B/0/fake_prop"], np.arange(5))
+        assert_array_equal(h5["/nodes/B/node_type_id"], np.full(5, -1))
+
 def test_add_synapse_id_override_basic(edge_mappings, orig_group_mock, sl_mask_mock):
     split_population._add_synapse_id_override(sl_mask_mock, edge_mappings, orig_group_mock)
     override_map = sl_mask_mock[0][2]
@@ -195,88 +400,6 @@ def test_empty_input():
     mask = split_population._compute_syn_mask(syn_ids, syn_pops, edge_mappings)
     
     assert mask.size == 0
-
-
-
-
-
-def _check_edge_indices(nodes_file, edges_file):
-    def check_index_consistency(node2range, range2edge, ids):
-        for id_ in range(node2range.shape[0]):
-            range_start, range_end = node2range[id_, :]
-            for edge_start, edge_end in range2edge[range_start:range_end, :]:
-                assert all(ids[edge_start:edge_end] == id_)
-
-    with h5py.File(edges_file, "r") as h5edges, h5py.File(nodes_file, "r") as h5nodes:
-        for pop_name in h5edges["edges"]:
-            base_path = "edges/" + pop_name
-
-            src_pop = h5edges[base_path + "/source_node_id"].attrs["node_population"]
-            tgt_pop = h5edges[base_path + "/target_node_id"].attrs["node_population"]
-
-            src_node2range = h5edges[base_path + "/indices/source_to_target/node_id_to_ranges"][:]
-            tgt_node2range = h5edges[base_path + "/indices/target_to_source/node_id_to_ranges"][:]
-
-            # check index length is equal to population size
-            assert src_node2range.shape[0] == h5nodes["nodes"][src_pop]["node_type_id"].shape[0]
-            assert tgt_node2range.shape[0] == h5nodes["nodes"][tgt_pop]["node_type_id"].shape[0]
-
-            src_range2edge = h5edges[base_path + "/indices/source_to_target/range_to_edge_id"][:]
-            tgt_range2edge = h5edges[base_path + "/indices/target_to_source/range_to_edge_id"][:]
-
-            src_ids = h5edges[base_path + "/source_node_id"][:]
-            tgt_ids = h5edges[base_path + "/target_node_id"][:]
-
-            check_index_consistency(src_node2range, src_range2edge, src_ids)
-            check_index_consistency(tgt_node2range, tgt_range2edge, tgt_ids)
-
-
-def test__get_population_name():
-    assert "src__dst__chemical" == split_population._get_population_name(src="src", dst="dst")
-    assert "src" == split_population._get_population_name(src="src", dst="src")
-
-
-def test__get_unique_population():
-    nodes = DATA_PATH / "split_subcircuit" / "networks" / "nodes" / "nodes.h5"
-    with h5py.File(nodes, "r") as h5:
-        with pytest.raises(ValueError):
-            split_population._get_unique_population(h5["nodes"])
-
-    nodes = DATA_PATH / "nodes.h5"
-    with h5py.File(nodes, "r") as h5:
-        assert split_population._get_unique_population(h5["nodes"]) == "default"
-
-
-def test__get_unique_group(tmp_path):
-    nodes = DATA_PATH / "nodes.h5"
-    with h5py.File(nodes, "r") as h5:
-        parent = h5["nodes/default"]
-        assert split_population._get_unique_group(parent)
-
-    with h5py.File(tmp_path / "nodes.h5", "w") as h5:
-        parent = h5.create_group("/edges/")
-        parent.create_group("/pop_name/0")
-        parent.create_group("/pop_name/1")
-        with pytest.raises(ValueError):
-            split_population._get_unique_group(parent)
-
-
-def test__write_nodes(tmp_path):
-    split_nodes = {
-        "A": pd.DataFrame({"fake_prop": range(10)}, index=np.arange(10)),
-        "B": pd.DataFrame({"fake_prop": range(5)}, index=np.arange(10, 15)),
-    }
-    split_population._write_nodes(tmp_path, split_nodes)
-    assert (tmp_path / "nodes_A.h5").exists()
-    assert (tmp_path / "nodes_B.h5").exists()
-
-    with h5py.File(tmp_path / "nodes_A.h5", "r") as h5:
-        assert_array_equal(h5["/nodes/A/0/fake_prop"], np.arange(10))
-        assert_array_equal(h5["/nodes/A/node_type_id"], np.full(10, -1))
-    with h5py.File(tmp_path / "nodes_B.h5", "r") as h5:
-        assert_array_equal(h5["/nodes/B/0/fake_prop"], np.arange(5))
-        assert_array_equal(h5["/nodes/B/node_type_id"], np.full(5, -1))
-
 
 def test__get_node_id_mapping():
     split_nodes = {
@@ -507,133 +630,6 @@ def test_get_subcircuit_external_ids(monkeypatch):
     pd.testing.assert_frame_equal(expected, get_ids(wanted_src_ids, wanted_dst_ids))
 
 
-def _find_populations_by_path(networks, key, name):
-    populations = {
-        k: v
-        for population in networks[key]
-        for k, v in population["populations"].items()
-        if population[f"{key}_file"] == name
-    }
-    return populations
-
-
-def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=False):
-    mapping = load_json(path / "id_mapping.json")
-
-    def _orig_id_map(ids, pop):
-        orig_offset = {"A": 1000, "B": 2000, "C": 3000, "V1": 8000, "V2": 9000}
-        if from_subcircuit:
-            return [_id + orig_offset[pop] for _id in ids]
-        else:
-            return ids
-
-    def _orig_name_map(name):
-        if from_subcircuit:
-            return "All" + name
-        else:
-            return name
-
-    assert mapping["A"] == {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": _orig_id_map([0, 2, 4], "A"), "original_name": _orig_name_map("A")}
-    assert mapping["B"] == {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "B", "original_id": _orig_id_map([0, 2, 4, 5], "B"), "original_name": _orig_name_map("B")}
-    assert mapping["C"] == {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "C", "original_id": _orig_id_map([0, 2, 4, 5], "C"), "original_name": _orig_name_map("C")}
-
-    with h5py.File(path / "nodes" / "nodes.h5", "r") as h5:
-        nodes = h5["nodes"]
-        for src in ("A", "B", "C"):
-            assert src in nodes
-            mtypes = utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
-            assert np.all(mtypes == b"a")
-                
-
-        assert len(nodes["A/node_type_id"]) == 3
-        assert len(nodes["B/node_type_id"]) == 4
-        assert len(nodes["C/node_type_id"]) == 4
-
-    with h5py.File(path / "edges" / "edges.h5", "r") as h5:
-        edges = h5["edges"]
-
-        assert "A__B" in edges
-        assert list(edges["A__B"]["source_node_id"]) == [0, 0, 0]
-        assert list(edges["A__B"]["target_node_id"]) == [0, 0, 1]  # 2nd is duplicate edge
-
-        assert "B__A" not in edges
-
-        assert "A__C" in edges
-        assert list(edges["A__C"]["source_node_id"]) == [2]
-        assert list(edges["A__C"]["target_node_id"]) == [2]
-
-        assert "B__C" in edges
-        assert list(edges["B__C"]["source_node_id"]) == [1]
-        assert list(edges["B__C"]["target_node_id"]) == [1]
-
-        assert "C__A" in edges
-        assert list(edges["C__A"]["source_node_id"]) == [2]
-        assert list(edges["C__A"]["target_node_id"]) == [2]
-
-        assert "C__B" not in edges
-
-        config = load_json(path / "circuit_config.json")
-
-        assert "manifest" in config
-        assert config["manifest"]["$BASE_DIR"] == "./"
-        assert "networks" in config
-        assert "nodes" in config["networks"]
-        node_pops = _find_populations_by_path(
-            config["networks"], "nodes", "$BASE_DIR/nodes/nodes.h5"
-        )
-        assert node_pops == {
-            "A": {"type": "biophysical"},
-            "B": {"type": "biophysical"},
-            "C": {"type": "biophysical"},
-        }
-        assert "edges" in config["networks"]
-        edge_pops = _find_populations_by_path(
-            config["networks"], "edges", "$BASE_DIR/edges/edges.h5"
-        )
-        assert edge_pops == {
-            "A__B": {"type": "chemical"},
-            "A__C": {"type": "chemical"},
-            "B__C": {"type": "chemical"},
-            "C__A": {"type": "chemical"},
-        }   
-
-        virtual_node_count = sum(
-            population["type"] == "virtual"
-            for node in config["networks"]["nodes"]
-            for population in node["populations"].values()
-        )
-        if has_virtual or has_external:
-            assert virtual_node_count > 0
-        else:
-            assert virtual_node_count == 0
-            assert len(node_pops) == 3
-            assert len(edge_pops) == 4
-
-        node_sets = load_json(path / "node_sets.json")
-        assert node_sets == {
-            "mtype_a": {"mtype": "a"},
-            "mtype_b": {"mtype": "b"},
-            "someA": {"node_id": [0, 1], "population": "A"},
-            "allB": {"node_id": [0, 1, 2, 3], "population": "B"},
-            "someB": {"node_id": [1, 2], "population": "B"},
-            "noC": {"node_id": [], "population": "C"},
-        }
-
-        expected_mapping = {
-            "A": {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": _orig_id_map([0, 2, 4], "A"), "original_name": _orig_name_map("A")},
-            "B": {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "B", "original_id": _orig_id_map([0, 2, 4, 5], "B"), "original_name": _orig_name_map("B")},
-            "C": {"new_id": [0, 1, 2, 3], "parent_id": [0, 2, 4, 5], "parent_name": "C", "original_id": _orig_id_map([0, 2, 4, 5], "C"), "original_name": _orig_name_map("C")},
-        }
-
-        if has_virtual:
-            expected_mapping["V1"] = {"new_id": [0, 1, 2], "parent_id": [0, 2, 3], "parent_name": "V1", "original_id": _orig_id_map([0, 2, 3], "V1"), "original_name": _orig_name_map("V1")}
-            expected_mapping["V2"] = {"new_id": [0], "parent_id": [0], "parent_name": "V2", "original_id": _orig_id_map([0], "V2"), "original_name": _orig_name_map("V2")}
-
-        if has_external:
-            expected_mapping["external_A"] = {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": _orig_id_map([5, 3], "A"), "original_name": _orig_name_map("A")}
-
-        mapping = load_json(path / "id_mapping.json")
-        assert mapping == expected_mapping
 
 
 @pytest.mark.parametrize(
