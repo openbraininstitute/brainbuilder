@@ -45,8 +45,7 @@ ORIG_NAME = "original_name"
 
 @dataclass
 class EdgeWriteConfig:
-    # h5in: str | Path
-    # h5out: str | Path
+
     src_node_name: str
     dst_node_name: str
     src_edge_name: str
@@ -55,10 +54,12 @@ class EdgeWriteConfig:
     dst_mapping: pd.DataFrame
     h5_read_chunk_size: int | None = None
     edge_mappings: dict[pd.DataFrame] | None = None
+    input_path: str | Path | None = None
+    output_path: str | Path | None = None
 
-    # def __post_init__(self):
-    #         self.h5in = Path(self.h5in) if not isinstance(self.h5in, Path) else self.h5in
-    #         self.h5out = Path(self.h5out) if not isinstance(self.h5out, Path) else self.h5out
+    def __post_init__(self):
+            self.input_path = Path(self.input_path) if isinstance(self.input_path, str) else self.input_path
+            self.output_path = Path(self.output_path) if isinstance(self.output_path, str) else self.output_path
 
 
 def _create_chunked_slices(length, chunk_size):
@@ -483,18 +484,18 @@ def _check_all_edges_used(h5in, written_edges):
 
 
 def _write_edges(
-    output,
-    edges_path,
+    output_path,
+    input_path,
     id_mapping,
     h5_read_chunk_size=None,
     expect_to_use_all_edges=True,
 ):
     """create all new edge populations in separate files"""
-    with h5py.File(edges_path, "r") as h5in:
+    with h5py.File(input_path, "r") as h5in:
         written_edges = 0
         for src_node_pop, dst_node_pop in it.product(id_mapping, id_mapping):
             edge_pop_name = _get_population_name(src_node_pop, dst_node_pop)
-            edge_file_name = os.path.join(output, _get_edge_file_name(edge_pop_name))
+            edge_file_name = os.path.join(output_path, _get_edge_file_name(edge_pop_name))
 
             L.debug("Writing to  %s", edge_file_name)
             with h5py.File(edge_file_name, "w") as h5out:
@@ -665,7 +666,7 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
 
 def _write_subcircuit_edges(
     output_path,
-    edges_path,
+    input_path,
     src_node_pop,
     dst_node_pop,
     src_edge_pop_name,
@@ -680,13 +681,8 @@ def _write_subcircuit_edges(
     populations existed in it any more
     If DELETED_EMPTY_EDGES_POPULATION is returned, the population was removed
     """
-    with h5py.File(edges_path, "r") as h5in:
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        is_file_empty = False
-        kept_indexes = None
 
-        with h5py.File(output_path, "a") as h5out:
-            edge_write_config = EdgeWriteConfig(
+    edge_write_config = EdgeWriteConfig(
                 src_node_name=src_node_pop,
                 dst_node_name=dst_node_pop,
                 src_edge_name=src_edge_pop_name,
@@ -694,8 +690,16 @@ def _write_subcircuit_edges(
                 src_mapping=src_mapping,
                 dst_mapping=dst_mapping,
                 edge_mappings=edge_mappings,
+                output_path=output_path,
+                input_path=input_path
             )
 
+    with h5py.File(input_path, "r") as h5in:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        is_file_empty = False
+        kept_indexes = None
+
+        with h5py.File(output_path, "a") as h5out:
             kept_indexes = _copy_edge_attributes(
                 h5in=h5in, h5out=h5out, edge_write_config=edge_write_config
             )
@@ -764,7 +768,7 @@ def _write_subcircuit_biological(
             )
             new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
                 output_path=str(output_path),
-                edges_path=edge.h5_filepath,
+                input_path=edge.h5_filepath,
                 src_node_pop=edge.source.name,
                 dst_node_pop=edge.target.name,
                 src_edge_pop_name=edge_pop_name,
@@ -782,7 +786,7 @@ def _write_subcircuit_biological(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
             output_path=str(output_path),
-            edges_path=edge.h5_filepath,
+            input_path=edge.h5_filepath,
             src_node_pop=edge.source.name,
             dst_node_pop=edge.target.name,
             src_edge_pop_name=edge_pop_name,
@@ -947,7 +951,7 @@ def _write_subcircuit_external(
 
         new_edges_files[new_name], kept_indexes = _write_subcircuit_edges(
             output_path=str(output_path),
-            edges_path=edge.h5_filepath,
+            input_path=edge.h5_filepath,
             src_node_pop=new_source_pop_name,
             dst_node_pop=edge.target.name,
             src_edge_pop_name=name,
@@ -973,7 +977,7 @@ def _write_subcircuit_external(
 
         new_edges_files[new_name], kept_indexes = _write_subcircuit_edges(
             output_path=str(output_path),
-            edges_path=edge.h5_filepath,
+            input_path=edge.h5_filepath,
             src_node_pop=new_source_pop_name,
             dst_node_pop=edge.target.name,
             src_edge_pop_name=name,
@@ -1062,7 +1066,7 @@ def _write_subcircuit_virtual(
             output_path=os.path.join(
                 output, edge_populations_to_paths[edge_pop_name]
             ),  # Where to write to
-            edges_path=edge.h5_filepath,  # Where to read from
+            input_path=edge.h5_filepath,  # Where to read from
             src_node_pop=edge.source.name,
             dst_node_pop=edge.target.name,
             src_edge_pop_name=edge_pop_name,
@@ -1079,7 +1083,7 @@ def _write_subcircuit_virtual(
             output_path=os.path.join(
                 output, edge_populations_to_paths[edge_pop_name]
             ),  # Where to write to
-            edges_path=edge.h5_filepath,
+            input_path=edge.h5_filepath,
             src_node_pop=edge.source.name,
             dst_node_pop=edge.target.name,
             src_edge_pop_name=edge_pop_name,
