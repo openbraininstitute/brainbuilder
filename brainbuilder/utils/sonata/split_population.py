@@ -296,8 +296,20 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
 
 
 def _compute_syn_mask(syn_ids, syn_pops, edge_mappings):
-    mask = np.zeros(len(syn_ids), dtype=bool)
+    """
+    Return a boolean mask selecting synapse IDs present in the
+    population-specific edge mappings.
 
+    Args:
+        syn_ids (np.ndarray): Synapse IDs.
+        syn_pops (np.ndarray): Population labels (aligned with `syn_ids`).
+        edge_mappings (dict[str, pandas.DataFrame]):
+            Per-population mappings indexed by synapse ID.
+
+    Returns:
+        np.ndarray: Boolean mask of valid synapses.
+    """
+    mask = np.zeros(len(syn_ids), dtype=bool)
     for pop in np.unique(syn_pops):
         pop_idx = np.flatnonzero(syn_pops == pop)
 
@@ -324,7 +336,7 @@ def _add_synapse_id_override(sl_mask, edge_mappings, orig_group):
         new_syn_ids = np.empty_like(old_ids, dtype=int)
 
         # build a Series: old_id -> new_id
-        mapping_series = pd.concat([df["new_id"] for df in edge_mappings.values()])
+        mapping_series = pd.concat([df[NEW_IDS] for df in edge_mappings.values()])
 
         # map all old_ids at once
         new_syn_ids = mapping_series.reindex(old_ids).to_numpy(dtype=int)
@@ -381,11 +393,12 @@ def _collect_sl_and_masks(orig_edges, h5_read_chunk_size, sgids_new, tgids_new, 
         mask = sgid_mask & tgid_mask
 
         if edge_mappings is not None:
-            syn_ids = orig_edges["0/synapse_id"][sl]
-            syn_pops = utils.get_property(
-                orig_edges["0"], orig_edges["0/synapse_population"][sl], "synapse_population"
-            )
 
+            orig_group = orig_edges[GROUP_NAME]
+            syn_ids = orig_group["synapse_id"][sl]
+            syn_pops = utils.get_property(
+                orig_group, orig_group["synapse_population"][sl], "synapse_population"
+            )
             syn_mask = _compute_syn_mask(syn_ids, syn_pops, edge_mappings)
             mask &= syn_mask
 
@@ -414,7 +427,7 @@ def _collect_lib_id_mapping(sl_mask, group0):
             if all_ids:
                 all_ids = np.unique(np.concatenate(all_ids))
                 lib_id_mapping[name] = pd.DataFrame(
-                    {"new_id": np.arange(len(all_ids), dtype=np.int64)}, index=all_ids
+                    {NEW_IDS: np.arange(len(all_ids), dtype=np.int64)}, index=all_ids
                 )
 
     return lib_id_mapping
@@ -914,7 +927,6 @@ def _write_subcircuit_external(
             output_path,
         )
 
-        # TODO tripartite connection
         new_edges_files[new_name], kept_indexes = _write_subcircuit_edges(
             output_path=str(output_path),
             edges_path=edge.h5_filepath,
@@ -941,7 +953,6 @@ def _write_subcircuit_external(
             output_path,
         )
 
-        # TODO tripartite connection
         new_edges_files[new_name], kept_indexes = _write_subcircuit_edges(
             output_path=str(output_path),
             edges_path=edge.h5_filepath,
@@ -1029,7 +1040,6 @@ def _write_subcircuit_virtual(
         if edge.type == "synapse_astrocyte":
             continue
 
-        # TODO write
         new_edges_files[edge_pop_name], kept_indexes = _write_subcircuit_edges(
             output_path=os.path.join(
                 output, edge_populations_to_paths[edge_pop_name]

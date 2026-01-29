@@ -35,6 +35,35 @@ def make_edge_mapping_df(old_ids):
         index=old_ids
     )
 
+def dict_to_h5_group(data: dict, tmp_path, root_name="root"):
+    """
+    Convert a nested dict into a real h5py.Group.
+
+    - dict → group
+    - numpy array / list → dataset
+    - strings → UTF-8 datasets
+    """
+    h5file = tmp_path / "test.h5"
+
+    def _write(group, obj):
+        for k, v in obj.items():
+            if isinstance(v, dict):
+                sub = group.create_group(str(k))
+                _write(sub, v)
+            else:
+                arr = np.asarray(v)
+                if arr.dtype.kind in {"U", "O"}:
+                    arr = arr.astype("S")
+                group.create_dataset(str(k), data=arr)
+
+    with h5py.File(h5file, "w") as f:
+        root = f.create_group(root_name)
+        _write(root, data)
+
+    # reopen read-only (realistic usage)
+    f = h5py.File(h5file, "r")
+    return f[root_name]
+
 # -------------------------------
 # Fixtures / Test data
 # -------------------------------
@@ -67,14 +96,13 @@ def test_add_synapse_id_override_basic(edge_mappings, orig_group_mock, sl_mask_m
     np.testing.assert_array_equal(override_map["synapse_id"], expected_new_ids)
 
 
-def test_collect_sl_and_masks_basic():
+def test_collect_sl_and_masks_basic(tmp_path):
     orig_edges = {
         "source_node_id": np.array([1, 2, 3, 4]),
         "target_node_id": np.array([10, 20, 30, 40]),
-        "0/synapse_id": np.array([100, 101, 102, 103]),
-        "0/synapse_population": np.array(["A", "A", "B", "B"]),
-        "0": {}  # placeholder for utils.get_property
+        "0": {"synapse_id": np.array([100, 101, 102, 103]),"synapse_population": np.array(["A", "A", "B", "B"]),}  # placeholder for utils.get_property
     }
+    orig_edges = dict_to_h5_group(orig_edges, tmp_path)
     sgids_new = np.array([1, 3])
     tgids_new = np.array([10, 30])
 
