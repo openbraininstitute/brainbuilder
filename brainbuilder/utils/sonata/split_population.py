@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import voxcell
 from joblib import Parallel, delayed
+from dataclasses import dataclass
 
 from brainbuilder.utils import utils
 
@@ -40,6 +41,24 @@ ORIG_IDS = "original_id"
 PARENT_NAME = "parent_name"
 # name of field with node population name in original circuit
 ORIG_NAME = "original_name"
+
+
+@dataclass
+class EdgeWriteConfig:
+    # h5in: str | Path
+    # h5out: str | Path
+    src_node_name: str
+    dst_node_name: str
+    src_edge_name: str
+    dst_edge_name: str
+    src_mapping: pd.DataFrame
+    dst_mapping: pd.DataFrame
+    h5_read_chunk_size: int | None = None
+    edge_mappings: dict[pd.DataFrame] | None = None
+
+    # def __post_init__(self):
+    #         self.h5in = Path(self.h5in) if not isinstance(self.h5in, Path) else self.h5in
+    #         self.h5out = Path(self.h5out) if not isinstance(self.h5out, Path) else self.h5out
 
 
 def _create_chunked_slices(length, chunk_size):
@@ -202,18 +221,16 @@ def _h5_get_read_chunk_size():
     return int(os.environ.get("H5_READ_CHUNKSIZE", H5_READ_CHUNKSIZE))
 
 
-def _copy_edge_attributes(  # pylint: disable=too-many-arguments
-    h5in,
-    h5out,
-    src_node_name,
-    dst_node_name,
-    src_edge_name,
-    dst_edge_name,
-    src_mapping,
-    dst_mapping,
-    h5_read_chunk_size=None,
-    edge_mappings=None,
-):
+def _copy_edge_attributes(h5in: h5py.File, h5out: h5py.File, edge_write_config: EdgeWriteConfig):
+    src_node_name = edge_write_config.src_node_name
+    dst_node_name = edge_write_config.dst_node_name
+    src_edge_name = edge_write_config.src_edge_name
+    dst_edge_name = edge_write_config.dst_edge_name
+    src_mapping = edge_write_config.src_mapping
+    dst_mapping = edge_write_config.dst_mapping
+    h5_read_chunk_size = edge_write_config.h5_read_chunk_size
+    edge_mappings = edge_write_config.edge_mappings
+
     """Copy the attributes from the original edges into the new edge populations"""
     # pylint: disable=too-many-locals
     if h5_read_chunk_size is None:
@@ -393,7 +410,6 @@ def _collect_sl_and_masks(orig_edges, h5_read_chunk_size, sgids_new, tgids_new, 
         mask = sgid_mask & tgid_mask
 
         if edge_mappings is not None:
-
             orig_group = orig_edges[GROUP_NAME]
             syn_ids = orig_group["synapse_id"][sl]
             syn_pops = utils.get_property(
@@ -482,9 +498,7 @@ def _write_edges(
 
             L.debug("Writing to  %s", edge_file_name)
             with h5py.File(edge_file_name, "w") as h5out:
-                _copy_edge_attributes(
-                    h5in=h5in,
-                    h5out=h5out,
+                edge_write_config = EdgeWriteConfig(
                     src_node_name=src_node_pop,
                     dst_node_name=dst_node_pop,
                     src_edge_name=_get_unique_population(h5in["edges"]),
@@ -493,6 +507,8 @@ def _write_edges(
                     dst_mapping=id_mapping[dst_node_pop],
                     h5_read_chunk_size=h5_read_chunk_size,
                 )
+
+                _copy_edge_attributes(h5in=h5in, h5out=h5out, edge_write_config=edge_write_config)
                 edge_count, sgid_count, tgid_count = _get_node_counts(
                     h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
                 )
@@ -670,9 +686,7 @@ def _write_subcircuit_edges(
         kept_indexes = None
 
         with h5py.File(output_path, "a") as h5out:
-            kept_indexes = _copy_edge_attributes(
-                h5in=h5in,
-                h5out=h5out,
+            edge_write_config = EdgeWriteConfig(
                 src_node_name=src_node_pop,
                 dst_node_name=dst_node_pop,
                 src_edge_name=src_edge_pop_name,
@@ -680,6 +694,10 @@ def _write_subcircuit_edges(
                 src_mapping=src_mapping,
                 dst_mapping=dst_mapping,
                 edge_mappings=edge_mappings,
+            )
+
+            kept_indexes = _copy_edge_attributes(
+                h5in=h5in, h5out=h5out, edge_write_config=edge_write_config
             )
             edge_count, sgid_count, tgid_count = _get_node_counts(
                 h5out, dst_edge_pop_name, src_mapping, dst_mapping
@@ -937,7 +955,7 @@ def _write_subcircuit_external(
             src_mapping=wanted_src_ids,
             dst_mapping=id_mapping[edge.target.name],
         )
-        edge_mappings[name.encode('utf-8')] = kept_indexes
+        edge_mappings[name.encode("utf-8")] = kept_indexes
 
     for name, (new_source_pop_name, wanted_src_ids, new_name) in edge_info.items():
         edge = circuit.edges[name]
@@ -964,7 +982,7 @@ def _write_subcircuit_external(
             dst_mapping=id_mapping[edge.target.name],
             edge_mappings=edge_mappings,
         )
-        edge_mappings[name.encode('utf-8')] = kept_indexes
+        edge_mappings[name.encode("utf-8")] = kept_indexes
 
     return new_node_files, new_edges_files
 
@@ -1323,5 +1341,3 @@ def split_subcircuit(
     # $BASE_DIR for entries in "provenance"..? So I don't even try.
     config.setdefault("components", {}).setdefault("provenance", {})["id_mapping"] = mapping_fn
     utils.dump_json(output / "circuit_config.json", config)
-
-

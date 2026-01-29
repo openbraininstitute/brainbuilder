@@ -1010,9 +1010,7 @@ def test_copy_edge_attributes_advanced(tmp_path):
     # Run
     # ----------------------
     with h5py.File(infile, "r") as h5in, h5py.File(outfile, "w") as h5out:
-        keep = split_population._copy_edge_attributes(
-            h5in=h5in,
-            h5out=h5out,
+        edge_write_config = split_population.EdgeWriteConfig(
             src_node_name="src",
             dst_node_name="dst",
             src_edge_name="pop_name",
@@ -1021,6 +1019,11 @@ def test_copy_edge_attributes_advanced(tmp_path):
             dst_mapping=mapping,
             h5_read_chunk_size=3,  # FORCE chunking
             edge_mappings=edge_mappings
+        )
+        keep = split_population._copy_edge_attributes(
+            h5in=h5in,
+            h5out=h5out,
+edge_write_config=edge_write_config
         )
 
     # ----------------------
@@ -1140,9 +1143,7 @@ def test_copy_edge_attributes_empty_edge_mapping(tmp_path):
     # Run
     # ----------------------
     with h5py.File(infile, "r") as h5in, h5py.File(outfile, "w") as h5out:
-        keep = split_population._copy_edge_attributes(
-            h5in=h5in,
-            h5out=h5out,
+        edge_write_config = split_population.EdgeWriteConfig(
             src_node_name="src",
             dst_node_name="dst",
             src_edge_name="pop_name",
@@ -1151,6 +1152,11 @@ def test_copy_edge_attributes_empty_edge_mapping(tmp_path):
             dst_mapping=mapping,
             h5_read_chunk_size=3,
             edge_mappings=edge_mappings
+        )
+        keep = split_population._copy_edge_attributes(
+            h5in=h5in,
+            h5out=h5out,
+edge_write_config=edge_write_config
         )
 
     # ----------------------
