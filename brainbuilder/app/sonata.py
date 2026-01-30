@@ -363,6 +363,33 @@ def split_subcircuit(nodeset, circuit, include_virtual, create_external, output)
         )
     )
 
+@app.command()
+@click.option("--nodeset", required=True, help="Name of nodeset")
+@click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
+@click.option(
+    "--include-virtual/--no-include-virtual",
+    default=False,
+    help="Extract virtual nodes that project into the extracted subcircuit",
+)
+@click.option(
+    "--create-external/--no-create-external",
+    default=False,
+    help="Extract external connections; ones that are non-virtual, but sourced from"
+    "outside the extracted subcircuit - they become virtual nodes",
+)
+@click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
+def extract_subcircuit(nodeset, circuit, include_virtual, create_external, output):
+    """Extract a fully independant subcircuit out from a SONATA circuit based on node_set"""
+    from brainbuilder.utils.sonata import split_population as module
+
+    module.extract_subcircuit(
+        output,
+        node_set_name=nodeset,
+        circuit_path=circuit,
+        do_virtual=include_virtual,
+        create_external=create_external,
+    )
+
 
 @app.command()
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")

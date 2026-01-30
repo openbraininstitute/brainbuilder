@@ -1306,3 +1306,60 @@ def split_subcircuit(
     # $BASE_DIR for entries in "provenance"..? So I don't even try.
     config.setdefault("components", {}).setdefault("provenance", {})["id_mapping"] = mapping_fn
     utils.dump_json(output / "circuit_config.json", config)
+
+def _recursive_replace_in_json_dict(config_dict: dict, old_base: str, new_base: str) -> None:
+    """TODO"""
+    old_base = str(Path(old_base).resolve())
+    for key, value in config_dict.items():
+        if isinstance(value, str):
+            if value == old_base:
+                config_dict[key] = ""
+            else:
+                config_dict[key] = value.replace(old_base, new_base)
+        elif isinstance(value, dict):
+            _recursive_replace_in_json_dict(value, old_base, new_base)
+        elif isinstance(value, list):
+            for _v in value:
+                _recursive_replace_in_json_dict(_v, old_base, new_base)
+
+def _rebase_config_file(new_file_path: str, old_file_path: str) -> None:
+    """
+    TODO
+    """
+
+    L.debug("Rebasing in place %s", new_file_path)
+
+    old_config = utils.load_json(old_file_path)
+    old_base = Path(old_file_path).parent
+
+    # Compute basedir
+    basedir = Path(old_config.get("manifest", {}).get("$BASE_DIR", "."))
+    basedir = (basedir if basedir.is_absolute() else old_base / basedir).resolve()
+
+    new_config = utils.load_json(new_file_path)
+
+    _recursive_replace_in_json_dict(new_config, basedir, "$BASEDIR")
+
+    utils.dump_json(new_file_path, new_config)
+
+
+def extract_subcircuit(
+    output,
+    node_set_name,
+    circuit_path,
+    do_virtual,
+    create_external,
+    list_of_virtual_sources_to_ignore=(),
+):
+    
+    split_subcircuit(output=output,
+                     node_set_name=node_set_name,
+                     circuit=circuit_path,
+                     do_virtual=do_virtual,
+                     create_external=create_external,
+                     list_of_virtual_sources_to_ignore=list_of_virtual_sources_to_ignore
+                     )
+    _rebase_config_file(new_file_path=Path(output)/"circuit_config.json", old_file_path=circuit_path)
+    
+    
+
