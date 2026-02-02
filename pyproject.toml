@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
-    "bluepysnap>=1.0.3",
+    "bluepysnap>=3.0.2",
     "click>=7.0,<9.0",
     "h5py>=3.1.0",
     "joblib>=1.0.1",
