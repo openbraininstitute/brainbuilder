@@ -11,7 +11,7 @@ from numpy.testing import assert_array_equal
 from brainbuilder.utils.utils import load_json
 from brainbuilder.utils.sonata import split_population
 import bluepysnap
-from brainbuilder.utils import utils
+from brainbuilder.utils.sonata import utils as sonata_utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
 
@@ -127,7 +127,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
         nodes = h5["nodes"]
         for src in ("A", "B", "C"):
             assert src in nodes
-            mtypes = utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
+            mtypes = sonata_utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
             assert np.all(mtypes == b"a")
                 
 
@@ -630,8 +630,6 @@ def test_get_subcircuit_external_ids(monkeypatch):
     pd.testing.assert_frame_equal(expected, get_ids(wanted_src_ids, wanted_dst_ids))
 
 
-
-
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
@@ -800,7 +798,7 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
         nodes = h5["nodes"]
         for src in ("A", ):  # Cagegorical m-types, i.e., @library created by Voxcell (#unique < 0.5 * #total)
             assert src in nodes
-            mtypes = utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
+            mtypes = sonata_utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
             assert np.all(mtypes == b"b")
         for src in ("B", "C"):  # Non-cagegorical m-types, i.e., @library not created by Voxcell (not #unique < 0.5 * #total)
             assert src in nodes

@@ -1311,6 +1311,7 @@ def split_subcircuit(
 
     return circuit
 
+
 def _recursive_replace_in_json_dict(config_dict: dict, old_base: str, new_base: str) -> None:
     """Recursively replace old_base with new_base in a dict or nested lists."""
     old_base = str(Path(old_base).resolve())
@@ -1325,6 +1326,7 @@ def _recursive_replace_in_json_dict(config_dict: dict, old_base: str, new_base: 
         elif isinstance(value, list):
             for _v in value:
                 _recursive_replace_in_json_dict(_v, old_base, new_base)
+
 
 def _rebase_config_file(new_file_path: str, old_file_path: str) -> None:
     """Rebase paths in new_file_path, replacing old config paths with $BASEDIR from old_file_path."""
@@ -1343,6 +1345,7 @@ def _rebase_config_file(new_file_path: str, old_file_path: str) -> None:
     _recursive_replace_in_json_dict(new_config, basedir, "$BASE_DIR")
 
     utils.dump_json(new_file_path, new_config)
+
 
 def _get_pop_morph_dirs(
     pop_name: str, pop: bluepysnap.nodes.NodePopulation, original_circuit: bluepysnap.Circuit
@@ -1366,7 +1369,8 @@ def _get_pop_morph_dirs(
             continue
         if (
             Path(morph_folder).is_dir()
-            and sum(1 for p in Path(morph_folder).iterdir() if p.suffix.lower() == f".{_morph_ext}") == 0
+            and sum(1 for p in Path(morph_folder).iterdir() if p.suffix.lower() == f".{_morph_ext}")
+            == 0
         ):
             # Morphology folder does not contain morphologies
             continue
@@ -1375,6 +1379,7 @@ def _get_pop_morph_dirs(
         # TODO: Should not use private function!!
         src_morph_dirs[_morph_ext] = morph_folder
     return src_morph_dirs, dest_morph_dirs
+
 
 def _copy_pop_morphologies(
     pop_name: str, pop: bluepysnap.nodes.NodePopulation, original_circuit: bluepysnap.Circuit
@@ -1398,9 +1403,7 @@ def _copy_pop_morphologies(
             # https://github.com/openbraininstitute/obi-one/issues/387
 
             # Copy containerized morphologies into new container
-            Path(os.path.split(dest_morph_dirs[_morph_ext])[0]).mkdir(
-                parents=True, exist_ok=True
-            )
+            Path(os.path.split(dest_morph_dirs[_morph_ext])[0]).mkdir(parents=True, exist_ok=True)
             src_container = _src_dir
             dest_container = dest_morph_dirs[_morph_ext]
             with (
@@ -1431,9 +1434,7 @@ def _copy_pop_morphologies(
                 morphology_list, desc=f"Copying .{_morph_ext} morphologies"
             ):
                 src_file = Path(_src_dir) / f"{morphology_name}.{_morph_ext}"
-                dest_file = (
-                    Path(dest_morph_dirs[_morph_ext]) / f"{morphology_name}.{_morph_ext}"
-                )
+                dest_file = Path(dest_morph_dirs[_morph_ext]) / f"{morphology_name}.{_morph_ext}"
                 if not Path(src_file).exists():
                     msg = f"ERROR: Morphology '{src_file}' missing!"
                     raise ValueError(msg)
@@ -1484,6 +1485,7 @@ def _copy_mod_files(circuit_path: str, output_root: str) -> None:
     else:
         L.info("No mod files to copy: skip")
 
+
 def extract_subcircuit(
     output,
     node_set_name,
@@ -1494,14 +1496,15 @@ def extract_subcircuit(
     list_of_virtual_sources_to_ignore=(),
 ):
     """Extract a subcircuit and copy all required assets (morphologies, HOC, mod files)."""
-    original_circuit = split_subcircuit(output=output,
-                     node_set_name=node_set_name,
-                     circuit=circuit_path,
-                     do_virtual=do_virtual,
-                     create_external=create_external,
-                     list_of_virtual_sources_to_ignore=list_of_virtual_sources_to_ignore
-                     )
-    new_circuit_path = Path(output)/"circuit_config.json"
+    original_circuit = split_subcircuit(
+        output=output,
+        node_set_name=node_set_name,
+        circuit=circuit_path,
+        do_virtual=do_virtual,
+        create_external=create_external,
+        list_of_virtual_sources_to_ignore=list_of_virtual_sources_to_ignore,
+    )
+    new_circuit_path = Path(output) / "circuit_config.json"
     _rebase_config_file(new_file_path=new_circuit_path, old_file_path=circuit_path)
 
     new_circuit = bluepysnap.Circuit(new_circuit_path)
@@ -1511,7 +1514,3 @@ def extract_subcircuit(
     _copy_mod_files(circuit_path=circuit_path, output_root=output)
 
     L.info("Extraction DONE")
-
-    
-    
-
