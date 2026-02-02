@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 
 from brainbuilder.app._utils import REQUIRED_PATH, REQUIRED_PATH_DIR
-from brainbuilder.utils import dump_json, load_json
+from brainbuilder.utils.utils import dump_json, load_json
 
 
 def _get_morphs_with_full_path(nodes_path, morph_path):
@@ -316,6 +316,19 @@ def simple_split_subcircuit(nodeset, nodeset_path, nodes, edges, output):
 
 
 @app.command()
+@click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
+@click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
+def repair_ngv_circuit(circuit, output):
+    """Repair neuroglial SONATA edge file"""
+    from brainbuilder.utils.sonata import repair_ngv_circuit as module
+
+    module.repair_ngv_circuit(
+        circuit=circuit,
+        output=output,
+    )
+
+
+@app.command()
 @click.option("--nodeset", required=True, help="Name of nodeset")
 @click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
 @click.option(
@@ -337,7 +350,7 @@ def split_subcircuit(nodeset, circuit, include_virtual, create_external, output)
     module.split_subcircuit(
         output,
         node_set_name=nodeset,
-        circuit_config_path=circuit,
+        circuit=circuit,
         do_virtual=include_virtual,
         create_external=create_external,
     )
@@ -348,6 +361,40 @@ def split_subcircuit(nodeset, circuit, include_virtual, create_external, output)
             "to reflect the location of all necessary files",
             fg="green",
         )
+    )
+
+
+@app.command()
+@click.option("--nodeset", required=True, help="Name of nodeset")
+@click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
+@click.option(
+    "--include-virtual/--no-include-virtual",
+    default=False,
+    help="Extract virtual nodes that project into the extracted subcircuit",
+)
+@click.option(
+    "--create-external/--no-create-external",
+    default=False,
+    help="Extract external connections; ones that are non-virtual, but sourced from"
+    "outside the extracted subcircuit - they become virtual nodes",
+)
+@click.option(
+    "--validate/--no-validate",
+    default=True,
+    help="Validate extracted subcircuit",
+)
+@click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
+def extract_subcircuit(nodeset, circuit, include_virtual, create_external, validate, output):
+    """Extract a fully independant subcircuit out from a SONATA circuit based on node_set"""
+    from brainbuilder.utils.sonata import split_population as module
+
+    module.extract_subcircuit(
+        output,
+        node_set_name=nodeset,
+        circuit_path=circuit,
+        do_virtual=include_virtual,
+        create_external=create_external,
+        validate=validate,
     )
 
 

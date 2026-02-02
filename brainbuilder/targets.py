@@ -7,7 +7,7 @@ import voxcell
 from voxcell.nexus.voxelbrain import Atlas
 
 from brainbuilder.exceptions import BrainBuilderError
-from brainbuilder.utils import load_yaml
+from brainbuilder.utils.utils import load_yaml
 
 
 def load_atlas(atlas_path, atlas_cache_path):

@@ -11,7 +11,7 @@ from pandas.errors import ParserError
 from voxcell import CellCollection
 
 from brainbuilder.exceptions import BrainBuilderError
-from brainbuilder.utils import load_yaml
+from brainbuilder.utils.utils import load_yaml
 
 NEURONDB_COLUMNS = ["morphology", "layer", "mtype"]
 EXTNEURONDB_COLUMNS = NEURONDB_COLUMNS + ["etype", "me_combo"]

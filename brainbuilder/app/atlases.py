@@ -12,7 +12,7 @@ import numpy as np
 from voxcell import VoxelData, math_utils
 
 from brainbuilder.masks import regular_convex_polygon_mask_from_side
-from brainbuilder.utils import dump_json
+from brainbuilder.utils.utils import dump_json
 
 L = logging.getLogger("brainbuilder")
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import jsonschema
 
-from brainbuilder.utils import dump_json
+from brainbuilder.utils.utils import dump_json
 
 # minimal nodes schema to validate data before building the sonata configuration
 nodes_schema = {

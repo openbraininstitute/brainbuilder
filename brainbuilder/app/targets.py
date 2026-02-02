@@ -10,7 +10,8 @@ import voxcell
 import brainbuilder
 import brainbuilder.targets
 from brainbuilder.exceptions import BrainBuilderError
-from brainbuilder.utils import bbp, dump_json
+from brainbuilder.utils import bbp
+from brainbuilder.utils.utils import dump_json
 
 L = logging.getLogger("brainbuilder")
 

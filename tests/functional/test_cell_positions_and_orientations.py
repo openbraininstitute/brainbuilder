@@ -10,7 +10,7 @@ from click.testing import CliRunner
 from voxcell import CellCollection, VoxelData  # type: ignore
 
 import brainbuilder.app.cells as tested
-from brainbuilder.utils import dump_yaml
+from brainbuilder.utils.utils import dump_yaml
 
 
 def get_result(runner):

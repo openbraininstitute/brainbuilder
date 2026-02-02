@@ -8,7 +8,7 @@ import click
 import h5py
 import numpy as np
 
-from brainbuilder import utils
+from brainbuilder.utils import utils
 
 L = logging.getLogger(__name__)
 
