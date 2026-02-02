@@ -7,18 +7,18 @@ import itertools as it
 import logging
 import math
 import os
-from pathlib import Path
 import shutil
-import tqdm
+from dataclasses import dataclass
+from pathlib import Path
 
 import bluepysnap
 import h5py
 import libsonata
 import numpy as np
 import pandas as pd
+import tqdm
 import voxcell
 from joblib import Parallel, delayed
-from dataclasses import dataclass
 
 from brainbuilder.utils import utils
 

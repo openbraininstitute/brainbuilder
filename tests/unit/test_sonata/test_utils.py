@@ -1,9 +1,9 @@
 
-from brainbuilder.utils import utils
-
+import numpy as np
 import pytest
 
-import numpy as np
+from brainbuilder.utils import utils
+
 
 # Mock h5py.Group
 class MockGroup(dict):

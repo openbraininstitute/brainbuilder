@@ -1,10 +1,11 @@
-from brainbuilder.utils import utils
-from pathlib import Path
-import bluepysnap
 import logging
+from pathlib import Path
+
+import bluepysnap
+import h5py
 import numpy as np
 
-import h5py
+from brainbuilder.utils import utils
 
 L = logging.getLogger(__name__)
 

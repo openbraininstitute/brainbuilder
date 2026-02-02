@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """libraries of common functionality for circuit building"""
 
-from pathlib import Path
 import json
+from pathlib import Path
 
-import yaml
 import numpy as np
+import yaml
 
 
 def gather_layout_from_networks(networks):

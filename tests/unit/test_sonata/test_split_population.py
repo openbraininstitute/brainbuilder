@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from pathlib import Path
 
+import bluepysnap
 import h5py
 import numpy as np
 import pandas as pd
@@ -8,10 +9,9 @@ import pytest
 import utils as test_utils
 from numpy.testing import assert_array_equal
 
-from brainbuilder.utils.utils import load_json
 from brainbuilder.utils.sonata import split_population
-import bluepysnap
 from brainbuilder.utils.sonata import utils as sonata_utils
+from brainbuilder.utils.utils import load_json
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
 

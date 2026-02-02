@@ -7,7 +7,7 @@ import morphio
 import numpy as np
 import pytest
 
-from brainbuilder.utils import utils, bbp
+from brainbuilder.utils import bbp, utils
 from brainbuilder.utils.sonata import curate
 from brainbuilder.utils.sonata import utils as sonata_utils
 
