@@ -4,8 +4,8 @@ from pathlib import Path
 import bluepysnap
 import h5py
 
-from brainbuilder.utils.sonata import layout
 from brainbuilder.utils import hdf5
+from brainbuilder.utils.sonata import layout
 
 L = logging.getLogger(__name__)
 
