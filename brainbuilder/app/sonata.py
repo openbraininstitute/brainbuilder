@@ -301,6 +301,19 @@ def split_population(attribute, nodes, edges, output):
 
 
 @app.command()
+@click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")
+@click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
+def repair_circuit(circuit, output):
+    """Repair neuroglial SONATA edge file"""
+    from brainbuilder.utils.sonata import repair_circuit as module
+
+    module.repair_circuit(
+        circuit=circuit,
+        output=output,
+    )
+
+
+@app.command()
 @click.option("--nodeset", required=True, help="Name of nodeset")
 @click.option(
     "--nodeset-path", required=True, type=REQUIRED_PATH, help="path to node_sets.json file"
