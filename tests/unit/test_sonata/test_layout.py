@@ -2,6 +2,7 @@
 
 from brainbuilder.utils.sonata import layout
 
+
 def test__gather_layout_from_networks():
     res = layout._gather_layout_from_networks({"nodes": [], "edges": []})
     assert res == ({}, {})
