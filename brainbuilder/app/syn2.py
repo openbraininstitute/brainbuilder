@@ -8,7 +8,7 @@ import click
 import h5py
 import numpy as np
 
-from brainbuilder import utils
+from brainbuilder.utils import hdf5
 
 L = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def _concat_h5(output, sources):
 
         properties = _get_property_dtypes(sources[0])
         for name, dtype in properties.items():
-            utils.create_appendable_dataset(output_properties, name, dtype)
+            hdf5.create_appendable_dataset(output_properties, name, dtype)
 
         for source in sources:
             L.debug("Opening source: %s", source)
@@ -70,7 +70,7 @@ def _concat_h5(output, sources):
                 prop = h5[PROPERTIES_PATH]
                 for name in properties:
                     L.debug("Copying property[%s] %s", source, name)
-                    utils.append_to_dataset(output_properties[name], prop[name])
+                    hdf5.append_to_dataset(output_properties[name], prop[name])
 
 
 def _check_syn2_invariants(path, population, expected_properties, afferent_index=True):
