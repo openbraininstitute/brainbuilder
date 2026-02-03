@@ -18,6 +18,7 @@ import voxcell
 from joblib import Parallel, delayed
 
 from brainbuilder import utils
+from brainbuilder.utils import hdf5
 
 L = logging.getLogger(__name__)
 
@@ -144,12 +145,12 @@ def _init_edge_group(orig_group, new_group):
     """
     for name, attr in orig_group.items():
         if isinstance(attr, h5py.Dataset):
-            utils.create_appendable_dataset(new_group, name, attr.dtype)
+            hdf5.create_appendable_dataset(new_group, name, attr.dtype)
         elif isinstance(attr, h5py.Group) and name == "dynamics_params":
             new_group.create_group(name)
             for k, values in attr.items():
                 assert isinstance(values, h5py.Dataset), f"dynamics_params has an h5 subgroup: {k}"
-                utils.create_appendable_dataset(new_group[name], k, values.dtype)
+                hdf5.create_appendable_dataset(new_group[name], k, values.dtype)
         else:
             raise ValueError('Only "dynamics_params" group is expected')
 
@@ -165,11 +166,11 @@ def _populate_edge_group(orig_group, new_group, sl, mask):
     """
     for name, attr in orig_group.items():
         if isinstance(attr, h5py.Dataset):
-            utils.append_to_dataset(new_group[name], attr[sl][mask])
+            hdf5.append_to_dataset(new_group[name], attr[sl][mask])
         elif isinstance(attr, h5py.Group) and name == "dynamics_params":
             for k, values in attr.items():
                 if isinstance(values, h5py.Dataset):
-                    utils.append_to_dataset(new_group[name][k], values[sl][mask])
+                    hdf5.append_to_dataset(new_group[name][k], values[sl][mask])
         else:
             raise ValueError('Only "dynamics_params" group is expected')
 
@@ -208,8 +209,8 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
     new_edges = h5out.create_group("edges/" + dst_edge_name)
     new_group = new_edges.create_group(GROUP_NAME)
 
-    utils.create_appendable_dataset(new_edges, "source_node_id", np.uint64)
-    utils.create_appendable_dataset(new_edges, "target_node_id", np.uint64)
+    hdf5.create_appendable_dataset(new_edges, "source_node_id", np.uint64)
+    hdf5.create_appendable_dataset(new_edges, "target_node_id", np.uint64)
 
     new_edges["source_node_id"].attrs["node_population"] = src_node_name
     new_edges["target_node_id"].attrs["node_population"] = dst_node_name
@@ -239,10 +240,10 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
         mask = sgid_mask & tgid_mask
 
         if np.any(mask):
-            utils.append_to_dataset(
+            hdf5.append_to_dataset(
                 new_edges["source_node_id"], src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy()
             )
-            utils.append_to_dataset(
+            hdf5.append_to_dataset(
                 new_edges["target_node_id"], dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy()
             )
             _populate_edge_group(orig_group, new_group, sl, mask)
