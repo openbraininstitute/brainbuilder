@@ -1,10 +1,12 @@
-import pytest
-import h5py
-import numpy as np
 from pathlib import Path
 from types import SimpleNamespace
 
+import h5py
+import numpy as np
+import pytest
+
 from brainbuilder.utils.sonata import repair_circuit
+
 
 @pytest.fixture
 def sample_h5(tmp_path):
