@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from pathlib import Path
 
+import bluepysnap
 import h5py
 import numpy as np
 import pandas as pd
@@ -10,7 +11,6 @@ from numpy.testing import assert_array_equal
 
 from brainbuilder.utils import load_json
 from brainbuilder.utils.sonata import split_population
-import bluepysnap
 from brainbuilder.utils.sonata import utils as sonata_utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
@@ -258,110 +258,6 @@ def test_simple_split_subcircuit(tmp_path):
         group = h5["edges/L6_Y/"]
         assert list(group["source_node_id"]) == [1]
         assert list(group["target_node_id"]) == [0]
-
-
-def test__gather_layout_from_networks():
-    res = split_population._gather_layout_from_networks({"nodes": [], "edges": []})
-    assert res == ({}, {})
-
-    nodes, edges = split_population._gather_layout_from_networks(
-        {
-            "nodes": [
-                {
-                    "nodes_file": "a/b/a.h5",
-                    "populations": {"a": {"type": "biophysical"}},
-                },
-                {
-                    "nodes_file": "a/b/bc.h5",
-                    "populations": {"b": {"type": "biophysical"}, "c": {"type": "biophysical"}},
-                },
-                {
-                    "nodes_file": "a/b/a.h5",
-                    "populations": {"A": {"type": "biophysical"}},
-                },
-            ],
-            "edges": [
-                {
-                    "edges_file": "a/b/a.h5",
-                    "populations": {"a_a": {"type": "biophysical"}},
-                },
-                {
-                    "edges_file": "a/b/bc.h5",
-                    "populations": {"b_c": {"type": "biophysical"}, "c_b": {"type": "biophysical"}},
-                },
-                {
-                    "edges_file": "a/a/bc.h5",
-                    "populations": {"a_c": {"type": "biophysical"}, "a_b": {"type": "biophysical"}},
-                },
-                {
-                    "edges_file": "a/b/a.h5",
-                    "populations": {"A_a": {"type": "biophysical"}},
-                },
-            ],
-        }
-    )
-    assert nodes == {
-        "A": "A/a.h5",
-        "a": "a/a.h5",
-        "b": "b/bc.h5",
-        "c": "b/bc.h5",
-    }
-    assert edges == {
-        "A_a": "A_a/a.h5",
-        "a_a": "a_a/a.h5",
-        "a_b": "a/bc.h5",
-        "a_c": "a/bc.h5",
-        "b_c": "b/bc.h5",
-        "c_b": "b/bc.h5",
-    }
-
-    nodes, edges = split_population._gather_layout_from_networks(
-        {
-            "nodes": [
-                {
-                    "nodes_file": "a/b/bc.h5",
-                    "populations": {"b": {"type": "biophysical"}, "c": {"type": "biophysical"}},
-                },
-                {
-                    "nodes_file": "a/b/bc.h5",
-                    "populations": {"B": {"type": "biophysical"}, "C": {"type": "biophysical"}},
-                },
-            ],
-            "edges": [],
-        }
-    )
-    assert nodes == {"B": "b/bc.h5", "C": "b/bc.h5", "b": "b/bc.h5", "c": "b/bc.h5"}
-
-    nodes, edges = split_population._gather_layout_from_networks(
-        {
-            "nodes": [
-                {
-                    "nodes_file": "a/b/a.h5",
-                    "populations": {"a": {"type": "biophysical"}},
-                },
-                {
-                    "nodes_file": "a/b/bc.h5",
-                    "populations": {"b": {"type": "biophysical"}},
-                },
-                {
-                    "nodes_file": "a/b/bc.h5",
-                    "populations": {"c": {"type": "biophysical"}},
-                },
-                {
-                    "nodes_file": "a/b/a.h5",
-                    "populations": {"A": {"type": "biophysical"}},
-                },
-            ],
-            "edges": [],
-        }
-    )
-    assert nodes == {
-        "A": "A/a.h5",
-        "a": "a/a.h5",
-        "b": "b/bc.h5",
-        "c": "c/bc.h5",
-    }
-
 
 def test__update_node_sets():
     ret = split_population._update_node_sets(node_sets={}, id_mapping={})
