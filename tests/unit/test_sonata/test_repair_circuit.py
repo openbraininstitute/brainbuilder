@@ -14,7 +14,7 @@ def sample_h5(tmp_path):
     with h5py.File(path, "w") as f:
         grp = f.require_group("edges/pop_neuroglial/0")
         grp.create_dataset("synapse_id", data=np.arange(5))
-        grp.create_dataset("synapse_population", data=np.arange(5) + 10)
+        grp.create_dataset("synapse_population", data=np.full(5, b"pop_chemical"))
         grp.create_dataset("other_ds", data=np.ones(5))
     return path
 
@@ -38,15 +38,105 @@ def test_repair_neuroglial_edge_file(tmp_path, sample_h5, dummy_circuit):
     with h5py.File(out_file, "r") as f:
         grp = f["edges/pop_neuroglial/0"]
 
-        # Excluded datasets should not exist
-        assert "synapse_id" not in grp
+        # synapse_population must be removed
         assert "synapse_population" not in grp
 
-        # Other dataset should be copied
+        # synapse_id must exist and have attribute
+        assert "synapse_id" in grp
+        syn_id = grp["synapse_id"]
+        np.testing.assert_array_equal(syn_id[()], np.arange(5))
+        assert syn_id.attrs["edge_population"] == "pop_chemical"
+
+        # other datasets must be preserved
         assert "other_ds" in grp
         np.testing.assert_array_equal(grp["other_ds"][()], np.ones(5))
 
-        # target_edge_id exists and has correct data
-        target_ds = f["edges/pop_neuroglial/target_edge_id"]
-        np.testing.assert_array_equal(target_ds[()], np.arange(5))
-        assert target_ds.attrs["edge_population"] == "pop_chemical"
+def test_repair_neuroglial_edge_file_skips_if_already_repaired(tmp_path):
+    path = tmp_path / "input.h5"
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("edges/pop_neuroglial/0")
+        syn_id = grp.create_dataset("synapse_id", data=np.arange(3))
+        syn_id.attrs["edge_population"] = "pop_chemical"
+        grp.create_dataset("other_ds", data=np.ones(3))
+
+    edges = {
+        "pop_chemical": SimpleNamespace(type="chemical", h5_filepath=path),
+        "pop_neuroglial": SimpleNamespace(type="synapse_astrocyte", h5_filepath=path),
+    }
+    circuit = SimpleNamespace(edges=edges)
+
+    edge_pop_to_paths = {"pop_neuroglial": Path("pop_neuroglial.h5")}
+
+    repair_circuit._repair_neuroglial_edge_file(tmp_path, circuit, edge_pop_to_paths)
+
+    # Should skip entirely → no output file
+    assert not (tmp_path / "pop_neuroglial.h5").exists()
+
+def test_repair_aborts_on_multiple_synapse_populations(tmp_path):
+    path = tmp_path / "input.h5"
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("edges/pop_neuroglial/0")
+        grp.create_dataset("synapse_id", data=np.arange(4))
+        grp.create_dataset("synapse_population", data=np.array([1, 2, 1, 2]))
+
+    edges = {
+        "pop_chemical": SimpleNamespace(type="chemical", h5_filepath=path),
+        "pop_neuroglial": SimpleNamespace(type="synapse_astrocyte", h5_filepath=path),
+    }
+    circuit = SimpleNamespace(edges=edges)
+
+    with pytest.raises(RuntimeError, match="multiple synapse populations"):
+        repair_circuit._repair_neuroglial_edge_file(
+            tmp_path, circuit, {"pop_neuroglial": Path("out.h5")}
+        )
+
+def test_repair_fallback_on_empty_synapse_population(tmp_path):
+    path = tmp_path / "input.h5"
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("edges/pop_neuroglial/0")
+        grp.create_dataset("synapse_id", data=np.arange(3))
+        grp.create_dataset("synapse_population", data=np.array([], dtype=int))
+
+    edges = {
+        "pop_chemical": SimpleNamespace(type="chemical", h5_filepath=path),
+        "pop_neuroglial": SimpleNamespace(type="synapse_astrocyte", h5_filepath=path),
+    }
+    circuit = SimpleNamespace(edges=edges)
+
+    edge_pop_to_paths = {"pop_neuroglial": Path("out.h5")}
+
+    # Should succeed and fallback to chemical candidate
+    repair_circuit._repair_neuroglial_edge_file(tmp_path, circuit, edge_pop_to_paths)
+
+    out_file = tmp_path / "out.h5"
+    assert out_file.exists()
+
+    with h5py.File(out_file, "r") as f:
+        grp = f["edges/pop_neuroglial/0"]
+
+        # synapse_population removed
+        assert "synapse_population" not in grp
+
+        # synapse_id exists and has edge_population attribute from chemical
+        syn_id = grp["synapse_id"]
+        np.testing.assert_array_equal(syn_id[()], np.arange(3))
+        assert syn_id.attrs["edge_population"] == "pop_chemical"
+
+def test_repair_aborts_with_multiple_chemical_candidates(tmp_path):
+    path = tmp_path / "input.h5"
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("edges/pop_neuroglial/0")
+        grp.create_dataset("synapse_id", data=np.arange(2))
+
+    edges = {
+        "chem_1": SimpleNamespace(type="chemical", h5_filepath=path),
+        "chem_2": SimpleNamespace(type="chemical", h5_filepath=path),
+        "pop_neuroglial": SimpleNamespace(type="synapse_astrocyte", h5_filepath=path),
+    }
+    circuit = SimpleNamespace(edges=edges)
+
+    with pytest.raises(RuntimeError, match="chemical candidates"):
+        repair_circuit._repair_neuroglial_edge_file(
+            tmp_path, circuit, {"pop_neuroglial": Path("out.h5")}
+        )
+

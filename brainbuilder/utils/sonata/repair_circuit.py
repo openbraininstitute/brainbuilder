@@ -28,11 +28,17 @@ def repair_circuit(output, circuit):
 
 def _repair_neuroglial_edge_file(output, circuit, edge_pop_to_paths):
     """
-    Repair a neuroglial edge HDF5 file by copying its contents while excluding
-    `synapse_id` and `synapse_population`, then creating an appendable
-    `target_edge_id` dataset with the corresponding synapse edge population attribute.
+    Repair a neuroglial edge HDF5 file by normalizing how the synapse edge population
+    is stored.
+
+    Rules:
+    - If `synapse_id.attrs["edge_population"]` exists: file is already repaired → skip
+    - Else, if `synapse_population` dataset exists:
+        * if all values are identical → promote to attribute and drop dataset
+        * if values differ → abort (multiple populations per file not supported)
+    - Else, infer from chemical edge populations (must be exactly one)
     """
-    chemical_candidates = [name for name, e in circuit.edges.items() if e.type == "chemical"]
+    chemical_candidates = [n for n, e in circuit.edges.items() if e.type == "chemical"]
 
     for edge_pop_name, edge in circuit.edges.items():
         if edge.type != "synapse_astrocyte":
@@ -43,40 +49,50 @@ def _repair_neuroglial_edge_file(output, circuit, edge_pop_to_paths):
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         with h5py.File(edge_path, "r") as h5in:
-            orig_group = h5in["edges"][edge_pop_name]
+            group0 = h5in["edges"][edge_pop_name]["0"]
 
-            if "target_edge_id" in orig_group:
-                L.info(f"`{edge_pop_name}` already contains target_edge_id, skipping")
-                continue
-
-            group0 = orig_group["0"]
             if "synapse_id" not in group0:
-                L.warning(f"`{edge_pop_name}` missing synapse_id, cannot repair.")
+                L.warning(f"`{edge_pop_name}` missing synapse_id, cannot repair. Skipping")
                 continue
 
-            if len(chemical_candidates) != 1:
-                raise RuntimeError(
-                    f"Cannot infer synapse_population for repair, candidates={chemical_candidates}"
-                )
-            syn_pop = chemical_candidates[0]
+            syn_id = group0["synapse_id"]
 
-            # Exclude synapse_population and synapse_id
-            exclude_paths = {
-                f"edges/{edge_pop_name}/0/synapse_population",
-                f"edges/{edge_pop_name}/0/synapse_id",
-            }
+            # Already repaired
+            if "edge_population" in syn_id.attrs:
+                L.info(f"`{edge_pop_name}` already repaired. Skipping")
+                continue
+
+            syn_pop = None
+
+            # Try synapse_population dataset
+            if "synapse_population" in group0:
+                sp = group0["synapse_population"][()]
+                unique = set(sp.tolist())
+
+                if len(unique) == 1:
+                    syn_pop = unique.pop()
+                elif len(unique) > 1:
+                    raise RuntimeError(
+                        f"`{edge_pop_name}` contains multiple synapse populations "
+                        f"{sorted(unique)}. Multiple edge populations per single "
+                        "neuro-glial edge filefile are no longer supported. "
+                        "Split them into separate files."
+                    )
+
+            # Fallback: infer from chemical candidates
+            if syn_pop is None:
+                if len(chemical_candidates) != 1:
+                    raise RuntimeError(
+                        f"Cannot infer synapse_population for `{edge_pop_name}`, "
+                        f"chemical candidates={chemical_candidates}"
+                    )
+                syn_pop = chemical_candidates[0]
+
+            exclude_paths = {f"edges/{edge_pop_name}/0/synapse_population"}
 
             with h5py.File(output_path, "w") as h5out:
-                # Copy everything except excluded paths
+                # Copy everything except deprecated synapse_population
                 hdf5.copy_h5_filtered(h5in, h5out, exclude_paths=exclude_paths)
 
-                # Use appendable dataset for target_edge_id
-                src_ds = h5in[f"edges/{edge_pop_name}/0/synapse_id"]
-                dst_group = h5out[f"edges/{edge_pop_name}"]
-                dst_ds = hdf5.create_appendable_dataset(
-                    dst_group, "target_edge_id", dtype=src_ds.dtype
-                )
-                hdf5.append_to_dataset(dst_ds, src_ds[()])
-
-                # Add attribute
-                dst_ds.attrs["edge_population"] = syn_pop
+                # Attach canonical attribute
+                h5out[f"edges/{edge_pop_name}/0/synapse_id"].attrs["edge_population"] = syn_pop
