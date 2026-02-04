@@ -7,6 +7,7 @@ import itertools as it
 import logging
 import math
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import bluepysnap
@@ -19,7 +20,6 @@ from joblib import Parallel, delayed
 
 from brainbuilder import utils
 from brainbuilder.utils import hdf5
-from dataclasses import dataclass
 
 L = logging.getLogger(__name__)
 
