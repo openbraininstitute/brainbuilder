@@ -1332,7 +1332,6 @@ def extract_subcircuit(
     circuit_path,
     do_virtual,
     create_external,
-    validate,
     list_of_virtual_sources_to_ignore=(),
 ):
     """Extract a subcircuit and copy all required assets (morphologies, HOC, mod files)."""
@@ -1344,13 +1343,13 @@ def extract_subcircuit(
         create_external=create_external,
         list_of_virtual_sources_to_ignore=list_of_virtual_sources_to_ignore,
     )
-    new_circuit_path = Path(output) / "circuit_config.json"
-    _rebase_config_file(new_file_path=new_circuit_path, old_file_path=circuit_path)
+    # new_circuit_path = Path(output) / "circuit_config.json"
+    # _rebase_config_file(new_file_path=new_circuit_path, old_file_path=circuit_path)
 
-    new_circuit = bluepysnap.Circuit(new_circuit_path)
-    for pop_name, pop in new_circuit.nodes.items():
-        _copy_pop_morphologies(pop_name=pop_name, pop=pop, original_circuit=original_circuit)
-        _copy_pop_hoc_files(pop_name=pop_name, pop=pop, original_circuit=original_circuit)
-    _copy_mod_files(circuit_path=circuit_path, output_root=output)
+    # new_circuit = bluepysnap.Circuit(new_circuit_path)
+    # for pop_name, pop in new_circuit.nodes.items():
+    #     _copy_pop_morphologies(pop_name=pop_name, pop=pop, original_circuit=original_circuit)
+    #     _copy_pop_hoc_files(pop_name=pop_name, pop=pop, original_circuit=original_circuit)
+    # _copy_mod_files(circuit_path=circuit_path, output_root=output)
 
     L.info("Extraction DONE")

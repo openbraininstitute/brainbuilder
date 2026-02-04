@@ -365,13 +365,8 @@ def split_subcircuit(nodeset, circuit, include_virtual, create_external, output)
     help="Extract external connections; ones that are non-virtual, but sourced from"
     "outside the extracted subcircuit - they become virtual nodes",
 )
-@click.option(
-    "--validate/--no-validate",
-    default=True,
-    help="Validate extracted subcircuit",
-)
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
-def extract_subcircuit(nodeset, circuit, include_virtual, create_external, validate, output):
+def extract_subcircuit(nodeset, circuit, include_virtual, create_external, output):
     """Extract a fully independant subcircuit out from a SONATA circuit based on node_set"""
     from brainbuilder.utils.sonata import extract_subcircuit as module
 
@@ -381,7 +376,6 @@ def extract_subcircuit(nodeset, circuit, include_virtual, create_external, valid
         circuit_path=circuit,
         do_virtual=include_virtual,
         create_external=create_external,
-        validate=validate,
     )
 
 
