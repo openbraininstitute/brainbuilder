@@ -159,7 +159,7 @@ def _save_sonata_nodes(nodes_path, df, population_name):
     return nodes_path
 
 
-def _init_edge_group(orig_group: h5py.Group, new_group: h5py.Group, additional_attrs: dict[str, object]):
+def _init_edge_group(orig_group: h5py.Group, new_group: h5py.Group, additional_attrs):
     """Initialize an edge group by recreating appendable datasets and attrs.
 
     Copies the dataset layout from orig_group into new_group using appendable
@@ -189,14 +189,19 @@ def _init_edge_group(orig_group: h5py.Group, new_group: h5py.Group, additional_a
 
 
 def _populate_edge_group(orig_group, new_group, sl, mask, overrides):
-    """Populate the datasets from orig_group to new_group.
+    """Append filtered data from orig_group datasets into new_group.
+
+    Copies data chunk-by-chunk using the provided slice and boolean mask.
+    Dataset values can be replaced via overrides instead of being read from
+    the source. Also handles the "dynamics_params" subgroup recursively.
 
     Args:
-        orig_group (h5py.Group): original group, e.g. /edges/default/0
-        new_group (h5py.Group): new group, e.g. /edges/L2_X__L6_Y__chemical/0
-        sl (slice): slice used to select the dataset range
-        mask (np.ndarray): mask used to filter the dataset
-        TODO
+        orig_group (h5py.Group): Source edge group to read from.
+        new_group (h5py.Group): Destination edge group to append into.
+        sl (slice): Slice selecting the chunk range in each dataset.
+        mask (np.ndarray): Boolean mask applied to the sliced data.
+        overrides (dict[str, np.ndarray]): Optional mapping of dataset
+            name to precomputed values to append instead of ds[sl][mask].
     """
     for name, ds in orig_group.items():
         if isinstance(ds, h5py.Dataset):
@@ -859,6 +864,15 @@ def _write_subcircuit_external(
 
     Warning: this writes `id_mapping` in place
     """
+
+    assert all(edge.type != "neuroglial" for edge in circuit.edges.values()), (
+        "External circuits with neuroglial connections are not supported. "
+        "Non-external astrocytes may connect to newly created external "
+        "neuron–neuron connections, which requires generating an additional "
+        "edges file. External astrocytes, if possible, are still another problem"
+        "that multiplies the amount of additional files required."
+    )
+
     new_nodes = {}
 
     write_edge_configs = []
@@ -933,11 +947,6 @@ def _write_subcircuit_external(
             else:
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
-            # currently, external astrocytes are not supported. The neuroglial edges
-            # would require a much more complex subcircuit extraction process because
-            # external astrocytes may connect to old biophisical or external synapse_id
-            # edges
-            assert "astrocyte" not in circuit.nodes[edge.source.name].type
             write_edge_config = WriteEdgeConfig(
                 output_path=str(output_path),
                 input_path=_get_storage_path(edge),
