@@ -831,3 +831,140 @@ def test_split_subcircuit_edge_indices(tmp_path):
     nodes_path = tmp_path / "nodes" / "nodes.h5"
     edges_path = tmp_path / "edges" / "edges.h5"
     _check_edge_indices(nodes_path, edges_path)
+
+
+def make_edge_mapping_df(old_ids):
+    """
+    Convert a list/array of old IDs into a DataFrame suitable for edge_mappings.
+    
+    Parameters
+    ----------
+    old_ids : list or np.ndarray
+        Array of old IDs.
+    
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by old IDs, column 'new_id' = 0..N-1
+    """
+    old_ids = np.asarray(old_ids)  # ensure NumPy array
+    return pd.DataFrame(
+        {"new_id": np.arange(len(old_ids), dtype=np.int64)},
+        index=old_ids
+    )
+
+
+def print_h5_contents(fname):
+    def recurse(name, obj):
+        print(f"{name}: {type(obj)}")
+        if isinstance(obj, h5py.Dataset):
+            print(f"  data: {obj[:]}")
+        for k, v in obj.attrs.items():
+            print(f"  attr {k}: {v}")
+
+    with h5py.File(fname, "r") as f:
+        f.visititems(recurse)
+
+def test_copy_filtered_edges_advanced(tmp_path):
+    """
+    TODO
+    """
+    infile = tmp_path / "in.h5"
+    outfile = tmp_path / "out.h5"
+
+    # ----------------------
+    # Build minimal SONATA input
+    # ----------------------
+    with h5py.File(infile, "w") as f:
+        edges = f.create_group("edges/orig_src_edge_pop")
+        src_ds = edges.create_dataset(
+            "source_node_id",
+            data=np.arange(10, dtype=np.uint64),
+            maxshape=(None,),
+        )
+        src_ds.attrs["node_population"] = "orig_src_node_pop"
+        dst_ds = edges.create_dataset(
+            "target_node_id",
+            data=np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 0], dtype=np.uint64),
+            maxshape=(None,),
+        )
+        dst_ds.attrs["node_population"] = "orig_dst_node_pop"
+
+        # mandatory edge group
+        egrp = edges.create_group('0')
+        egrp.create_dataset(
+            "weight",
+            data=np.arange(10, dtype=np.uint64),
+            maxshape=(None,),
+        )
+
+        syn_ds = egrp.create_dataset(
+            "synapse_id",
+            data=np.arange(100, 110, dtype=np.uint64),
+            maxshape=(None,),
+        )
+        syn_ds.attrs["edge_population"] = "orig_biophysical_edge_pop"
+
+    # ----------------------
+    # Identity mappings
+    # ----------------------
+    mapping = pd.DataFrame(
+        {"new_id": np.arange(5, dtype=np.uint64)},
+        index=np.array([2, 3, 4, 7, 8], dtype=np.uint64),
+    )
+
+    edge_mappings = {"orig_biophysical_edge_pop": (make_edge_mapping_df([100, 102, 107]),"new_biophysical_edge_pop")}
+
+    # ----------------------
+    # Run
+    # ----------------------
+    with h5py.File(infile, "r") as h5in, h5py.File(outfile, "w") as h5out:
+        write_edge_config = split_population.WriteEdgeConfig(
+            src_node_name="orig_src_node_pop",
+            dst_node_name="orig_dst_node_pop",
+            src_edge_name="orig_src_edge_pop",
+            dst_edge_name="new_src_edge_pop",
+            src_mapping=mapping,
+            dst_mapping=mapping,
+            h5_read_chunk_size=3,  # FORCE chunking
+            edge_type="synapse_astrocyte"
+        )
+        split_population._copy_filtered_edges(
+            h5in=h5in,
+            h5out=h5out,
+            write_edge_config=write_edge_config,
+            edge_mappings=edge_mappings
+        )
+
+    # # ----------------------
+    # # Verification
+    # # ----------------------
+
+    keep, new_name = edge_mappings["orig_src_edge_pop"]
+    assert new_name == "new_src_edge_pop"
+    with h5py.File(outfile, "r") as f:
+        out_edges = f["edges/new_src_edge_pop"]
+        src_ids = out_edges["source_node_id"][:]
+        tgt_ids = out_edges["target_node_id"][:]
+        assert out_edges["source_node_id"].attrs["node_population"] == "orig_src_node_pop"
+        assert out_edges["target_node_id"].attrs["node_population"] == "orig_dst_node_pop"
+
+        # keep should match the indices in the original dataset that were kept
+        orig_src = np.arange(10, dtype=np.uint64)
+        orig_tgt = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 0], dtype=np.uint64)
+        # 3 is erased by the synapse_id. the others by the nodes
+        expected_keep = np.array([2, 7])  # indices of edges whose source nodes are in mapping.index
+        np.testing.assert_array_equal(keep.index.to_numpy(), expected_keep)
+
+        # source_node_id remapped correctly
+        expected_src = mapping.loc[orig_src[expected_keep]]["new_id"].to_numpy()
+        np.testing.assert_array_equal(src_ids, expected_src)
+
+        # target_node_id remapped correctly
+        expected_tgt = mapping.loc[orig_tgt[expected_keep]]["new_id"].to_numpy()
+        np.testing.assert_array_equal(tgt_ids, expected_tgt)
+
+        syn_ids = out_edges["0"]["synapse_id"][:]
+        expected_syn_ids = [1, 2]
+        np.testing.assert_array_equal(syn_ids, expected_syn_ids)
+        assert out_edges["0"]["synapse_id"].attrs["edge_population"] == "new_biophysical_edge_pop"
