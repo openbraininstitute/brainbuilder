@@ -152,7 +152,7 @@ def _save_sonata_nodes(nodes_path, df, population_name):
     df.index += 1
     cell_collection = voxcell.CellCollection.from_dataframe(df)
     cell_collection.population_name = population_name
-    cell_collection.save_sonata(nodes_path, mode="a")
+    cell_collection.save_sonata(str(nodes_path), mode="a")
     # restore the original index
     df.index -= 1
     return nodes_path
@@ -349,7 +349,7 @@ def _write_edges(
         written_edges = 0
         for src_node_pop, dst_node_pop in it.product(id_mapping, id_mapping):
             edge_pop_name = _get_population_name(src_node_pop, dst_node_pop)
-            edge_file_name = os.path.join(output, _get_edge_file_name(edge_pop_name))
+            edge_file_name = Path(output) / _get_edge_file_name(edge_pop_name)
 
             L.debug("Writing to  %s", edge_file_name)
             with h5py.File(edge_file_name, "w") as h5out:
@@ -374,7 +374,7 @@ def _write_edges(
                 L.debug("Wrote %s edges to %s", edge_count, edge_file_name)
                 written_edges += edge_count
             else:
-                os.unlink(edge_file_name)
+                Path(edge_file_name).unlink(missing_ok=True)
 
         if expect_to_use_all_edges:
             _check_all_edges_used(h5in, written_edges)
@@ -395,8 +395,8 @@ def _write_nodes(output, split_nodes, population_to_path=None):
     for new_population, df in split_nodes.items():
         df = df.reset_index(drop=True)
         nodes_path = population_to_path.get(new_population, _get_node_file_name(new_population))
-        nodes_path = os.path.join(output, nodes_path)
-        Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
+        nodes_path = Path(output) / nodes_path
+        nodes_path.parent.mkdir(parents=True, exist_ok=True)
         ret[new_population] = _save_sonata_nodes(nodes_path, df, population_name=new_population)
         L.debug("Wrote %s nodes to %s", len(df), nodes_path)
 
@@ -446,15 +446,16 @@ def _write_circuit_config(output, split_nodes):
         if src == dst:
             tmpl["networks"]["nodes"].append(
                 {
-                    "nodes_file": os.path.join("$BASE_DIR", _get_node_file_name(new_pop_name)),
+                    "nodes_file": str(Path("$BASE_DIR") / _get_node_file_name(new_pop_name)),
                     "node_types_file": None,
                 }
             )
 
-        if os.path.exists(os.path.join(output, _get_edge_file_name(new_pop_name))):
+        edge_path = Path(output) / _get_edge_file_name(new_pop_name)
+        if edge_path.exists():
             tmpl["networks"]["edges"].append(
                 {
-                    "edges_file": os.path.join("$BASE_DIR", _get_edge_file_name(new_pop_name)),
+                    "edges_file": str(Path("$BASE_DIR") / _get_edge_file_name(new_pop_name)),
                     "edge_types_file": None,
                 }
             )
@@ -569,7 +570,7 @@ def _write_subcircuit_edges(write_edge_config: WriteEdgeConfig):
             )
             L.debug("Wrote %s edges to %s", edge_count, output_path)
         elif is_file_empty:
-            os.unlink(output_path)
+            Path(output_path).unlink(missing_ok=True)
             output_path = DELETED_EMPTY_EDGES_FILE
         else:  # population empty, but not file
             output_path = DELETED_EMPTY_EDGES_POPULATION
@@ -809,8 +810,8 @@ def _write_subcircuit_external(
         # Get all properties of the subset of the node population that is relevant
         orig_population_name, ids = id_tuple
         df = circuit.nodes[orig_population_name].get(ids).reset_index(drop=True)
-        nodes_path = os.path.join(output, population_name, "nodes.h5")
-        Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
+        nodes_path = Path(output) / population_name / "nodes.h5"
+        nodes_path.parent.mkdir(parents=True, exist_ok=True)
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
     return new_node_files, new_edges_files
@@ -893,8 +894,8 @@ def _write_subcircuit_virtual(
     for population_name, ids in pop_used_source_node_ids.items():
         # Get all properties of the subset of the node population that is relevant
         df = circuit.nodes[population_name].get(ids).reset_index(drop=True)
-        nodes_path = os.path.join(output, population_name, "nodes.h5")
-        Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
+        nodes_path = Path(output) / population_name / "nodes.h5"
+        nodes_path.parent.mkdir(parents=True, exist_ok=True)
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
     return new_node_files, new_edges_files
@@ -947,20 +948,13 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
             if new_pop_name in _entry["populations"]
         ]
         assert 0 <= len(matched_originals) <= 1
-        if len(matched_originals) == 1:
-            config["networks"][type_].append(
-                {
-                    str_type: os.path.join("$BASE_DIR", updated_path),
-                    "populations": {new_pop_name: copy.deepcopy(matched_originals[0])},
-                }
-            )
-        else:
-            config["networks"][type_].append(
-                {
-                    str_type: os.path.join("$BASE_DIR", updated_path),
-                    "populations": {new_pop_name: {}},
-                }
-            )
+        entry = {
+            str_type: str(Path("$BASE_DIR") / updated_path),
+            "populations": {new_pop_name: copy.deepcopy(matched_originals[0])}
+            if len(matched_originals) == 1
+            else {new_pop_name: {}},
+        }
+        config["networks"][type_].append(entry)
         config["networks"][type_][-1]["populations"][new_pop_name].setdefault("type", default_type)
     return config
 
@@ -1034,8 +1028,8 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
     if "id_mapping" in provenance:
         # Currently, bluepysnap does not seem to resolve $BASE_DIR for entries in "provenance".
         # Therefore I decided to not prepend it and just assume the file exists near the circuit config.
-        parent_root = os.path.split(parent_circ._circuit_config_path)[0]
-        parent_mapping = utils.load_json(os.path.join(parent_root, provenance["id_mapping"]))
+        parent_root = Path(parent_circ._circuit_config_path).parent
+        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
         _add_mapping_to_original(this_mapping, parent_mapping)
     else:
         _make_parent_the_original_mapping(this_mapping)
