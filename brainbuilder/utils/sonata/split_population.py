@@ -278,8 +278,59 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
         h5_read_chunk_size,
         src_edge_name,
     )
+
+    sl_and_masks = _compute_chunks_and_masks(orig_edges=orig_edges, sgids_new=sgids_new, tgids_new=tgids_new, h5_read_chunk_size=h5_read_chunk_size)
+
+    offset = new_edges["source_node_id"].shape[0]
+    if offset != 0:
+        raise RuntimeError(
+            f"It may be unsafe to append edges with a nonzero offset ({offset}). "
+            "Edge IDs may become inconsistent."
+        )
+    edge_mapping = _compute_edge_mapping(sl_and_masks=sl_and_masks, offset=offset)
+
+    _write_masked_edges(sl_and_masks=sl_and_masks, new_edges=new_edges, orig_edges=orig_edges, src_mapping=src_mapping, dst_mapping=dst_mapping)
+
+    L.debug("Finalize edges")
+    _finalize_edges(new_edges)
+
+    return edge_mapping
+
+def _compute_edge_mapping(sl_and_masks, offset=0):
+    """
+    Build a pandas DataFrame mapping absolute indices to NEW_IDS.
+    
+    Parameters
+    ----------
+    sl_and_masks : list of (slice, relative_indices)
+        Output from `_compute_chunks_and_masks`.
+    offset : int
+        Starting value for NEW_IDS. Useful for actual appends
+    
+    Returns
+    -------
+    pd.DataFrame
+        Index = absolute indices in the original dataset
+        Column = NEW_IDS (sequential IDs starting from offset)
+    """
+    if not sl_and_masks:
+        return pd.DataFrame(columns=[NEW_IDS], dtype=np.int64)
+
+    # compute absolute indices
+    chunk_indices = [sl.start + rel_idxs for sl, rel_idxs in sl_and_masks]
+    flat_idxs = np.hstack(chunk_indices).astype(np.int64)
+
+    # build DataFrame
+    edge_mapping = pd.DataFrame(
+        {NEW_IDS: np.arange(len(flat_idxs), dtype=np.int64) + offset},
+        index=flat_idxs
+    )
+    return edge_mapping
+
+
+def _compute_chunks_and_masks(orig_edges, sgids_new, tgids_new, h5_read_chunk_size):
+    sl_and_masks = []
     for sl in _create_chunked_slices(len(orig_edges["source_node_id"]), h5_read_chunk_size):
-        L.debug("Processing chunk %s", sl)
         sgids = orig_edges["source_node_id"][sl]
         tgids = orig_edges["target_node_id"][sl]
         sgid_mask = _isin(sgids, sgids_new)
@@ -287,17 +338,24 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
 
         mask = sgid_mask & tgid_mask
 
-        if np.any(mask):
-            hdf5.append_to_dataset(
-                new_edges["source_node_id"], src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy()
-            )
-            hdf5.append_to_dataset(
-                new_edges["target_node_id"], dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy()
-            )
-            _populate_edge_group(orig_group, new_group, sl, mask)
+        rel_idxs = np.flatnonzero(mask)
+        if rel_idxs.size > 0:
+            sl_and_masks.append((sl, rel_idxs.astype(np.int64)))
 
-    L.debug("Finalize edges")
-    _finalize_edges(new_edges)
+    return sl_and_masks
+
+def _write_masked_edges(sl_and_masks, new_edges, orig_edges, src_mapping, dst_mapping):
+    for sl, mask in sl_and_masks:
+        L.debug("Processing chunk %s", sl)
+        sgids = orig_edges["source_node_id"][sl]
+        tgids = orig_edges["target_node_id"][sl]
+        hdf5.append_to_dataset(
+            new_edges["source_node_id"], src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy()
+        )
+        hdf5.append_to_dataset(
+            new_edges["target_node_id"], dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy()
+        )
+        _populate_edge_group(orig_edges[GROUP_NAME], new_edges[GROUP_NAME], sl, mask)
 
 
 def _get_node_counts(
