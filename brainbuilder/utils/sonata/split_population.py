@@ -329,6 +329,13 @@ def _copy_filtered_edges(
                 f"It may be unsafe to append edges with a nonzero offset ({offset}). "
                 "Edge IDs may become inconsistent."
             )
+
+        assert write_edge_config.src_edge_name not in edge_mappings, (
+            f"Source edge population '{write_edge_config.src_edge_name}' "
+            "already exists in edge_mappings. "
+            "Cannot overwrite an existing mapping; check your inputs or "
+            "ensure edge populations are unique."
+        )
         edge_mappings[write_edge_config.src_edge_name] = (
             _compute_edge_mapping(sl_and_masks=sl_and_masks, offset=offset),
             write_edge_config.dst_edge_name,
@@ -425,6 +432,7 @@ def _write_masked_edges(
         if is_neuroglial:
             src_syn_edge_pop = orig_edges[GROUP_NAME]["synapse_id"].attrs["edge_population"]
             edge_mapping, _ = edge_mappings[src_syn_edge_pop]
+
             syn_ids = orig_edges[GROUP_NAME]["synapse_id"][sl]
             overrides["synapse_id"] = edge_mapping.loc[syn_ids[mask]][NEW_IDS].to_numpy()
 
