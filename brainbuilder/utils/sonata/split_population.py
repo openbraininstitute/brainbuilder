@@ -401,8 +401,7 @@ def _compute_chunks_and_masks(
 
         if is_neuroglial:
             src_syn_edge_pop = orig_edges[GROUP_NAME]["synapse_id"].attrs["edge_population"]
-            # TODO remove dst_syn_edge_pop
-            edge_mask, dst_syn_edge_pop = edge_mappings[src_syn_edge_pop]
+            edge_mask, _ = edge_mappings[src_syn_edge_pop]
             syn_ids = orig_edges[GROUP_NAME]["synapse_id"][sl]
             syn_mask = _isin(syn_ids, edge_mask.index.to_numpy())
             mask &= syn_mask
