@@ -1030,7 +1030,7 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
     """write the id mappings between the old and new populations for future analysis"""
     this_mapping = _mapping_to_parent_dict(id_mapping, node_pop_name_mapping)
 
-    provenance = parent_circ.config["components"].get("provenance", {})
+    provenance = parent_circ.config.get("components", {}).get("provenance", {})
     if "id_mapping" in provenance:
         # Currently, bluepysnap does not seem to resolve $BASE_DIR for entries in "provenance".
         # Therefore I decided to not prepend it and just assume the file exists near the circuit config.
@@ -1143,5 +1143,5 @@ def split_subcircuit(
 
     # TODO: Should be "$BASE_DIR/" + mapping_fn. But bluepysnap does not seem to resolve
     # $BASE_DIR for entries in "provenance"..? So I don't even try.
-    config["components"].setdefault("provenance", {})["id_mapping"] = mapping_fn
+    config.setdefault("components", {}).setdefault("provenance", {})["id_mapping"] = mapping_fn
     utils.dump_json(output / "circuit_config.json", config)

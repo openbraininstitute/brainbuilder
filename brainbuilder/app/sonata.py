@@ -335,9 +335,9 @@ def split_subcircuit(nodeset, circuit, include_virtual, create_external, output)
     from brainbuilder.utils.sonata import split_population as module
 
     module.split_subcircuit(
-        output,
+        output=output,
         node_set_name=nodeset,
-        circuit_config_path=circuit,
+        circuit=circuit,
         do_virtual=include_virtual,
         create_external=create_external,
     )
