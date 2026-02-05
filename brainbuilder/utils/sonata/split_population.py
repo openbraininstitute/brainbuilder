@@ -55,6 +55,7 @@ class WriteEdgeConfig:
     h5_read_chunk_size: int | None = None
     input_path: str | Path | None = None
     output_path: str | Path | None = None
+    edge_type: type[bytes] | None = None
 
     def __post_init__(self):
         self.input_path = (
@@ -158,16 +159,26 @@ def _save_sonata_nodes(nodes_path, df, population_name):
     return nodes_path
 
 
-def _init_edge_group(orig_group, new_group):
-    """Copy the empty datasets from orig_group to new_group.
+def _init_edge_group(orig_group: h5py.Group, new_group: h5py.Group, additional_attrs: dict[str, object]):
+    """Initialize an edge group by recreating appendable datasets and attrs.
+
+    Copies the dataset layout from orig_group into new_group using appendable
+    datasets. Optionally sets extra dataset attributes from additional_attrs.
+    Recreates the "dynamics_params" subgroup with matching datasets.
 
     Args:
-        orig_group (h5py.Group): original group, e.g. /edges/default/0
-        new_group (h5py.Group): new group, e.g. /edges/L2_X__L6_Y__chemical/0
+        orig_group (h5py.Group): Source edge group (e.g. /edges/default/0).
+        new_group (h5py.Group): Destination edge group to initialize.
+        additional_attrs (dict[str, dict[str, Any]]): Optional mapping
+            dataset_name -> {attr_name: value} for attributes to set on
+            created datasets.
     """
     for name, attr in orig_group.items():
         if isinstance(attr, h5py.Dataset):
             hdf5.create_appendable_dataset(new_group, name, attr.dtype)
+            if name in additional_attrs:
+                for attr_name, val in additional_attrs[name].items():
+                    new_group[name].attrs[attr_name] = val
         elif isinstance(attr, h5py.Group) and name == "dynamics_params":
             new_group.create_group(name)
             for k, values in attr.items():
@@ -177,7 +188,7 @@ def _init_edge_group(orig_group, new_group):
             raise ValueError('Only "dynamics_params" group is expected')
 
 
-def _populate_edge_group(orig_group, new_group, sl, mask):
+def _populate_edge_group(orig_group, new_group, sl, mask, overrides):
     """Populate the datasets from orig_group to new_group.
 
     Args:
@@ -185,15 +196,19 @@ def _populate_edge_group(orig_group, new_group, sl, mask):
         new_group (h5py.Group): new group, e.g. /edges/L2_X__L6_Y__chemical/0
         sl (slice): slice used to select the dataset range
         mask (np.ndarray): mask used to filter the dataset
+        TODO
     """
-    for name, attr in orig_group.items():
-        if isinstance(attr, h5py.Dataset):
-            hdf5.append_to_dataset(new_group[name], attr[sl][mask])
-        elif isinstance(attr, h5py.Group) and name == "dynamics_params":
-            for k, values in attr.items():
+    for name, ds in orig_group.items():
+        if isinstance(ds, h5py.Dataset):
+            if name in overrides:
+                hdf5.append_to_dataset(new_group[name], overrides[name])
+            else:
+                hdf5.append_to_dataset(new_group[name], ds[sl][mask])
+        elif isinstance(ds, h5py.Group) and name == "dynamics_params":
+            for k, values in ds.items():
                 if isinstance(values, h5py.Dataset):
                     hdf5.append_to_dataset(new_group[name][k], values[sl][mask])
-        elif isinstance(attr, h5py.Group) and name == "@library":
+        elif isinstance(ds, h5py.Group) and name == "@library":
             raise NotImplementedError(
                 "@library group is defined by the spec but not currently supported"
             )
@@ -214,7 +229,12 @@ def _h5_get_read_chunk_size():
     return int(os.environ.get("H5_READ_CHUNKSIZE", H5_READ_CHUNKSIZE))
 
 
-def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: WriteEdgeConfig):
+def _copy_filtered_edges(
+    h5in: h5py.File,
+    h5out: h5py.File,
+    write_edge_config: WriteEdgeConfig,
+    edge_mappings: dict[str, tuple[pd.DataFrame, str]] = None,
+):
     """
     Copy and filter edge datasets from an input HDF5 file to an output HDF5 file.
 
@@ -248,6 +268,7 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
     dst_edge_name = write_edge_config.dst_edge_name
     src_mapping = write_edge_config.src_mapping
     dst_mapping = write_edge_config.dst_mapping
+    is_neuroglial = write_edge_config.edge_type == "synapse_astrocyte"
 
     # get groups
     orig_edges = h5in["edges"][src_edge_name]
@@ -263,7 +284,15 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
     new_edges["source_node_id"].attrs["node_population"] = src_node_name
     new_edges["target_node_id"].attrs["node_population"] = dst_node_name
 
-    _init_edge_group(orig_group, new_group)
+    additional_attrs = {}
+    if is_neuroglial:
+        # find new name of synapse_edge_pop
+        src_syn_edge_pop = orig_edges[GROUP_NAME]["synapse_id"].attrs["edge_population"]
+        _, dst_syn_edge_pop = edge_mappings[src_syn_edge_pop]
+        # create dataset and add correct attr
+        additional_attrs["synapse_id"] = {"edge_population": dst_syn_edge_pop}
+
+    _init_edge_group(orig_group, new_group, additional_attrs)
 
     sgids_new = src_mapping.index.to_numpy()
     tgids_new = dst_mapping.index.to_numpy()
@@ -279,34 +308,52 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
         src_edge_name,
     )
 
-    sl_and_masks = _compute_chunks_and_masks(orig_edges=orig_edges, sgids_new=sgids_new, tgids_new=tgids_new, h5_read_chunk_size=h5_read_chunk_size)
+    sl_and_masks = _compute_chunks_and_masks(
+        orig_edges=orig_edges,
+        sgids_new=sgids_new,
+        tgids_new=tgids_new,
+        h5_read_chunk_size=h5_read_chunk_size,
+        edge_mappings=edge_mappings,
+        is_neuroglial=is_neuroglial,
+    )
 
-    offset = new_edges["source_node_id"].shape[0]
-    if offset != 0:
-        raise RuntimeError(
-            f"It may be unsafe to append edges with a nonzero offset ({offset}). "
-            "Edge IDs may become inconsistent."
+    if edge_mappings is not None:
+        offset = new_edges["source_node_id"].shape[0]
+        if offset != 0:
+            raise RuntimeError(
+                f"It may be unsafe to append edges with a nonzero offset ({offset}). "
+                "Edge IDs may become inconsistent."
+            )
+        edge_mappings[write_edge_config.src_edge_name] = (
+            _compute_edge_mapping(sl_and_masks=sl_and_masks, offset=offset),
+            write_edge_config.dst_edge_name,
         )
-    edge_mapping = _compute_edge_mapping(sl_and_masks=sl_and_masks, offset=offset)
 
-    _write_masked_edges(sl_and_masks=sl_and_masks, new_edges=new_edges, orig_edges=orig_edges, src_mapping=src_mapping, dst_mapping=dst_mapping)
+    _write_masked_edges(
+        sl_and_masks=sl_and_masks,
+        new_edges=new_edges,
+        orig_edges=orig_edges,
+        src_mapping=src_mapping,
+        dst_mapping=dst_mapping,
+        edge_mappings=edge_mappings,
+        is_neuroglial=is_neuroglial,
+    )
 
     L.debug("Finalize edges")
     _finalize_edges(new_edges)
 
-    return edge_mapping
 
 def _compute_edge_mapping(sl_and_masks, offset=0):
     """
     Build a pandas DataFrame mapping absolute indices to NEW_IDS.
-    
+
     Parameters
     ----------
     sl_and_masks : list of (slice, relative_indices)
         Output from `_compute_chunks_and_masks`.
     offset : int
         Starting value for NEW_IDS. Useful for actual appends
-    
+
     Returns
     -------
     pd.DataFrame
@@ -322,13 +369,15 @@ def _compute_edge_mapping(sl_and_masks, offset=0):
 
     # build DataFrame
     edge_mapping = pd.DataFrame(
-        {NEW_IDS: np.arange(len(flat_idxs), dtype=np.int64) + offset},
-        index=flat_idxs
+        {NEW_IDS: np.arange(len(flat_idxs), dtype=np.int64) + offset}, index=flat_idxs
     )
     return edge_mapping
 
 
-def _compute_chunks_and_masks(orig_edges, sgids_new, tgids_new, h5_read_chunk_size):
+def _compute_chunks_and_masks(
+    orig_edges, sgids_new, tgids_new, h5_read_chunk_size, edge_mappings, is_neuroglial=False
+):
+    """Compute relative indices of edges to keep for each chunk."""
     sl_and_masks = []
     for sl in _create_chunked_slices(len(orig_edges["source_node_id"]), h5_read_chunk_size):
         sgids = orig_edges["source_node_id"][sl]
@@ -338,13 +387,25 @@ def _compute_chunks_and_masks(orig_edges, sgids_new, tgids_new, h5_read_chunk_si
 
         mask = sgid_mask & tgid_mask
 
+        if is_neuroglial:
+            src_syn_edge_pop = orig_edges[GROUP_NAME]["synapse_id"].attrs["edge_population"]
+            # TODO remove dst_syn_edge_pop
+            edge_mask, dst_syn_edge_pop = edge_mappings[src_syn_edge_pop]
+            syn_ids = orig_edges[GROUP_NAME]["synapse_id"][sl]
+            syn_mask = _isin(syn_ids, edge_mask.index.to_numpy())
+            mask &= syn_mask
+
         rel_idxs = np.flatnonzero(mask)
         if rel_idxs.size > 0:
             sl_and_masks.append((sl, rel_idxs.astype(np.int64)))
 
     return sl_and_masks
 
-def _write_masked_edges(sl_and_masks, new_edges, orig_edges, src_mapping, dst_mapping):
+
+def _write_masked_edges(
+    sl_and_masks, new_edges, orig_edges, src_mapping, dst_mapping, edge_mappings, is_neuroglial
+):
+    """Apply masks per chunk to write edges to HDF5 and populate edge groups."""
     for sl, mask in sl_and_masks:
         L.debug("Processing chunk %s", sl)
         sgids = orig_edges["source_node_id"][sl]
@@ -355,7 +416,14 @@ def _write_masked_edges(sl_and_masks, new_edges, orig_edges, src_mapping, dst_ma
         hdf5.append_to_dataset(
             new_edges["target_node_id"], dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy()
         )
-        _populate_edge_group(orig_edges[GROUP_NAME], new_edges[GROUP_NAME], sl, mask)
+        overrides = {}
+        if is_neuroglial:
+            src_syn_edge_pop = orig_edges[GROUP_NAME]["synapse_id"].attrs["edge_population"]
+            edge_mapping, _ = edge_mappings[src_syn_edge_pop]
+            syn_ids = orig_edges[GROUP_NAME]["synapse_id"][sl]
+            overrides["synapse_id"] = edge_mapping.loc[syn_ids[mask]][NEW_IDS].to_numpy()
+
+        _populate_edge_group(orig_edges[GROUP_NAME], new_edges[GROUP_NAME], sl, mask, overrides)
 
 
 def _get_node_counts(
@@ -577,7 +645,9 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
     _write_edges(output, edges_path, id_mapping, expect_to_use_all_edges=False)
 
 
-def _write_subcircuit_edges(write_edge_config: WriteEdgeConfig):
+def _write_subcircuit_edges(
+    write_edge_config: WriteEdgeConfig, edge_mappings: dict[str, tuple[pd.DataFrame, str]]
+):
     """copy a population to an edge file
 
     If DELETED_EMPTY_EDGES_FILE is returned, the file was removed since no
@@ -605,6 +675,7 @@ def _write_subcircuit_edges(write_edge_config: WriteEdgeConfig):
                 h5in=h5in,
                 h5out=h5out,
                 write_edge_config=write_edge_config,
+                edge_mappings=edge_mappings,
             )
 
             edge_count, sgid_count, tgid_count = _get_node_counts(
@@ -699,7 +770,7 @@ def _write_subcircuit_biological(
     """
     new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
 
-    new_edges_files = {}
+    write_edge_configs = []
     for edge_pop_name, edge in circuit.edges.items():
         if edge.source.name in id_mapping and edge.target.name in id_mapping:
             write_edge_config = WriteEdgeConfig(
@@ -711,13 +782,30 @@ def _write_subcircuit_biological(
                 dst_edge_name=edge_pop_name,
                 src_mapping=id_mapping[edge.source.name],
                 dst_mapping=id_mapping[edge.target.name],
+                edge_type=edge.type,
             )
+            write_edge_configs.append(write_edge_config)
 
-            new_edges_files[edge_pop_name] = _write_subcircuit_edges(
-                write_edge_config=write_edge_config
-            )
+    new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
 
     return new_node_files, new_edges_files
+
+
+def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig]):
+    assert all(config.edge_type is not None for config in write_edge_configs)
+    new_edges_files = {}
+    edge_mappings = {}
+    # "synapse_astrocyte" must be processed after the other edges
+    write_edge_configs_sorted = sorted(
+        write_edge_configs, key=lambda cfg: cfg.edge_type == "synapse_astrocyte"
+    )
+
+    for write_edge_config in write_edge_configs_sorted:
+        new_edges_files[write_edge_config.dst_edge_name] = _write_subcircuit_edges(
+            write_edge_config=write_edge_config, edge_mappings=edge_mappings
+        )
+
+    return new_edges_files
 
 
 def _get_subcircuit_external_ids(all_sgids, all_tgids, wanted_src_ids, wanted_dst_ids):
@@ -773,7 +861,7 @@ def _write_subcircuit_external(
     """
     new_nodes = {}
 
-    new_edges_files = {}
+    write_edge_configs = []
     for name, edge in circuit.edges.items():
         if edge.source.type != "virtual" and edge.target.name in id_mapping:
             wanted_src_ids = circuit.nodes[edge.source.name].ids()
@@ -845,6 +933,11 @@ def _write_subcircuit_external(
             else:
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
+            # currently, external astrocytes are not supported. The neuroglial edges
+            # would require a much more complex subcircuit extraction process because
+            # external astrocytes may connect to old biophisical or external synapse_id
+            # edges
+            assert "astrocyte" not in circuit.nodes[edge.source.name].type
             write_edge_config = WriteEdgeConfig(
                 output_path=str(output_path),
                 input_path=_get_storage_path(edge),
@@ -854,13 +947,16 @@ def _write_subcircuit_external(
                 dst_edge_name=new_name,
                 src_mapping=wanted_src_ids,
                 dst_mapping=id_mapping[edge.target.name],
+                edge_type=edge.type,
             )
+            write_edge_configs.append(write_edge_config)
 
-            new_edges_files[new_name] = _write_subcircuit_edges(write_edge_config=write_edge_config)
             new_nodes[new_source_pop_name] = (
                 edge.source.name,
                 wanted_src_ids.index.to_numpy(),
             )
+
+    new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
 
     new_node_files = {}
     # write new virtual nodes from originally non-virtual populations
@@ -888,7 +984,7 @@ def _write_subcircuit_virtual(
     Note: the id_mapping dictionary is updated with the used virtual nodes
     """
     # pylint: disable=too-many-locals
-    new_node_files, new_edges_files = {}, {}
+    new_node_files = {}
 
     virtual_populations = {
         name: edge
@@ -933,6 +1029,8 @@ def _write_subcircuit_virtual(
         node_pop_name_mapping[name] = name
 
     # write the edges that have the virtual populations as source
+
+    write_edge_configs = []
     for edge_pop_name, edge in virtual_populations.items():
         write_edge_config = WriteEdgeConfig(
             output_path=Path(output) / edge_populations_to_paths[edge_pop_name],
@@ -943,10 +1041,11 @@ def _write_subcircuit_virtual(
             dst_edge_name=edge_pop_name,
             src_mapping=id_mapping[edge.source.name],
             dst_mapping=id_mapping[edge.target.name],
+            edge_type=edge.type,
         )
-        new_edges_files[edge_pop_name] = _write_subcircuit_edges(
-            write_edge_config=write_edge_config
-        )
+        write_edge_configs.append(write_edge_config)
+
+    new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
 
     # write virtual nodes based on virtual populations
     for population_name, ids in pop_used_source_node_ids.items():
