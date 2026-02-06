@@ -295,7 +295,7 @@ def update_projection_efferent_section_type(population, edge_file):
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
 def split_population(attribute, nodes, edges, output):
     """Split a single Node and Edges file into multiple nodes and edges based on attribute"""
-    from brainbuilder.utils.sonata import split_population as module
+    from brainbuilder.utils.sonata import extract_subcircuit as module
 
     module.split_population(output, attribute, nodes, edges)
 
@@ -310,7 +310,7 @@ def split_population(attribute, nodes, edges, output):
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
 def simple_split_subcircuit(nodeset, nodeset_path, nodes, edges, output):
     """Split a subcircuit out from a SONATA circuit based on node_set"""
-    from brainbuilder.utils.sonata import split_population as module
+    from brainbuilder.utils.sonata import extract_subcircuit as module
 
     module.simple_split_subcircuit(output, nodeset, nodeset_path, nodes, edges)
 
@@ -332,7 +332,7 @@ def simple_split_subcircuit(nodeset, nodeset_path, nodes, edges, output):
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
 def split_subcircuit(nodeset, circuit, include_virtual, create_external, output):
     """Split a subcircuit out from a SONATA circuit based on node_set"""
-    from brainbuilder.utils.sonata import split_population as module
+    from brainbuilder.utils.sonata import extract_subcircuit as module
 
     module.split_subcircuit(
         output=output,
