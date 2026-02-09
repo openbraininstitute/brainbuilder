@@ -21,6 +21,9 @@ from joblib import Parallel, delayed
 from brainbuilder import utils
 from brainbuilder.utils import hdf5
 
+import shutil
+import tqdm
+
 L = logging.getLogger(__name__)
 
 # So as not to exhaust memory, the edges files are loaded/written in chunks of this size
@@ -1306,3 +1309,205 @@ def split_subcircuit(
     # $BASE_DIR for entries in "provenance"..? So I don't even try.
     config.setdefault("components", {}).setdefault("provenance", {})["id_mapping"] = mapping_fn
     utils.dump_json(output / "circuit_config.json", config)
+
+    return circuit
+
+def _recursive_replace_in_json_dict(config_dict: dict, old_base: str, new_base: str) -> None:
+    """Recursively replace old_base with new_base in a dict or nested lists."""
+    old_base = str(Path(old_base).resolve())
+    for key, value in config_dict.items():
+        if isinstance(value, str):
+            if value == old_base:
+                config_dict[key] = ""
+            else:
+                config_dict[key] = value.replace(old_base, new_base)
+        elif isinstance(value, dict):
+            _recursive_replace_in_json_dict(value, old_base, new_base)
+        elif isinstance(value, list):
+            for _v in value:
+                _recursive_replace_in_json_dict(_v, old_base, new_base)
+
+def _rebase_config_file(new_file_path: str, old_file_path: str) -> None:
+    """Rebase paths in new_file_path, replacing old config paths with $BASEDIR from old_file_path."""
+
+    L.debug("Rebasing in place %s", new_file_path)
+
+    old_config = utils.load_json(old_file_path)
+    old_base = Path(old_file_path).parent
+
+    # Compute basedir
+    basedir = Path(old_config.get("manifest", {}).get("$BASE_DIR", "."))
+    basedir = (basedir if basedir.is_absolute() else old_base / basedir).resolve()
+
+    new_config = utils.load_json(new_file_path)
+
+    _recursive_replace_in_json_dict(new_config, basedir, "$BASE_DIR")
+
+    utils.dump_json(new_file_path, new_config)
+
+def _get_pop_morph_dirs(
+    pop_name: str, pop: bluepysnap.nodes.NodePopulation, original_circuit: bluepysnap.Circuit
+) -> tuple[dict, dict]:
+    """Return source and destination morphology base paths per extension."""
+    src_morph_dirs = {}
+    dest_morph_dirs = {}
+    for _morph_ext in ["swc", "asc", "h5"]:
+        try:
+            morph_folder = original_circuit.nodes[pop_name].morph._get_morphology_base(  # noqa: SLF001
+                _morph_ext
+            )
+            # TODO: Should not use private function!! But required to get path
+            #       even if h5 container.
+        except bluepysnap.BluepySnapError:
+            # Morphology folder for given extension not defined in config
+            continue
+
+        if not Path(morph_folder).exists():
+            # Morphology folder/container does not exist
+            continue
+        if (
+            Path(morph_folder).is_dir()
+            and sum(1 for p in Path(morph_folder).iterdir() if p.suffix.lower() == f".{_morph_ext}")
+            == 0
+        ):
+            # Morphology folder does not contain morphologies
+            continue
+
+        dest_morph_dirs[_morph_ext] = pop.morph._get_morphology_base(_morph_ext)  # noqa: SLF001
+        # TODO: Should not use private function!!
+        src_morph_dirs[_morph_ext] = morph_folder
+    return src_morph_dirs, dest_morph_dirs
+
+
+def _copy_pop_morphologies(
+    pop_name: str, pop: bluepysnap.nodes.NodePopulation, original_circuit: bluepysnap.Circuit
+) -> None:
+    """Copy all morphologies used by a population from the original circuit."""
+    if "morphology" not in pop.property_names:
+        return
+
+    L.info(f"Copying morphologies for population '{pop_name}' ({pop.size})")
+    morphology_list = pop.get(properties="morphology").unique()
+
+    src_morph_dirs, dest_morph_dirs = _get_pop_morph_dirs(pop_name, pop, original_circuit)
+
+    if len(src_morph_dirs) == 0:
+        msg = "ERROR: No morphologies of any supported format found!"
+        raise ValueError(msg)
+    for _morph_ext, _src_dir in src_morph_dirs.items():
+        if _morph_ext == "h5" and Path(_src_dir).is_file():
+            # TODO: If there is only one neuron extracted, consider removing
+            #       the container
+            # https://github.com/openbraininstitute/obi-one/issues/387
+
+            # Copy containerized morphologies into new container
+            Path(os.path.split(dest_morph_dirs[_morph_ext])[0]).mkdir(parents=True, exist_ok=True)
+            src_container = _src_dir
+            dest_container = dest_morph_dirs[_morph_ext]
+            with (
+                h5py.File(src_container) as f_src,
+                h5py.File(dest_container, "a") as f_dest,
+            ):
+                skip_counter = 0
+                for morphology_name in tqdm.tqdm(
+                    morphology_list,
+                    desc=f"Copying containerized .{_morph_ext} morphologies",
+                ):
+                    if morphology_name in f_dest:
+                        skip_counter += 1
+                    else:
+                        f_src.copy(
+                            f_src[morphology_name],
+                            f_dest,
+                            name=morphology_name,
+                        )
+            L.info(
+                f"Copied {len(morphology_list) - skip_counter} morphologies into"
+                f" container ({skip_counter} already existed)"
+            )
+        else:
+            # Copy morphology files
+            Path(dest_morph_dirs[_morph_ext]).mkdir(parents=True, exist_ok=True)
+            for morphology_name in tqdm.tqdm(
+                morphology_list, desc=f"Copying .{_morph_ext} morphologies"
+            ):
+                src_file = Path(_src_dir) / f"{morphology_name}.{_morph_ext}"
+                dest_file = Path(dest_morph_dirs[_morph_ext]) / f"{morphology_name}.{_morph_ext}"
+                if not Path(src_file).exists():
+                    msg = f"ERROR: Morphology '{src_file}' missing!"
+                    raise ValueError(msg)
+                if not Path(dest_file).exists():
+                    # Copy only, if not yet existing (could happen for shared
+                    # morphologies among populations)
+                    shutil.copyfile(src_file, dest_file)
+
+
+def _copy_pop_hoc_files(
+    pop_name: str, pop: bluepysnap.nodes.NodePopulation, original_circuit: bluepysnap.Circuit
+) -> None:
+    """Copy only the biophysical neuron model (.hoc) files actually used by a population."""
+    og_pop = original_circuit.nodes[pop_name]
+    if "biophysical_neuron_models_dir" not in pop.config:
+        return
+    hoc_file_list = [
+        _hoc.split(":")[-1] + ".hoc" for _hoc in pop.get(properties="model_template").unique()
+    ]
+    L.info(
+        f"Copying {len(hoc_file_list)} biophysical neuron models (.hoc) for"
+        f" population '{pop_name}' ({pop.size})"
+    )
+
+    source_dir = og_pop.config["biophysical_neuron_models_dir"]
+    dest_dir = pop.config["biophysical_neuron_models_dir"]
+    Path(dest_dir).mkdir(parents=True, exist_ok=True)
+
+    for _hoc_file in hoc_file_list:
+        src_file = Path(source_dir) / _hoc_file
+        dest_file = Path(dest_dir) / _hoc_file
+        if not Path(src_file).exists():
+            raise ValueError(f"ERROR: HOC file '{src_file}' missing!")
+        if not Path(dest_file).exists():
+            # Copy only, if not yet existing (could happen for shared hoc files
+            # among populations)
+            shutil.copyfile(src_file, dest_file)
+
+
+def _copy_mod_files(circuit_path: str, output_root: str) -> None:
+    """Copy NEURON mod files from the original circuit, if present."""
+    mod_folder = "mod"
+    source_dir = Path(circuit_path).parent / mod_folder
+    if Path(source_dir).exists():
+        L.info("Copying mod files")
+        dest_dir = Path(output_root) / mod_folder
+        shutil.copytree(source_dir, dest_dir)
+    else:
+        L.info("No mod files to copy: skip")
+
+
+def extract_subcircuit(
+    output,
+    node_set_name,
+    circuit_path,
+    do_virtual,
+    create_external,
+    list_of_virtual_sources_to_ignore=(),
+):
+    """Extract a subcircuit and copy all required assets (morphologies, HOC, mod files)."""
+    original_circuit = split_subcircuit(
+        output=output,
+        node_set_name=node_set_name,
+        circuit=circuit_path,
+        do_virtual=do_virtual,
+        create_external=create_external,
+        list_of_virtual_sources_to_ignore=list_of_virtual_sources_to_ignore,
+    )
+    new_circuit_path = Path(output) / "circuit_config.json"
+    _rebase_config_file(new_file_path=new_circuit_path, old_file_path=circuit_path)
+
+    new_circuit = bluepysnap.Circuit(new_circuit_path)
+    for pop_name, pop in new_circuit.nodes.items():
+        _copy_pop_morphologies(pop_name=pop_name, pop=pop, original_circuit=original_circuit)
+        _copy_pop_hoc_files(pop_name=pop_name, pop=pop, original_circuit=original_circuit)
+    _copy_mod_files(circuit_path=circuit_path, output_root=output)
+
+    L.info("Extraction DONE")
