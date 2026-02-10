@@ -242,15 +242,11 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
         if write_edge_config.h5_read_chunk_size is not None
         else _h5_get_read_chunk_size()
     )
-    src_edge_name = write_edge_config.src_edge_name
-    dst_edge_name = write_edge_config.dst_edge_name
-    src_mapping = write_edge_config.src_mapping
-    dst_mapping = write_edge_config.dst_mapping
 
     # get groups
-    orig_edges = h5in["edges"][src_edge_name]
+    orig_edges = h5in["edges"][write_edge_config.src_edge_name]
     orig_group = _get_unique_group(orig_edges)
-    new_edges = h5out.create_group("edges/" + dst_edge_name)
+    new_edges = h5out.create_group("edges/" + write_edge_config.dst_edge_name)
     new_group = new_edges.create_group(GROUP_NAME)
 
     hdf5.create_appendable_dataset(new_edges, "source_node_id", np.uint64)
@@ -263,8 +259,8 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
 
     _init_edge_group(orig_group, new_group)
 
-    sgids_new = src_mapping.index.to_numpy()
-    tgids_new = dst_mapping.index.to_numpy()
+    sgids_new = write_edge_config.src_mapping.index.to_numpy()
+    tgids_new = write_edge_config.dst_mapping.index.to_numpy()
     assert (sgids_new >= 0).all(), "Source population ids must be positive."
     assert (tgids_new >= 0).all(), "Target population ids must be positive."
 
@@ -274,7 +270,7 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
         len(orig_edges["source_node_id"]),
         total_chunks,
         h5_read_chunk_size,
-        src_edge_name,
+        write_edge_config.src_edge_name,
     )
     for sl in _create_chunked_slices(len(orig_edges["source_node_id"]), h5_read_chunk_size):
         L.debug("Processing chunk %s", sl)
@@ -287,10 +283,12 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
 
         if np.any(mask):
             hdf5.append_to_dataset(
-                new_edges["source_node_id"], src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy()
+                new_edges["source_node_id"],
+                write_edge_config.src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy(),
             )
             hdf5.append_to_dataset(
-                new_edges["target_node_id"], dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy()
+                new_edges["target_node_id"],
+                write_edge_config.dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy(),
             )
             _populate_edge_group(orig_group, new_group, sl, mask)
 
