@@ -7,6 +7,7 @@ import itertools as it
 import logging
 import math
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import bluepysnap
@@ -41,6 +42,27 @@ ORIG_IDS = "original_id"
 PARENT_NAME = "parent_name"
 # name of field with node population name in original circuit
 ORIG_NAME = "original_name"
+
+
+@dataclass
+class WriteEdgeConfig:
+    input_path: str | Path
+    output_path: str | Path
+    src_node_name: str
+    dst_node_name: str
+    src_edge_name: str
+    dst_edge_name: str
+    src_mapping: pd.DataFrame
+    dst_mapping: pd.DataFrame
+    h5_read_chunk_size: int | None = None
+
+    def __post_init__(self):
+        self.input_path = (
+            Path(self.input_path) if isinstance(self.input_path, str) else self.input_path
+        )
+        self.output_path = (
+            Path(self.output_path) if isinstance(self.output_path, str) else self.output_path
+        )
 
 
 def _create_chunked_slices(length, chunk_size):
@@ -130,7 +152,7 @@ def _save_sonata_nodes(nodes_path, df, population_name):
     df.index += 1
     cell_collection = voxcell.CellCollection.from_dataframe(df)
     cell_collection.population_name = population_name
-    cell_collection.save_sonata(nodes_path, mode="a")
+    cell_collection.save_sonata(str(nodes_path), mode="a")
     # restore the original index
     df.index -= 1
     return nodes_path
@@ -171,6 +193,10 @@ def _populate_edge_group(orig_group, new_group, sl, mask):
             for k, values in attr.items():
                 if isinstance(values, h5py.Dataset):
                     hdf5.append_to_dataset(new_group[name][k], values[sl][mask])
+        elif isinstance(attr, h5py.Group) and name == "@library":
+            raise NotImplementedError(
+                "@library group is defined by the spec but not currently supported"
+            )
         else:
             raise ValueError('Only "dynamics_params" group is expected')
 
@@ -188,37 +214,53 @@ def _h5_get_read_chunk_size():
     return int(os.environ.get("H5_READ_CHUNKSIZE", H5_READ_CHUNKSIZE))
 
 
-def _copy_edge_attributes(  # pylint: disable=too-many-arguments
-    h5in,
-    h5out,
-    src_node_name,
-    dst_node_name,
-    src_edge_name,
-    dst_edge_name,
-    src_mapping,
-    dst_mapping,
-    h5_read_chunk_size=None,
-):
-    """Copy the attributes from the original edges into the new edge populations"""
-    # pylint: disable=too-many-locals
-    if h5_read_chunk_size is None:
-        h5_read_chunk_size = _h5_get_read_chunk_size()
+def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: WriteEdgeConfig):
+    """
+    Copy and filter edge datasets from an input HDF5 file to an output HDF5 file.
 
-    orig_edges = h5in["edges"][src_edge_name]
+    This function:
+        - Reads the source edge population in chunks.
+        - Filters edges based on source and target node mappings.
+        - Copies source/target node IDs and all associated datasets.
+        - Initializes and populates new edge groups, preserving attributes.
+        - Raises errors if invalid IDs or unsupported groups (e.g., @library) are encountered.
+
+    Args:
+        h5in (h5py.File): Input HDF5 file containing original edges.
+        h5out (h5py.File): Output HDF5 file to store filtered edges.
+        write_edge_config (WriteEdgeConfig): Configuration specifying
+            source/target populations, edge names, mappings, and read chunk size.
+
+    Notes:
+        - Only the "dynamics_params" group is currently supported in edge groups.
+        - Supports appendable datasets; existing datasets will raise an error if re-created.
+        - Processing is chunked to handle large edge populations efficiently.
+    """
+    # extract values
+    h5_read_chunk_size = (
+        write_edge_config.h5_read_chunk_size
+        if write_edge_config.h5_read_chunk_size is not None
+        else _h5_get_read_chunk_size()
+    )
+
+    # get groups
+    orig_edges = h5in["edges"][write_edge_config.src_edge_name]
     orig_group = _get_unique_group(orig_edges)
-    new_edges = h5out.create_group("edges/" + dst_edge_name)
+    new_edges = h5out.create_group("edges/" + write_edge_config.dst_edge_name)
     new_group = new_edges.create_group(GROUP_NAME)
 
     hdf5.create_appendable_dataset(new_edges, "source_node_id", np.uint64)
     hdf5.create_appendable_dataset(new_edges, "target_node_id", np.uint64)
 
-    new_edges["source_node_id"].attrs["node_population"] = src_node_name
-    new_edges["target_node_id"].attrs["node_population"] = dst_node_name
+    # since create_appendable_dataset already fails if we append to an existing
+    # dataset, the following attribute assignments are safe
+    new_edges["source_node_id"].attrs["node_population"] = write_edge_config.src_node_name
+    new_edges["target_node_id"].attrs["node_population"] = write_edge_config.dst_node_name
 
     _init_edge_group(orig_group, new_group)
 
-    sgids_new = src_mapping.index.to_numpy()
-    tgids_new = dst_mapping.index.to_numpy()
+    sgids_new = write_edge_config.src_mapping.index.to_numpy()
+    tgids_new = write_edge_config.dst_mapping.index.to_numpy()
     assert (sgids_new >= 0).all(), "Source population ids must be positive."
     assert (tgids_new >= 0).all(), "Target population ids must be positive."
 
@@ -228,7 +270,7 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
         len(orig_edges["source_node_id"]),
         total_chunks,
         h5_read_chunk_size,
-        src_edge_name,
+        write_edge_config.src_edge_name,
     )
     for sl in _create_chunked_slices(len(orig_edges["source_node_id"]), h5_read_chunk_size):
         L.debug("Processing chunk %s", sl)
@@ -241,10 +283,12 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
 
         if np.any(mask):
             hdf5.append_to_dataset(
-                new_edges["source_node_id"], src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy()
+                new_edges["source_node_id"],
+                write_edge_config.src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy(),
             )
             hdf5.append_to_dataset(
-                new_edges["target_node_id"], dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy()
+                new_edges["target_node_id"],
+                write_edge_config.dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy(),
             )
             _populate_edge_group(orig_group, new_group, sl, mask)
 
@@ -252,7 +296,9 @@ def _copy_edge_attributes(  # pylint: disable=too-many-arguments
     _finalize_edges(new_edges)
 
 
-def _get_node_counts(h5out, new_edge_pop_name, src_mapping, dst_mapping):
+def _get_node_counts(
+    h5out: h5py.File, new_edge_pop_name: str, src_mapping: pd.DataFrame, dst_mapping: pd.DataFrame
+):
     """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
 
     source_node_count = int(np.max(src_mapping)) + 1
@@ -268,10 +314,12 @@ def _get_node_counts(h5out, new_edge_pop_name, src_mapping, dst_mapping):
     return edge_count, source_node_count, target_node_count
 
 
-def _write_indexes(edge_file_name, new_pop_name, source_node_count, target_node_count):
+def _write_indexes(
+    edge_file_name: str | Path, new_pop_name: str, source_node_count: int, target_node_count: int
+):
     """ibid"""
     libsonata.EdgePopulation.write_indices(
-        edge_file_name, new_pop_name, source_node_count, target_node_count
+        str(edge_file_name), new_pop_name, source_node_count, target_node_count
     )
 
 
@@ -297,32 +345,33 @@ def _write_edges(
         written_edges = 0
         for src_node_pop, dst_node_pop in it.product(id_mapping, id_mapping):
             edge_pop_name = _get_population_name(src_node_pop, dst_node_pop)
-            edge_file_name = os.path.join(output, _get_edge_file_name(edge_pop_name))
 
-            L.debug("Writing to  %s", edge_file_name)
-            with h5py.File(edge_file_name, "w") as h5out:
-                _copy_edge_attributes(
-                    h5in=h5in,
-                    h5out=h5out,
-                    src_node_name=src_node_pop,
-                    dst_node_name=dst_node_pop,
-                    src_edge_name=_get_unique_population(h5in["edges"]),
-                    dst_edge_name=edge_pop_name,
-                    src_mapping=id_mapping[src_node_pop],
-                    dst_mapping=id_mapping[dst_node_pop],
-                    h5_read_chunk_size=h5_read_chunk_size,
-                )
+            write_edge_config = WriteEdgeConfig(
+                output_path=Path(output) / _get_edge_file_name(edge_pop_name),
+                input_path=edges_path,
+                src_node_name=src_node_pop,
+                dst_node_name=dst_node_pop,
+                src_edge_name=_get_unique_population(h5in["edges"]),
+                dst_edge_name=edge_pop_name,
+                src_mapping=id_mapping[src_node_pop],
+                dst_mapping=id_mapping[dst_node_pop],
+                h5_read_chunk_size=h5_read_chunk_size,
+            )
+
+            L.debug("Writing to  %s", write_edge_config.output_path)
+            with h5py.File(write_edge_config.output_path, "w") as h5out:
+                _copy_filtered_edges(h5in=h5in, h5out=h5out, write_edge_config=write_edge_config)
                 edge_count, sgid_count, tgid_count = _get_node_counts(
                     h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
                 )
 
             # after the h5 file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
-                _write_indexes(edge_file_name, edge_pop_name, sgid_count, tgid_count)
-                L.debug("Wrote %s edges to %s", edge_count, edge_file_name)
+                _write_indexes(write_edge_config.output_path, edge_pop_name, sgid_count, tgid_count)
+                L.debug("Wrote %s edges to %s", edge_count, write_edge_config.output_path)
                 written_edges += edge_count
             else:
-                os.unlink(edge_file_name)
+                Path(write_edge_config.output_path).unlink(missing_ok=True)
 
         if expect_to_use_all_edges:
             _check_all_edges_used(h5in, written_edges)
@@ -343,8 +392,8 @@ def _write_nodes(output, split_nodes, population_to_path=None):
     for new_population, df in split_nodes.items():
         df = df.reset_index(drop=True)
         nodes_path = population_to_path.get(new_population, _get_node_file_name(new_population))
-        nodes_path = os.path.join(output, nodes_path)
-        Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
+        nodes_path = Path(output) / nodes_path
+        nodes_path.parent.mkdir(parents=True, exist_ok=True)
         ret[new_population] = _save_sonata_nodes(nodes_path, df, population_name=new_population)
         L.debug("Wrote %s nodes to %s", len(df), nodes_path)
 
@@ -394,15 +443,16 @@ def _write_circuit_config(output, split_nodes):
         if src == dst:
             tmpl["networks"]["nodes"].append(
                 {
-                    "nodes_file": os.path.join("$BASE_DIR", _get_node_file_name(new_pop_name)),
+                    "nodes_file": str(Path("$BASE_DIR") / _get_node_file_name(new_pop_name)),
                     "node_types_file": None,
                 }
             )
 
-        if os.path.exists(os.path.join(output, _get_edge_file_name(new_pop_name))):
+        edge_path = Path(output) / _get_edge_file_name(new_pop_name)
+        if edge_path.exists():
             tmpl["networks"]["edges"].append(
                 {
-                    "edges_file": os.path.join("$BASE_DIR", _get_edge_file_name(new_pop_name)),
+                    "edges_file": str(Path("$BASE_DIR") / _get_edge_file_name(new_pop_name)),
                     "edge_types_file": None,
                 }
             )
@@ -466,51 +516,58 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
     _write_edges(output, edges_path, id_mapping, expect_to_use_all_edges=False)
 
 
-def _write_subcircuit_edges(
-    output_path,
-    edges_path,
-    src_node_pop,
-    dst_node_pop,
-    src_edge_pop_name,
-    dst_edge_pop_name,
-    src_mapping,
-    dst_mapping,
-):
+def _write_subcircuit_edges(write_edge_config: WriteEdgeConfig):
     """copy a population to an edge file
 
     If DELETED_EMPTY_EDGES_FILE is returned, the file was removed since no
     populations existed in it any more
     If DELETED_EMPTY_EDGES_POPULATION is returned, the population was removed
     """
-    with h5py.File(edges_path, "r") as h5in:
+    output_path = write_edge_config.output_path
+
+    L.debug(
+        "Writing edges %s for %s -> %s [%s]",
+        write_edge_config.src_edge_name,
+        write_edge_config.src_edge_name,
+        write_edge_config.dst_edge_name,
+        str(output_path),
+    )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with h5py.File(write_edge_config.input_path, "r") as h5in:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         is_file_empty = False
 
         with h5py.File(output_path, "a") as h5out:
-            _copy_edge_attributes(
+            _copy_filtered_edges(
                 h5in=h5in,
                 h5out=h5out,
-                src_node_name=src_node_pop,
-                dst_node_name=dst_node_pop,
-                src_edge_name=src_edge_pop_name,
-                dst_edge_name=dst_edge_pop_name,
-                src_mapping=src_mapping,
-                dst_mapping=dst_mapping,
+                write_edge_config=write_edge_config,
             )
+
             edge_count, sgid_count, tgid_count = _get_node_counts(
-                h5out, dst_edge_pop_name, src_mapping, dst_mapping
+                h5out=h5out,
+                new_edge_pop_name=write_edge_config.dst_edge_name,
+                src_mapping=write_edge_config.src_mapping,
+                dst_mapping=write_edge_config.dst_mapping,
             )
 
             if edge_count == 0:
-                del h5out[f"/edges/{dst_edge_pop_name}"]
+                del h5out[f"/edges/{write_edge_config.dst_edge_name}"]
                 is_file_empty = len(h5out["/edges"]) == 0
 
         # after the h5 file is closed, it's indexed if valid, or it's removed if empty
         if edge_count > 0:
-            _write_indexes(output_path, dst_edge_pop_name, sgid_count, tgid_count)
+            _write_indexes(
+                edge_file_name=write_edge_config.output_path,
+                new_pop_name=write_edge_config.dst_edge_name,
+                source_node_count=sgid_count,
+                target_node_count=tgid_count,
+            )
             L.debug("Wrote %s edges to %s", edge_count, output_path)
         elif is_file_empty:
-            os.unlink(output_path)
+            Path(output_path).unlink(missing_ok=True)
             output_path = DELETED_EMPTY_EDGES_FILE
         else:  # population empty, but not file
             output_path = DELETED_EMPTY_EDGES_POPULATION
@@ -584,24 +641,19 @@ def _write_subcircuit_biological(
     new_edges_files = {}
     for edge_pop_name, edge in circuit.edges.items():
         if edge.source.name in id_mapping and edge.target.name in id_mapping:
-            output_path = output / edge_pop_to_paths[edge_pop_name]
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            L.debug(
-                "Writing edges %s for %s -> %s [%s]",
-                edge_pop_name,
-                edge.source.name,
-                edge.target.name,
-                output_path,
-            )
-            new_edges_files[edge_pop_name] = _write_subcircuit_edges(
-                output_path=str(output_path),
-                edges_path=_get_storage_path(edge),
-                src_node_pop=edge.source.name,
-                dst_node_pop=edge.target.name,
-                src_edge_pop_name=edge_pop_name,
-                dst_edge_pop_name=edge_pop_name,
+            write_edge_config = WriteEdgeConfig(
+                output_path=output / edge_pop_to_paths[edge_pop_name],
+                input_path=_get_storage_path(edge),
+                src_node_name=edge.source.name,
+                dst_node_name=edge.target.name,
+                src_edge_name=edge_pop_name,
+                dst_edge_name=edge_pop_name,
                 src_mapping=id_mapping[edge.source.name],
                 dst_mapping=id_mapping[edge.target.name],
+            )
+
+            new_edges_files[edge_pop_name] = _write_subcircuit_edges(
+                write_edge_config=write_edge_config
             )
 
     return new_node_files, new_edges_files
@@ -732,16 +784,18 @@ def _write_subcircuit_external(
             else:
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
-            new_edges_files[new_name] = _write_subcircuit_edges(
+            write_edge_config = WriteEdgeConfig(
                 output_path=str(output_path),
-                edges_path=_get_storage_path(edge),
-                src_node_pop=new_source_pop_name,
-                dst_node_pop=edge.target.name,
-                src_edge_pop_name=name,
-                dst_edge_pop_name=new_name,
+                input_path=_get_storage_path(edge),
+                src_node_name=new_source_pop_name,
+                dst_node_name=edge.target.name,
+                src_edge_name=name,
+                dst_edge_name=new_name,
                 src_mapping=wanted_src_ids,
                 dst_mapping=id_mapping[edge.target.name],
             )
+
+            new_edges_files[new_name] = _write_subcircuit_edges(write_edge_config=write_edge_config)
             new_nodes[new_source_pop_name] = (
                 edge.source.name,
                 wanted_src_ids.index.to_numpy(),
@@ -753,8 +807,8 @@ def _write_subcircuit_external(
         # Get all properties of the subset of the node population that is relevant
         orig_population_name, ids = id_tuple
         df = circuit.nodes[orig_population_name].get(ids).reset_index(drop=True)
-        nodes_path = os.path.join(output, population_name, "nodes.h5")
-        Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
+        nodes_path = Path(output) / population_name / "nodes.h5"
+        nodes_path.parent.mkdir(parents=True, exist_ok=True)
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
     return new_node_files, new_edges_files
@@ -819,25 +873,26 @@ def _write_subcircuit_virtual(
 
     # write the edges that have the virtual populations as source
     for edge_pop_name, edge in virtual_populations.items():
-        new_edges_files[edge_pop_name] = _write_subcircuit_edges(
-            output_path=os.path.join(
-                output, edge_populations_to_paths[edge_pop_name]
-            ),  # Where to write to
-            edges_path=_get_storage_path(edge),  # Where to read from
-            src_node_pop=edge.source.name,
-            dst_node_pop=edge.target.name,
-            src_edge_pop_name=edge_pop_name,
-            dst_edge_pop_name=edge_pop_name,
+        write_edge_config = WriteEdgeConfig(
+            output_path=Path(output) / edge_populations_to_paths[edge_pop_name],
+            input_path=_get_storage_path(edge),  # Where to read from
+            src_node_name=edge.source.name,
+            dst_node_name=edge.target.name,
+            src_edge_name=edge_pop_name,
+            dst_edge_name=edge_pop_name,
             src_mapping=id_mapping[edge.source.name],
             dst_mapping=id_mapping[edge.target.name],
+        )
+        new_edges_files[edge_pop_name] = _write_subcircuit_edges(
+            write_edge_config=write_edge_config
         )
 
     # write virtual nodes based on virtual populations
     for population_name, ids in pop_used_source_node_ids.items():
         # Get all properties of the subset of the node population that is relevant
         df = circuit.nodes[population_name].get(ids).reset_index(drop=True)
-        nodes_path = os.path.join(output, population_name, "nodes.h5")
-        Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
+        nodes_path = Path(output) / population_name / "nodes.h5"
+        nodes_path.parent.mkdir(parents=True, exist_ok=True)
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
     return new_node_files, new_edges_files
@@ -890,20 +945,13 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
             if new_pop_name in _entry["populations"]
         ]
         assert 0 <= len(matched_originals) <= 1
-        if len(matched_originals) == 1:
-            config["networks"][type_].append(
-                {
-                    str_type: os.path.join("$BASE_DIR", updated_path),
-                    "populations": {new_pop_name: copy.deepcopy(matched_originals[0])},
-                }
-            )
-        else:
-            config["networks"][type_].append(
-                {
-                    str_type: os.path.join("$BASE_DIR", updated_path),
-                    "populations": {new_pop_name: {}},
-                }
-            )
+        entry = {
+            str_type: str(Path("$BASE_DIR") / updated_path),
+            "populations": {new_pop_name: copy.deepcopy(matched_originals[0])}
+            if len(matched_originals) == 1
+            else {new_pop_name: {}},
+        }
+        config["networks"][type_].append(entry)
         config["networks"][type_][-1]["populations"][new_pop_name].setdefault("type", default_type)
     return config
 
@@ -973,12 +1021,12 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
     """write the id mappings between the old and new populations for future analysis"""
     this_mapping = _mapping_to_parent_dict(id_mapping, node_pop_name_mapping)
 
-    provenance = parent_circ.config["components"].get("provenance", {})
+    provenance = parent_circ.config.get("components", {}).get("provenance", {})
     if "id_mapping" in provenance:
         # Currently, bluepysnap does not seem to resolve $BASE_DIR for entries in "provenance".
         # Therefore I decided to not prepend it and just assume the file exists near the circuit config.
-        parent_root = os.path.split(parent_circ._circuit_config_path)[0]
-        parent_mapping = utils.load_json(os.path.join(parent_root, provenance["id_mapping"]))
+        parent_root = Path(parent_circ._circuit_config_path).parent
+        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
         _add_mapping_to_original(this_mapping, parent_mapping)
     else:
         _make_parent_the_original_mapping(this_mapping)
@@ -1086,5 +1134,5 @@ def split_subcircuit(
 
     # TODO: Should be "$BASE_DIR/" + mapping_fn. But bluepysnap does not seem to resolve
     # $BASE_DIR for entries in "provenance"..? So I don't even try.
-    config["components"].setdefault("provenance", {})["id_mapping"] = mapping_fn
+    config.setdefault("components", {}).setdefault("provenance", {})["id_mapping"] = mapping_fn
     utils.dump_json(output / "circuit_config.json", config)
