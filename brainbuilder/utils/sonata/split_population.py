@@ -46,6 +46,8 @@ ORIG_NAME = "original_name"
 
 @dataclass
 class WriteEdgeConfig:
+    input_path: str | Path
+    output_path: str | Path
     src_node_name: str
     dst_node_name: str
     src_edge_name: str
@@ -53,8 +55,6 @@ class WriteEdgeConfig:
     src_mapping: pd.DataFrame
     dst_mapping: pd.DataFrame
     h5_read_chunk_size: int | None = None
-    input_path: str | Path | None = None
-    output_path: str | Path | None = None
 
     def __post_init__(self):
         self.input_path = (
@@ -349,20 +349,21 @@ def _write_edges(
         written_edges = 0
         for src_node_pop, dst_node_pop in it.product(id_mapping, id_mapping):
             edge_pop_name = _get_population_name(src_node_pop, dst_node_pop)
-            edge_file_name = Path(output) / _get_edge_file_name(edge_pop_name)
 
-            L.debug("Writing to  %s", edge_file_name)
-            with h5py.File(edge_file_name, "w") as h5out:
-                write_edge_config = WriteEdgeConfig(
-                    src_node_name=src_node_pop,
-                    dst_node_name=dst_node_pop,
-                    src_edge_name=_get_unique_population(h5in["edges"]),
-                    dst_edge_name=edge_pop_name,
-                    src_mapping=id_mapping[src_node_pop],
-                    dst_mapping=id_mapping[dst_node_pop],
-                    h5_read_chunk_size=h5_read_chunk_size,
-                )
+            write_edge_config = WriteEdgeConfig(
+                output_path=Path(output) / _get_edge_file_name(edge_pop_name),
+                input_path=edges_path,
+                src_node_name=src_node_pop,
+                dst_node_name=dst_node_pop,
+                src_edge_name=_get_unique_population(h5in["edges"]),
+                dst_edge_name=edge_pop_name,
+                src_mapping=id_mapping[src_node_pop],
+                dst_mapping=id_mapping[dst_node_pop],
+                h5_read_chunk_size=h5_read_chunk_size,
+            )
 
+            L.debug("Writing to  %s", write_edge_config.output_path)
+            with h5py.File(write_edge_config.output_path, "w") as h5out:
                 _copy_filtered_edges(h5in=h5in, h5out=h5out, write_edge_config=write_edge_config)
                 edge_count, sgid_count, tgid_count = _get_node_counts(
                     h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
@@ -370,11 +371,11 @@ def _write_edges(
 
             # after the h5 file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
-                _write_indexes(edge_file_name, edge_pop_name, sgid_count, tgid_count)
-                L.debug("Wrote %s edges to %s", edge_count, edge_file_name)
+                _write_indexes(write_edge_config.output_path, edge_pop_name, sgid_count, tgid_count)
+                L.debug("Wrote %s edges to %s", edge_count, write_edge_config.output_path)
                 written_edges += edge_count
             else:
-                Path(edge_file_name).unlink(missing_ok=True)
+                Path(write_edge_config.output_path).unlink(missing_ok=True)
 
         if expect_to_use_all_edges:
             _check_all_edges_used(h5in, written_edges)
