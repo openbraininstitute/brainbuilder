@@ -350,6 +350,7 @@ def split_subcircuit(nodeset, circuit, include_virtual, create_external, output)
         )
     )
 
+
 @app.command()
 @click.option("--nodeset", required=True, help="Name of nodeset")
 @click.option("--circuit", required=True, type=REQUIRED_PATH, help="path to circuit_config.json")

@@ -1312,6 +1312,7 @@ def split_subcircuit(
 
     return circuit
 
+
 def _recursive_replace_in_json_dict(config_dict: dict, old_base: str, new_base: str) -> None:
     """Recursively replace old_base with new_base in a dict or nested lists."""
     old_base = str(Path(old_base).resolve())
@@ -1326,6 +1327,7 @@ def _recursive_replace_in_json_dict(config_dict: dict, old_base: str, new_base: 
         elif isinstance(value, list):
             for _v in value:
                 _recursive_replace_in_json_dict(_v, old_base, new_base)
+
 
 def _rebase_config_file(new_file_path: str, old_file_path: str) -> None:
     """Rebase paths in new_file_path, replacing old config paths with $BASEDIR from old_file_path."""
@@ -1344,6 +1346,7 @@ def _rebase_config_file(new_file_path: str, old_file_path: str) -> None:
     _recursive_replace_in_json_dict(new_config, basedir, "$BASE_DIR")
 
     utils.dump_json(new_file_path, new_config)
+
 
 def _get_pop_morph_dirs(
     pop_name: str, pop: bluepysnap.nodes.NodePopulation, original_circuit: bluepysnap.Circuit
