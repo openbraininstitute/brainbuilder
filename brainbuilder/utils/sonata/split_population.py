@@ -242,8 +242,6 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
         if write_edge_config.h5_read_chunk_size is not None
         else _h5_get_read_chunk_size()
     )
-    src_node_name = write_edge_config.src_node_name
-    dst_node_name = write_edge_config.dst_node_name
     src_edge_name = write_edge_config.src_edge_name
     dst_edge_name = write_edge_config.dst_edge_name
     src_mapping = write_edge_config.src_mapping
@@ -260,8 +258,8 @@ def _copy_filtered_edges(h5in: h5py.File, h5out: h5py.File, write_edge_config: W
 
     # since create_appendable_dataset already fails if we append to an existing
     # dataset, the following attribute assignments are safe
-    new_edges["source_node_id"].attrs["node_population"] = src_node_name
-    new_edges["target_node_id"].attrs["node_population"] = dst_node_name
+    new_edges["source_node_id"].attrs["node_population"] = write_edge_config.src_node_name
+    new_edges["target_node_id"].attrs["node_population"] = write_edge_config.dst_node_name
 
     _init_edge_group(orig_group, new_group)
 
