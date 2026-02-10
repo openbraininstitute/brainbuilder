@@ -854,20 +854,11 @@ def make_edge_mapping_df(old_ids):
     )
 
 
-def print_h5_contents(fname):
-    def recurse(name, obj):
-        print(f"{name}: {type(obj)}")
-        if isinstance(obj, h5py.Dataset):
-            print(f"  data: {obj[:]}")
-        for k, v in obj.attrs.items():
-            print(f"  attr {k}: {v}")
-
-    with h5py.File(fname, "r") as f:
-        f.visititems(recurse)
-
 def test_copy_filtered_edges_advanced(tmp_path):
     """
-    TODO
+    Test that _copy_filtered_edges filters edges, remaps node and synapse ids,
+    renames the edge population, and writes consistent SONATA output under
+    chunked reading.
     """
     infile = tmp_path / "in.h5"
     outfile = tmp_path / "out.h5"
@@ -918,17 +909,20 @@ def test_copy_filtered_edges_advanced(tmp_path):
     # ----------------------
     # Run
     # ----------------------
-    with h5py.File(infile, "r") as h5in, h5py.File(outfile, "w") as h5out:
-        write_edge_config = split_population.WriteEdgeConfig(
-            src_node_name="orig_src_node_pop",
-            dst_node_name="orig_dst_node_pop",
-            src_edge_name="orig_src_edge_pop",
-            dst_edge_name="new_src_edge_pop",
-            src_mapping=mapping,
-            dst_mapping=mapping,
-            h5_read_chunk_size=3,  # FORCE chunking
-            edge_type="synapse_astrocyte"
-        )
+
+    write_edge_config = split_population.WriteEdgeConfig(
+        output_path=outfile,
+        input_path=infile,
+        src_node_name="orig_src_node_pop",
+        dst_node_name="orig_dst_node_pop",
+        src_edge_name="orig_src_edge_pop",
+        dst_edge_name="new_src_edge_pop",
+        src_mapping=mapping,
+        dst_mapping=mapping,
+        h5_read_chunk_size=3,  # FORCE chunking
+        edge_type="synapse_astrocyte"
+    )
+    with h5py.File(write_edge_config.input_path, "r") as h5in, h5py.File(write_edge_config.output_path, "w") as h5out:
         split_population._copy_filtered_edges(
             h5in=h5in,
             h5out=h5out,

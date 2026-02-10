@@ -46,6 +46,8 @@ ORIG_NAME = "original_name"
 
 @dataclass
 class WriteEdgeConfig:
+    input_path: str | Path
+    output_path: str | Path
     src_node_name: str
     dst_node_name: str
     src_edge_name: str
@@ -53,8 +55,6 @@ class WriteEdgeConfig:
     src_mapping: pd.DataFrame
     dst_mapping: pd.DataFrame
     h5_read_chunk_size: int | None = None
-    input_path: str | Path | None = None
-    output_path: str | Path | None = None
     edge_type: type[bytes] | None = None
 
     def __post_init__(self):
@@ -267,18 +267,11 @@ def _copy_filtered_edges(
         if write_edge_config.h5_read_chunk_size is not None
         else _h5_get_read_chunk_size()
     )
-    src_node_name = write_edge_config.src_node_name
-    dst_node_name = write_edge_config.dst_node_name
-    src_edge_name = write_edge_config.src_edge_name
-    dst_edge_name = write_edge_config.dst_edge_name
-    src_mapping = write_edge_config.src_mapping
-    dst_mapping = write_edge_config.dst_mapping
     is_neuroglial = write_edge_config.edge_type == "synapse_astrocyte"
-
     # get groups
-    orig_edges = h5in["edges"][src_edge_name]
+    orig_edges = h5in["edges"][write_edge_config.src_edge_name]
     orig_group = _get_unique_group(orig_edges)
-    new_edges = h5out.create_group("edges/" + dst_edge_name)
+    new_edges = h5out.create_group("edges/" + write_edge_config.dst_edge_name)
     new_group = new_edges.create_group(GROUP_NAME)
 
     hdf5.create_appendable_dataset(new_edges, "source_node_id", np.uint64)
@@ -286,8 +279,8 @@ def _copy_filtered_edges(
 
     # since create_appendable_dataset already fails if we append to an existing
     # dataset, the following attribute assignments are safe
-    new_edges["source_node_id"].attrs["node_population"] = src_node_name
-    new_edges["target_node_id"].attrs["node_population"] = dst_node_name
+    new_edges["source_node_id"].attrs["node_population"] = write_edge_config.src_node_name
+    new_edges["target_node_id"].attrs["node_population"] = write_edge_config.dst_node_name
 
     additional_attrs = {}
     if is_neuroglial:
@@ -299,8 +292,8 @@ def _copy_filtered_edges(
 
     _init_edge_group(orig_group, new_group, additional_attrs)
 
-    sgids_new = src_mapping.index.to_numpy()
-    tgids_new = dst_mapping.index.to_numpy()
+    sgids_new = write_edge_config.src_mapping.index.to_numpy()
+    tgids_new = write_edge_config.dst_mapping.index.to_numpy()
     assert (sgids_new >= 0).all(), "Source population ids must be positive."
     assert (tgids_new >= 0).all(), "Target population ids must be positive."
 
@@ -310,7 +303,7 @@ def _copy_filtered_edges(
         len(orig_edges["source_node_id"]),
         total_chunks,
         h5_read_chunk_size,
-        src_edge_name,
+        write_edge_config.src_edge_name,
     )
 
     sl_and_masks = _compute_chunks_and_masks(
@@ -345,8 +338,8 @@ def _copy_filtered_edges(
         sl_and_masks=sl_and_masks,
         new_edges=new_edges,
         orig_edges=orig_edges,
-        src_mapping=src_mapping,
-        dst_mapping=dst_mapping,
+        src_mapping=write_edge_config.src_mapping,
+        dst_mapping=write_edge_config.dst_mapping,
         edge_mappings=edge_mappings,
         is_neuroglial=is_neuroglial,
     )
@@ -487,20 +480,21 @@ def _write_edges(
         written_edges = 0
         for src_node_pop, dst_node_pop in it.product(id_mapping, id_mapping):
             edge_pop_name = _get_population_name(src_node_pop, dst_node_pop)
-            edge_file_name = Path(output) / _get_edge_file_name(edge_pop_name)
 
-            L.debug("Writing to  %s", edge_file_name)
-            with h5py.File(edge_file_name, "w") as h5out:
-                write_edge_config = WriteEdgeConfig(
-                    src_node_name=src_node_pop,
-                    dst_node_name=dst_node_pop,
-                    src_edge_name=_get_unique_population(h5in["edges"]),
-                    dst_edge_name=edge_pop_name,
-                    src_mapping=id_mapping[src_node_pop],
-                    dst_mapping=id_mapping[dst_node_pop],
-                    h5_read_chunk_size=h5_read_chunk_size,
-                )
+            write_edge_config = WriteEdgeConfig(
+                output_path=Path(output) / _get_edge_file_name(edge_pop_name),
+                input_path=edges_path,
+                src_node_name=src_node_pop,
+                dst_node_name=dst_node_pop,
+                src_edge_name=_get_unique_population(h5in["edges"]),
+                dst_edge_name=edge_pop_name,
+                src_mapping=id_mapping[src_node_pop],
+                dst_mapping=id_mapping[dst_node_pop],
+                h5_read_chunk_size=h5_read_chunk_size,
+            )
 
+            L.debug("Writing to  %s", write_edge_config.output_path)
+            with h5py.File(write_edge_config.output_path, "w") as h5out:
                 _copy_filtered_edges(h5in=h5in, h5out=h5out, write_edge_config=write_edge_config)
                 edge_count, sgid_count, tgid_count = _get_node_counts(
                     h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
@@ -508,11 +502,11 @@ def _write_edges(
 
             # after the h5 file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
-                _write_indexes(edge_file_name, edge_pop_name, sgid_count, tgid_count)
-                L.debug("Wrote %s edges to %s", edge_count, edge_file_name)
+                _write_indexes(write_edge_config.output_path, edge_pop_name, sgid_count, tgid_count)
+                L.debug("Wrote %s edges to %s", edge_count, write_edge_config.output_path)
                 written_edges += edge_count
             else:
-                Path(edge_file_name).unlink(missing_ok=True)
+                Path(write_edge_config.output_path).unlink(missing_ok=True)
 
         if expect_to_use_all_edges:
             _check_all_edges_used(h5in, written_edges)
