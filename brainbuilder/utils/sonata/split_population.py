@@ -1031,7 +1031,7 @@ def split_subcircuit(
     else:
         assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
 
-    node_pop_to_paths, edge_pop_to_paths = layout._gather_layout_from_networks(
+    node_pop_to_paths, edge_pop_to_paths = layout.gather_layout_from_networks(
         circuit.config["networks"]
     )
 

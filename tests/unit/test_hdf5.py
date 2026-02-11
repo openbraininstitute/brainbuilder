@@ -4,10 +4,6 @@ import pytest
 
 from brainbuilder.utils import hdf5
 
-# ----------------------------------------------------------------------
-#                               TESTS
-# ----------------------------------------------------------------------
-
 @pytest.fixture
 def sample_h5(tmp_path):
     path = tmp_path / "input.h5"

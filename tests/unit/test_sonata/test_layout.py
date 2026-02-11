@@ -3,11 +3,11 @@
 from brainbuilder.utils.sonata import layout
 
 
-def test__gather_layout_from_networks():
-    res = layout._gather_layout_from_networks({"nodes": [], "edges": []})
+def test_gather_layout_from_networks():
+    res = layout.gather_layout_from_networks({"nodes": [], "edges": []})
     assert res == ({}, {})
 
-    nodes, edges = layout._gather_layout_from_networks(
+    nodes, edges = layout.gather_layout_from_networks(
         {
             "nodes": [
                 {
@@ -58,7 +58,7 @@ def test__gather_layout_from_networks():
         "c_b": "b/bc.h5",
     }
 
-    nodes, edges = layout._gather_layout_from_networks(
+    nodes, edges = layout.gather_layout_from_networks(
         {
             "nodes": [
                 {
@@ -75,7 +75,7 @@ def test__gather_layout_from_networks():
     )
     assert nodes == {"B": "b/bc.h5", "C": "b/bc.h5", "b": "b/bc.h5", "c": "b/bc.h5"}
 
-    nodes, edges = layout._gather_layout_from_networks(
+    nodes, edges = layout.gather_layout_from_networks(
         {
             "nodes": [
                 {

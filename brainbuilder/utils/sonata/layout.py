@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-def _extract_population_paths(key, networks):
+def extract_population_paths(key, networks):
     """extract populations from `network_base`; return dictionary with their file path"""
     key_name = f"{key}_file"
     ret = {}
@@ -18,7 +18,7 @@ def _extract_population_paths(key, networks):
     return ret
 
 
-def _gather_layout_from_networks(networks):
+def gather_layout_from_networks(networks):
     """find the layout of the nodes and edges files, return a dict of the name -> relative path"""
 
     # Note: we are 'prioritizing' the layout of the config over the layout of the files on disk:
@@ -32,7 +32,7 @@ def _gather_layout_from_networks(networks):
     # See tests for more clarity
     node_populations_to_paths, edge_populations_to_paths = {}, {}
 
-    node_populations_to_paths = _extract_population_paths(key="nodes", networks=networks)
-    edge_populations_to_paths = _extract_population_paths(key="edges", networks=networks)
+    node_populations_to_paths = extract_population_paths(key="nodes", networks=networks)
+    edge_populations_to_paths = extract_population_paths(key="edges", networks=networks)
 
     return node_populations_to_paths, edge_populations_to_paths

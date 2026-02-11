@@ -10,25 +10,8 @@ from brainbuilder.utils.sonata import layout
 L = logging.getLogger(__name__)
 
 
-def repair_circuit(output, circuit):
-    """
-    Repair circuits by inferring missing attributes.
-    """
-    output = Path(output)
-
-    if isinstance(circuit, (str, Path)):
-        circuit = bluepysnap.Circuit(circuit)
-    else:
-        assert isinstance(circuit, bluepysnap.Circuit)
-
-    _, edge_pop_to_paths = layout._gather_layout_from_networks(circuit.config["networks"])
-
-    _repair_neuroglial_edge_file(output, circuit, edge_pop_to_paths)
-
-
-def _repair_neuroglial_edge_file(output, circuit, edge_pop_to_paths):
-    """
-    Repair a neuroglial edge HDF5 file by normalizing how the synapse edge population
+def repair_neuroglial_edge_file(output, circuit):
+    """Repair a neuroglial edge HDF5 file by normalizing how the synapse edge population
     is stored.
 
     Rules:
@@ -38,6 +21,14 @@ def _repair_neuroglial_edge_file(output, circuit, edge_pop_to_paths):
         * if values differ → abort (multiple populations per file not supported)
     - Else, infer from chemical edge populations (must be exactly one)
     """
+
+    output = Path(output)
+
+    if isinstance(circuit, (str, Path)):
+        circuit = bluepysnap.Circuit(circuit)
+
+    _, edge_pop_to_paths = layout.gather_layout_from_networks(circuit.config["networks"])
+
     chemical_candidates = [n for n, e in circuit.edges.items() if e.type == "chemical"]
 
     for edge_pop_name, edge in circuit.edges.items():
