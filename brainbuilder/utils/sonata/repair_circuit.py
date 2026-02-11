@@ -5,7 +5,7 @@ import bluepysnap
 import h5py
 
 from brainbuilder.utils import hdf5
-from brainbuilder.utils.sonata import layout
+from brainbuilder.utils.sonata import _layout
 
 L = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ def repair_neuroglial_edge_file(output, circuit):
     if isinstance(circuit, (str, Path)):
         circuit = bluepysnap.Circuit(circuit)
 
-    _, edge_pop_to_paths = layout.gather_layout_from_networks(circuit.config["networks"])
+    _, edge_pop_to_paths = _layout.gather_layout_from_networks(circuit.config["networks"])
 
     chemical_candidates = [n for n, e in circuit.edges.items() if e.type == "chemical"]
 

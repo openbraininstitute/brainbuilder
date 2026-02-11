@@ -20,7 +20,7 @@ from joblib import Parallel, delayed
 
 from brainbuilder import utils
 from brainbuilder.utils import hdf5
-from brainbuilder.utils.sonata import layout
+from brainbuilder.utils.sonata import _layout
 
 L = logging.getLogger(__name__)
 
@@ -1031,7 +1031,7 @@ def split_subcircuit(
     else:
         assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
 
-    node_pop_to_paths, edge_pop_to_paths = layout.gather_layout_from_networks(
+    node_pop_to_paths, edge_pop_to_paths = _layout.gather_layout_from_networks(
         circuit.config["networks"]
     )
 
