@@ -20,6 +20,7 @@ from joblib import Parallel, delayed
 
 from brainbuilder import utils
 from brainbuilder.utils import hdf5
+from brainbuilder.utils.sonata import _layout
 
 L = logging.getLogger(__name__)
 
@@ -575,42 +576,6 @@ def _write_subcircuit_edges(write_edge_config: WriteEdgeConfig):
         return output_path
 
 
-def _gather_layout_from_networks(networks):
-    """find the layout of the nodes and edges files, return a dict of the name -> relative path"""
-
-    # Note: we are 'prioritizing' the layout of the config over the layout of the files on disk:
-    # 1) the `nodes`/`edges` network keys will still have the same number of elements
-    #    after writing the new config (unless populations aren't used)
-    # 2) The layout of the files may be slightly different; if the config has a single population
-    #    in the dict, the output population will be writen to $population_name/$original_filename.h5
-    #    if it has multiple elements, it will be written to
-    #    $original_parent_dir/$original_filename.h5
-    #
-    # See tests for more clarity
-    node_populations_to_paths, edge_populations_to_paths = {}, {}
-
-    def _extract_population_paths(key):
-        """extract populations from `network_base`; return dictionary with their file path"""
-        key_name = f"{key}_file"
-        ret = {}
-        for stanza in networks[key]:
-            filename = Path(stanza[key_name]).name
-            if len(stanza["populations"]) == 1:
-                population = next(iter(stanza["populations"]))
-                ret[population] = str(Path(population) / filename)
-            else:
-                # multiple populations; need to group them into the same file
-                base_path = Path(stanza[key_name]).parent.name
-                for population in stanza["populations"]:
-                    ret[population] = str(Path(base_path) / filename)
-        return ret
-
-    node_populations_to_paths = _extract_population_paths("nodes")
-    edge_populations_to_paths = _extract_population_paths("edges")
-
-    return node_populations_to_paths, edge_populations_to_paths
-
-
 def _get_storage_path(edge):
     """Return the storage path."""
     return edge.h5_filepath
@@ -1066,7 +1031,9 @@ def split_subcircuit(
     else:
         assert isinstance(circuit, bluepysnap.Circuit), "Path or sonata circuit object required!"
 
-    node_pop_to_paths, edge_pop_to_paths = _gather_layout_from_networks(circuit.config["networks"])
+    node_pop_to_paths, edge_pop_to_paths = _layout.gather_layout_from_networks(
+        circuit.config["networks"]
+    )
 
     # TODO: remove backward compatibility with snap 1.0, when the dependency can be updated.
     #  In snap 2.0 it's possible to simplify:
