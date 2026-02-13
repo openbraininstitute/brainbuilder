@@ -730,18 +730,14 @@ def test_split_subcircuit_edge_indices(tmp_path):
 
 
 def make_edge_mapping_df(old_ids):
-    """
-    Convert a list/array of old IDs into a DataFrame suitable for edge_mappings.
-    
-    Parameters
-    ----------
-    old_ids : list or np.ndarray
-        Array of old IDs.
-    
-    Returns
-    -------
-    pd.DataFrame
-        Indexed by old IDs, column 'new_id' = 0..N-1
+    """Convert old IDs into an edge-mapping DataFrame.
+
+    Args:
+        old_ids (Sequence[int] | np.ndarray): Old edge IDs.
+
+    Returns:
+        pd.DataFrame: DataFrame indexed by old IDs with column "new_id"
+            containing consecutive IDs from 0 to N-1.
     """
     old_ids = np.asarray(old_ids)  # ensure NumPy array
     return pd.DataFrame(
@@ -759,9 +755,9 @@ def test_copy_filtered_edges_advanced(tmp_path):
     infile = tmp_path / "in.h5"
     outfile = tmp_path / "out.h5"
 
-    # ----------------------
+
     # Build minimal SONATA input
-    # ----------------------
+
     with h5py.File(infile, "w") as f:
         edges = f.create_group("edges/orig_src_edge_pop")
         src_ds = edges.create_dataset(
@@ -792,9 +788,9 @@ def test_copy_filtered_edges_advanced(tmp_path):
         )
         syn_ds.attrs["edge_population"] = "orig_biophysical_edge_pop"
 
-    # ----------------------
+
     # Identity mappings
-    # ----------------------
+
     mapping = pd.DataFrame(
         {"new_id": np.arange(5, dtype=np.uint64)},
         index=np.array([2, 3, 4, 7, 8], dtype=np.uint64),
@@ -802,9 +798,8 @@ def test_copy_filtered_edges_advanced(tmp_path):
 
     edge_mappings = {"orig_biophysical_edge_pop": (make_edge_mapping_df([100, 102, 107]),"new_biophysical_edge_pop")}
 
-    # ----------------------
+
     # Run
-    # ----------------------
 
     write_edge_config = split_population.WriteEdgeConfig(
         output_path=outfile,
@@ -826,10 +821,7 @@ def test_copy_filtered_edges_advanced(tmp_path):
             edge_mappings=edge_mappings
         )
 
-    # # ----------------------
-    # # Verification
-    # # ----------------------
-
+    # Verification
     keep, new_name = edge_mappings["orig_src_edge_pop"]
     assert new_name == "new_src_edge_pop"
     with h5py.File(outfile, "r") as f:

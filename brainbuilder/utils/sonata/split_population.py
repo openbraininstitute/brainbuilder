@@ -256,6 +256,8 @@ def _copy_filtered_edges(
         h5out (h5py.File): Output HDF5 file to store filtered edges.
         write_edge_config (WriteEdgeConfig): Configuration specifying
             source/target populations, edge names, mappings, and read chunk size.
+        edge_mappings (dict[str, tuple[pd.DataFrame, str]]): Optional dict
+            updated with old→new edge ID mappings.
 
     Notes:
         - Only the "dynamics_params" group is currently supported in edge groups.
@@ -320,8 +322,12 @@ def _copy_filtered_edges(
         offset = new_edges["source_node_id"].shape[0]
         if offset != 0:
             raise RuntimeError(
-                f"It may be unsafe to append edges with a nonzero offset ({offset}). "
-                "Edge IDs may become inconsistent."
+                "Cannot append edges when edge_mappings is enabled and the destination already "
+                f"contains {offset} edges. The current implementation only supports edges created "
+                "in a single pass and does not capture cross-generation connections "
+                "(old astrocyte -> new neuron or new astrocyte -> old neuron). "
+                "Only new->new connections would be handled correctly. "
+                "Appending is therefore blocked as a safety safeguard."
             )
 
         assert write_edge_config.src_edge_name not in edge_mappings, (
@@ -350,8 +356,7 @@ def _copy_filtered_edges(
 
 
 def _compute_edge_mapping(sl_and_masks, offset=0):
-    """
-    Build a pandas DataFrame mapping absolute indices to NEW_IDS.
+    """Build a pandas DataFrame mapping absolute indices to NEW_IDS.
 
     Parameters
     ----------
@@ -766,7 +771,10 @@ def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig
     assert all(config.edge_type is not None for config in write_edge_configs)
     new_edges_files = {}
     edge_mappings = {}
-    # "synapse_astrocyte" must be processed after the other edges
+    # "synapse_astrocyte" edges must be processed after neuron–neuron edges because
+    # they depend on the remapped neuron–neuron edge IDs. These IDs are needed to
+    # populate the synapse_id dataset correctly. For neuroglial edges, synapse_id is
+    # the true target reference, while target_node_id is redundant.
     write_edge_configs_sorted = sorted(
         write_edge_configs, key=lambda cfg: cfg.edge_type == "synapse_astrocyte"
     )
