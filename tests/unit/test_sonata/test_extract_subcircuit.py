@@ -10,7 +10,8 @@ import utils
 from numpy.testing import assert_array_equal
 
 from brainbuilder.utils import load_json
-from brainbuilder.utils.sonata import split_population
+from brainbuilder.utils.sonata import extract_subcircuit
+import bluepysnap
 from brainbuilder.utils.sonata import utils as sonata_utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
@@ -48,33 +49,33 @@ def _check_edge_indices(nodes_file, edges_file):
 
 
 def test__get_population_name():
-    assert "src__dst__chemical" == split_population._get_population_name(src="src", dst="dst")
-    assert "src" == split_population._get_population_name(src="src", dst="src")
+    assert "src__dst__chemical" == extract_subcircuit._get_population_name(src="src", dst="dst")
+    assert "src" == extract_subcircuit._get_population_name(src="src", dst="src")
 
 
 def test__get_unique_population():
     nodes = DATA_PATH / "split_subcircuit" / "networks" / "nodes" / "nodes.h5"
     with h5py.File(nodes, "r") as h5:
         with pytest.raises(ValueError):
-            split_population._get_unique_population(h5["nodes"])
+            extract_subcircuit._get_unique_population(h5["nodes"])
 
     nodes = DATA_PATH / "nodes.h5"
     with h5py.File(nodes, "r") as h5:
-        assert split_population._get_unique_population(h5["nodes"]) == "default"
+        assert extract_subcircuit._get_unique_population(h5["nodes"]) == "default"
 
 
 def test__get_unique_group(tmp_path):
     nodes = DATA_PATH / "nodes.h5"
     with h5py.File(nodes, "r") as h5:
         parent = h5["nodes/default"]
-        assert split_population._get_unique_group(parent)
+        assert extract_subcircuit._get_unique_group(parent)
 
     with h5py.File(tmp_path / "nodes.h5", "w") as h5:
         parent = h5.create_group("/edges/")
         parent.create_group("/pop_name/0")
         parent.create_group("/pop_name/1")
         with pytest.raises(ValueError):
-            split_population._get_unique_group(parent)
+            extract_subcircuit._get_unique_group(parent)
 
 
 def test__write_nodes(tmp_path):
@@ -82,7 +83,7 @@ def test__write_nodes(tmp_path):
         "A": pd.DataFrame({"fake_prop": range(10)}, index=np.arange(10)),
         "B": pd.DataFrame({"fake_prop": range(5)}, index=np.arange(10, 15)),
     }
-    split_population._write_nodes(tmp_path, split_nodes)
+    extract_subcircuit._write_nodes(tmp_path, split_nodes)
     assert (tmp_path / "nodes_A.h5").exists()
     assert (tmp_path / "nodes_B.h5").exists()
 
@@ -99,7 +100,7 @@ def test__get_node_id_mapping():
         "A": pd.DataFrame(index=np.arange(0, 10)),
         "B": pd.DataFrame(index=np.arange(10, 15)),
     }
-    ret = split_population._get_node_id_mapping(split_nodes)
+    ret = extract_subcircuit._get_node_id_mapping(split_nodes)
     assert len(ret) == 2
     assert ret["A"].new_id.to_list() == list(range(10))
     assert ret["B"].new_id.to_list() == list(range(5))
@@ -108,7 +109,7 @@ def test__get_node_id_mapping():
 def test__split_population_by_attribute():
     # nodes.h5 contains 3 nodes with mtypes "L2_X", "L6_Y", "L6_Y"
     nodes_path = DATA_PATH / "nodes.h5"
-    ret = split_population._split_population_by_attribute(nodes_path, "mtype")
+    ret = extract_subcircuit._split_population_by_attribute(nodes_path, "mtype")
     assert len(ret) == 2
     assert isinstance(ret["L2_X"], pd.DataFrame)
 
@@ -126,7 +127,7 @@ def test__write_circuit_config(tmp_path):
         "A": pd.DataFrame(index=np.arange(0, 10)),
         "B": pd.DataFrame(index=np.arange(10, 15)),
     }
-    split_population._write_circuit_config(tmp_path, split_nodes)
+    extract_subcircuit._write_circuit_config(tmp_path, split_nodes)
     ret = load_json(tmp_path / "circuit_config.json")
     assert "manifest" in ret
     assert "networks" in ret
@@ -137,7 +138,7 @@ def test__write_circuit_config(tmp_path):
     open(tmp_path / "edges_A.h5", "w").close()
     open(tmp_path / "edges_B.h5", "w").close()
     open(tmp_path / "edges_A__B__chemical.h5", "w").close()
-    split_population._write_circuit_config(tmp_path, split_nodes)
+    extract_subcircuit._write_circuit_config(tmp_path, split_nodes)
     ret = load_json(tmp_path / "circuit_config.json")
     assert len(ret["networks"]["edges"]) == 3
 
@@ -198,7 +199,7 @@ def test__write_edges(tmp_path, id_mapping, h5_read_chunk_size, expected_dir):
     # '/edges/default/target_node_id': [0, 1, 1, 1]
     edges_path = DATA_PATH / "edges.h5"
     # iterate over different id_mappings to split the edges in different ways
-    split_population._write_edges(
+    extract_subcircuit._write_edges(
         tmp_path,
         edges_path,
         id_mapping,
@@ -214,7 +215,7 @@ def test_split_population(tmp_path):
     edges_path = DATA_PATH / "edges.h5"
     expected_dir = DATA_PATH / "00"
 
-    split_population.split_population(tmp_path, attribute, nodes_path, edges_path)
+    extract_subcircuit.split_population(tmp_path, attribute, nodes_path, edges_path)
     utils.assert_h5_dirs_equal(tmp_path, expected_dir)
     utils.assert_json_files_equal(
         tmp_path / "circuit_config.json", expected_dir / "circuit_config.json"
@@ -227,7 +228,7 @@ def test__split_population_by_node_set():
     node_set_name = "L2_X"
     node_set_path = DATA_PATH / "node_sets.json"
 
-    ret = split_population._split_population_by_node_set(nodes_path, node_set_name, node_set_path)
+    ret = extract_subcircuit._split_population_by_node_set(nodes_path, node_set_name, node_set_path)
 
     assert len(ret) == 1
     assert isinstance(ret["L2_X"], pd.DataFrame)
@@ -243,7 +244,7 @@ def test_simple_split_subcircuit(tmp_path):
     node_set_name = "L6_Y"
     node_set_path = DATA_PATH / "node_sets.json"
 
-    split_population.simple_split_subcircuit(
+    extract_subcircuit.simple_split_subcircuit(
         tmp_path, node_set_name, node_set_path, nodes_path, edges_path
     )
 
@@ -260,7 +261,7 @@ def test_simple_split_subcircuit(tmp_path):
         assert list(group["target_node_id"]) == [0]
 
 def test__update_node_sets():
-    ret = split_population._update_node_sets(node_sets={}, id_mapping={})
+    ret = extract_subcircuit._update_node_sets(node_sets={}, id_mapping={})
     assert ret == {}
 
     node_sets = {
@@ -284,7 +285,7 @@ def test__update_node_sets():
     id_mapping = {
         "A": pd.DataFrame({"new_id": np.arange(4)}, index=[0, 5, 4, 3]),
     }
-    ret = split_population._update_node_sets(node_sets, id_mapping)
+    ret = extract_subcircuit._update_node_sets(node_sets, id_mapping)
 
     expected = {
         "CopiedNoNodeIds": ["All"],
@@ -303,7 +304,7 @@ def test_get_subcircuit_external_ids(monkeypatch):
 
     def get_ids(wanted_src_ids, wanted_dst_ids):
         monkeypatch.setenv("H5_READ_CHUNKSIZE", "3")
-        return split_population._get_subcircuit_external_ids(
+        return extract_subcircuit._get_subcircuit_external_ids(
             all_sgids, all_tgids, wanted_src_ids, wanted_dst_ids
         )
 
@@ -464,7 +465,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
 def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_a"
 
-    split_population.split_subcircuit(
+    extract_subcircuit.split_subcircuit(
         tmp_path, node_set_name, circuit, do_virtual=False, create_external=False
     )
 
@@ -483,7 +484,7 @@ def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
 def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_a"
 
-    split_population.split_subcircuit(
+    extract_subcircuit.split_subcircuit(
         tmp_path, node_set_name, circuit, do_virtual=False, create_external=True
     )
 
@@ -533,7 +534,7 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
 )
 def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_a"
-    split_population.split_subcircuit(
+    extract_subcircuit.split_subcircuit(
         tmp_path, node_set_name, circuit, do_virtual=True, create_external=False
     )
 
@@ -591,7 +592,7 @@ def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
 )
 def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit):
     node_set_name = "mtype_b"
-    split_population.split_subcircuit(
+    extract_subcircuit.split_subcircuit(
         tmp_path, node_set_name, circuit, do_virtual=True, create_external=False
     )
 
@@ -718,7 +719,7 @@ def test_split_subcircuit_edge_indices(tmp_path):
     node_set_name = "mtype_a"
     circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
 
-    split_population.split_subcircuit(
+    extract_subcircuit.split_subcircuit(
         tmp_path, node_set_name, circuit_config_path, do_virtual=False, create_external=False
     )
 
@@ -801,7 +802,7 @@ def test_copy_filtered_edges_advanced(tmp_path):
 
     # Run
 
-    write_edge_config = split_population.WriteEdgeConfig(
+    write_edge_config = extract_subcircuit.WriteEdgeConfig(
         output_path=outfile,
         input_path=infile,
         src_node_name="orig_src_node_pop",
@@ -814,7 +815,7 @@ def test_copy_filtered_edges_advanced(tmp_path):
         edge_type="synapse_astrocyte"
     )
     with h5py.File(write_edge_config.input_path, "r") as h5in, h5py.File(write_edge_config.output_path, "w") as h5out:
-        split_population._copy_filtered_edges(
+        extract_subcircuit._copy_filtered_edges(
             h5in=h5in,
             h5out=h5out,
             write_edge_config=write_edge_config,
