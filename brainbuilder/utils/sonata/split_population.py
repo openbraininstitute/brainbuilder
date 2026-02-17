@@ -257,7 +257,8 @@ def _copy_filtered_edges(
         write_edge_config (WriteEdgeConfig): Configuration specifying
             source/target populations, edge names, mappings, and read chunk size.
         edge_mappings (dict[str, tuple[pd.DataFrame, str]]): Optional dict
-            updated with old→new edge ID mappings.
+            updated with old→new edge ID mappings. The key is the old edge file name,
+            pd.DataFrame is the id remapping and the last str is the new edge file name.
 
     Notes:
         - Only the "dynamics_params" group is currently supported in edge groups.
@@ -358,18 +359,17 @@ def _copy_filtered_edges(
 def _compute_edge_mapping(sl_and_masks, offset=0):
     """Build a pandas DataFrame mapping absolute indices to NEW_IDS.
 
-    Parameters
-    ----------
-    sl_and_masks : list of (slice, relative_indices)
-        Output from `_compute_chunks_and_masks`.
-    offset : int
-        Starting value for NEW_IDS. Useful for actual appends
+    Args:
+        sl_and_masks (list[tuple[slice, array-like]]): Output from
+            `_compute_chunks_and_masks`, containing slices and relative indices.
+        offset (int): Starting value for NEW_IDS. When appending to a non-empty
+            destination file, set this to the current edge count so new IDs
+            continue after existing ones. For a fresh write, leave it at 0.
 
-    Returns
-    -------
-    pd.DataFrame
-        Index = absolute indices in the original dataset
-        Column = NEW_IDS (sequential IDs starting from offset)
+    Returns:
+        pd.DataFrame: DataFrame where the index contains absolute indices from
+        the original dataset and the NEW_IDS column contains sequential IDs
+        starting from ``offset``.
     """
     if not sl_and_masks:
         return pd.DataFrame(columns=[NEW_IDS], dtype=np.int64)
@@ -768,6 +768,14 @@ def _write_subcircuit_biological(
 
 
 def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig]):
+    """Write subcircuit edge files in the correct order and propagate edge ID mappings.
+
+    Neuron–neuron edges must be processed first because neuro–glial
+    (synapse_astrocyte) edges depend on the remapped neuron–neuron edge IDs.
+    These mappings are required to populate the synapse_id dataset correctly:
+    for neuro–glial edges, synapse_id is the true target reference, while
+    target_node_id is redundant.
+    """
     assert all(config.edge_type is not None for config in write_edge_configs)
     new_edges_files = {}
     edge_mappings = {}
