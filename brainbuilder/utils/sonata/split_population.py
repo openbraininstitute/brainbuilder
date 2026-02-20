@@ -22,6 +22,7 @@ from brainbuilder import utils
 from brainbuilder.utils import hdf5
 from brainbuilder.utils.sonata import _layout
 
+
 L = logging.getLogger(__name__)
 
 # So as not to exhaust memory, the edges files are loaded/written in chunks of this size
@@ -1289,3 +1290,5 @@ def split_subcircuit(
     # $BASE_DIR for entries in "provenance"..? So I don't even try.
     config.setdefault("components", {}).setdefault("provenance", {})["id_mapping"] = mapping_fn
     utils.dump_json(output / "circuit_config.json", config)
+
+    return circuit

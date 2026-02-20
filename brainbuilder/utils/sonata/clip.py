@@ -43,22 +43,46 @@ def _copy_files_with_extension(source, dest, names, extension):
     return missing
 
 
-def morphologies(output, circuit_config, population_name):
-    """copy only used morphologies to `output`"""
+def morphologies(
+    output: str | Path | None,
+    circuit: str | bluepysnap.Circuit,
+    population_name: str,
+    filtering_circuit: str | bluepysnap.Circuit | None = None,
+):
+    """copy only used morphologies to `output`
 
-    output = Path(output)
-    circuit = bluepysnap.Circuit(circuit_config)
+    The filtering is based on `filtering_circuit` if present
+    If output is None, the new placement is provided by `filtering_circuit`.
+        In that case `filtering_circuit` is required
+    """
+
+    if output is not None:
+        output = Path(output)
+    if isinstance(circuit, str) or isinstance(circuit, Path):
+        circuit = bluepysnap.Circuit(circuit)
+
+    if isinstance(filtering_circuit, str) or isinstance(circuit, Path):
+        filtering_circuit = bluepysnap.Circuit(filtering_circuit)
 
     if population_name not in circuit.nodes.population_names:
         raise BrainBuilderError(f"{population_name} missing from {circuit.nodes.population_names}")
 
-    population = circuit.nodes[population_name]
-    population_config = population.config
+    population_config = circuit.nodes[population_name].config
+    population = (
+        circuit.nodes[population_name]
+        if filtering_circuit is None
+        else filtering_circuit.nodes[population_name]
+    )
     morph_paths = list(population.get(properties="morphology").unique())
 
     if "morphologies_dir" in population_config:
         source = Path(population_config["morphologies_dir"])
-        dest = output / source.name
+
+        dest = (
+            output / source.name
+            if output is not None
+            else Path(filtering_circuit.nodes[population_name].config["morphologies_dir"])
+        )
         missing = _copy_files_with_extension(source, dest, morph_paths, "swc")
         if missing:
             L.warning(_format_missing(missing))
@@ -68,7 +92,16 @@ def morphologies(output, circuit_config, population_name):
         for extension, name in EXTENSIONS_MAPPING.items():
             if name in alt_morphs:
                 source = Path(alt_morphs[name])
-                dest = output / source.name
+                dest = (
+                    output / source.name
+                    if output is not None
+                    else Path(
+                        filtering_circuit.nodes[population_name].config["alternate_morphologies"][
+                            name
+                        ]
+                    )
+                )
+
                 missing = _copy_files_with_extension(source, dest, morph_paths, extension)
                 if missing:
                     L.warning(_format_missing(missing))

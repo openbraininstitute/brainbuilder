@@ -11,6 +11,7 @@ from numpy.testing import assert_array_equal
 
 from brainbuilder.utils import load_json
 from brainbuilder.utils.sonata import split_population
+import bluepysnap
 from brainbuilder.utils.sonata import utils as sonata_utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
