@@ -234,7 +234,7 @@ def test_update_edge_pos(mock_module, mock_cell_collection, tmp_path):
     assert mock_cell_collection.load.call_count == 1
 
 
-@patch("brainbuilder.utils.sonata.extract_subcircuit", create=True)
+@patch("brainbuilder.utils.sonata.split_population", create=True)
 def test_split_population(mock_module, tmp_path):
     nodes = tmp_path / "nodes.h5"
     nodes.touch()
@@ -261,7 +261,7 @@ def test_split_population(mock_module, tmp_path):
     assert mock_module.split_population.call_count == 1
 
 
-@patch("brainbuilder.utils.sonata.extract_subcircuit", create=True)
+@patch("brainbuilder.utils.sonata.split_population", create=True)
 def test_simple_split_subcircuit(mock_module, tmp_path):
     nodes = tmp_path / "nodes.h5"
     nodes.touch()
@@ -292,7 +292,7 @@ def test_simple_split_subcircuit(mock_module, tmp_path):
     assert mock_module.simple_split_subcircuit.call_count == 1
 
 
-@patch("brainbuilder.utils.sonata.extract_subcircuit", create=True)
+@patch("brainbuilder.utils.sonata.split_population", create=True)
 def test_split_subcircuit(mock_module, tmp_path):
     circuit = tmp_path / "circuit_config.json"
     circuit.touch()
