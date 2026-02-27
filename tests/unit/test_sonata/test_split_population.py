@@ -694,9 +694,9 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
     assert virtual_node_count == 1
 
     networks = config["networks"]
-    virtual_pop = _find_populations_by_path(networks, "nodes", f"$BASE_DIR/V1/nodes.h5")
+    virtual_pop = _find_populations_by_path(networks, "nodes", "$BASE_DIR/V1/nodes.h5")
     assert len(virtual_pop) == 1
-    assert virtual_pop[f"V1"] == {"type": "virtual"}
+    assert virtual_pop["V1"] == {"type": "virtual"}
 
     virtual_pop = _find_populations_by_path(
         networks, "edges", "$BASE_DIR/edges/virtual_edges_V1.h5"
