@@ -380,7 +380,17 @@ def split_subcircuit(nodeset, circuit, include_virtual, create_external, output)
 )
 @click.option("-o", "--output", required=True, type=REQUIRED_PATH_DIR, help="Output directory")
 def extract_subcircuit(nodeset, circuit, include_virtual, create_external, output):
-    """Extract a fully independant subcircuit out from a SONATA circuit based on node_set"""
+    """Extract a fully independent subcircuit from a SONATA circuit based on a specified node set.
+
+    The extraction produces a self-contained subcircuit where:
+    - All relevant HOC and morphology files are copied, ensuring the subcircuit can run independently.
+    - Circuit configuration files are updated to reflect the new structure and paths.
+    - Virtual nodes can optionally be included (--include-virtual) if they project into the subcircuit.
+    - External connections can optionally be converted to virtual nodes (--create-external)
+    if they originate outside the subcircuit.
+
+    The resulting files are written to the specified output directory.
+    """
     from brainbuilder.utils.sonata import extract_subcircuit as module
 
     module.extract_subcircuit(

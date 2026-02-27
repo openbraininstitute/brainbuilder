@@ -32,6 +32,12 @@ def _recursive_rebase_paths(config, old_base: Path, new_base: Path) -> None:
 
 
 def rebase_config_file(new_file_path: str | Path, old_file_path: str | Path) -> None:
+    """Update all file paths in `new_file_path` config to be relative to a generic $BASE_DIR,
+    based on the original paths in `old_file_path`.
+
+    Loads both JSON configs, rebases paths
+    recursively, and overwrites `new_file_path` with the updated configuration.
+    """
     old_file_path = Path(old_file_path)
     new_file_path = Path(new_file_path)
 
