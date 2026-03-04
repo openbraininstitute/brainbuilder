@@ -123,6 +123,7 @@ def extract_subcircuit(
 
     L.info("Extraction DONE")
 
+
 def insp(v):
     print("---")
     print(v)
