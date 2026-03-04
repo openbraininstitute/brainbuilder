@@ -68,38 +68,31 @@ def test_rebase_config_file(tmp_json_file):
 
 def test_copy_pop_hoc_files(tmp_path):
     """Copies only referenced .hoc files to destination directory."""
-    # --- setup dirs ---
     source_dir = tmp_path / "source_hoc"
     dest_dir = tmp_path / "dest_hoc"
     source_dir.mkdir()
 
-    # create source hoc file
     hoc_name = "CellA.hoc"
     (source_dir / hoc_name).write_text("hoc content")
 
-    # --- fake pop + circuit ---
-    # new_circuit population
+    # fake pop + circuit
     new_pop = SimpleNamespace(
         config={"biophysical_neuron_models_dir": str(dest_dir)},
         size=1,
         get=lambda properties=None: SimpleNamespace(unique=lambda: ["template:CellA"])
     )
-
-    # original_circuit population
     original_pop = SimpleNamespace(
         config={"biophysical_neuron_models_dir": str(source_dir)}
     )
 
-    # circuits
     new_circuit = SimpleNamespace(nodes={"pop1": new_pop})
     original_circuit = SimpleNamespace(nodes={"pop1": original_pop})
 
-    # --- call ---
+
     extract_subcircuit._copy_pop_hoc_files(
         new_circuit=new_circuit, original_circuit=original_circuit
     )
 
-    # --- assert ---
     assert (dest_dir / hoc_name).exists()
 
 def test_copy_mod_files(tmp_path):
