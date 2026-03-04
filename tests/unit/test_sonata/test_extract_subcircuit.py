@@ -65,7 +65,6 @@ def test_rebase_config_file(tmp_json_file):
     assert new_config["list_paths"][0] == str(new_base / "list1.txt")
     assert new_config["list_paths"][1] == "list2.txt"
 
-
 def test_copy_pop_hoc_files(tmp_path):
     """Copies only referenced .hoc files to destination directory."""
     # --- setup dirs ---
@@ -78,18 +77,26 @@ def test_copy_pop_hoc_files(tmp_path):
     (source_dir / hoc_name).write_text("hoc content")
 
     # --- fake pop + circuit ---
-    pop = SimpleNamespace(
+    # new_circuit population
+    new_pop = SimpleNamespace(
         config={"biophysical_neuron_models_dir": str(dest_dir)},
         size=1,
-        get=lambda properties: SimpleNamespace(unique=lambda: ["template:CellA"]),
+        get=lambda properties=None: SimpleNamespace(unique=lambda: ["template:CellA"])
     )
 
-    original_circuit = SimpleNamespace(
-        nodes={"pop1": SimpleNamespace(config={"biophysical_neuron_models_dir": str(source_dir)})}
+    # original_circuit population
+    original_pop = SimpleNamespace(
+        config={"biophysical_neuron_models_dir": str(source_dir)}
     )
+
+    # circuits
+    new_circuit = SimpleNamespace(nodes={"pop1": new_pop})
+    original_circuit = SimpleNamespace(nodes={"pop1": original_pop})
 
     # --- call ---
-    extract_subcircuit._copy_pop_hoc_files("pop1", pop, original_circuit)
+    extract_subcircuit._copy_pop_hoc_files(
+        new_circuit=new_circuit, original_circuit=original_circuit
+    )
 
     # --- assert ---
     assert (dest_dir / hoc_name).exists()
