@@ -1,10 +1,11 @@
-from brainbuilder.utils.sonata import extract_subcircuit
-
-
 import json
-import pytest
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
+
+from brainbuilder.utils.sonata import extract_subcircuit
+
 
 @pytest.fixture
 def tmp_json_file(tmp_path):

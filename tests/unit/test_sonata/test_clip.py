@@ -1,19 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 from pathlib import Path
+from shutil import copy
 
+import bluepysnap
+import h5py
+import numpy as np
 import pytest
 
 from brainbuilder import BrainBuilderError
 from brainbuilder.utils.sonata import clip as test_module
 from brainbuilder.utils.sonata.extract_subcircuit import rebase_config_file
-import bluepysnap
-from shutil import copy
-
-import json
-
-import h5py
-import numpy as np
-
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/clip").resolve()
 
