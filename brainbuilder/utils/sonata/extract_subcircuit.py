@@ -54,33 +54,34 @@ def rebase_config_file(new_file_path: str | Path, old_file_path: str | Path) -> 
 
 
 def _copy_pop_hoc_files(
-    pop_name: str, pop: bluepysnap.nodes.NodePopulation, original_circuit: bluepysnap.Circuit
+    new_circuit: bluepysnap.Circuit, original_circuit: bluepysnap.Circuit
 ) -> None:
     """Copy only the biophysical neuron model (.hoc) files actually used by a population."""
-    og_pop = original_circuit.nodes[pop_name]
-    if "biophysical_neuron_models_dir" not in pop.config:
-        return
-    hoc_file_list = [
-        _hoc.split(":")[-1] + ".hoc" for _hoc in pop.get(properties="model_template").unique()
-    ]
-    L.info(
-        f"Copying {len(hoc_file_list)} biophysical neuron models (.hoc) for"
-        f" population '{pop_name}' ({pop.size})"
-    )
+    for pop_name, pop in new_circuit.nodes.items():
+        og_pop = original_circuit.nodes[pop_name]
+        if "biophysical_neuron_models_dir" not in pop.config:
+            return
+        hoc_file_list = [
+            _hoc.split(":")[-1] + ".hoc" for _hoc in pop.get(properties="model_template").unique()
+        ]
+        L.info(
+            f"Copying {len(hoc_file_list)} biophysical neuron models (.hoc) for"
+            f" population '{pop_name}' ({pop.size})"
+        )
 
-    source_dir = og_pop.config["biophysical_neuron_models_dir"]
-    dest_dir = pop.config["biophysical_neuron_models_dir"]
-    Path(dest_dir).mkdir(parents=True, exist_ok=True)
+        source_dir = og_pop.config["biophysical_neuron_models_dir"]
+        dest_dir = pop.config["biophysical_neuron_models_dir"]
+        Path(dest_dir).mkdir(parents=True, exist_ok=True)
 
-    for _hoc_file in hoc_file_list:
-        src_file = Path(source_dir) / _hoc_file
-        dest_file = Path(dest_dir) / _hoc_file
-        if not Path(src_file).exists():
-            raise ValueError(f"ERROR: HOC file '{src_file}' missing!")
-        if not Path(dest_file).exists():
-            # Copy only, if not yet existing (could happen for shared hoc files
-            # among populations)
-            shutil.copyfile(src_file, dest_file)
+        for _hoc_file in hoc_file_list:
+            src_file = Path(source_dir) / _hoc_file
+            dest_file = Path(dest_dir) / _hoc_file
+            if not Path(src_file).exists():
+                raise ValueError(f"ERROR: HOC file '{src_file}' missing!")
+            if not Path(dest_file).exists():
+                # Copy only, if not yet existing (could happen for shared hoc files
+                # among populations)
+                shutil.copyfile(src_file, dest_file)
 
 
 def _copy_mod_files(circuit_path: str, output_root: str) -> None:
@@ -113,14 +114,18 @@ def extract_subcircuit(
         list_of_virtual_sources_to_ignore=list_of_virtual_sources_to_ignore,
     )
     new_circuit_path = Path(output) / "circuit_config.json"
-    rebase_config_file(new_file_path=new_circuit_path, old_file_path=circuit_path)
 
+    rebase_config_file(new_file_path=new_circuit_path, old_file_path=circuit_path)
     new_circuit = bluepysnap.Circuit(new_circuit_path)
-    for pop_name, pop in new_circuit.nodes.items():
-        clip.morphologies(
-            None, circuit=original_circuit, population_name=pop_name, filtering_circuit=new_circuit
-        )
-        _copy_pop_hoc_files(pop_name=pop_name, pop=pop, original_circuit=original_circuit)
+    clip.copy_filtered_morphologies(old_circuit=original_circuit, new_circuit=new_circuit)
+    _copy_pop_hoc_files(new_circuit=new_circuit, original_circuit=original_circuit)
     _copy_mod_files(circuit_path=circuit_path, output_root=output)
 
     L.info("Extraction DONE")
+
+def insp(v):
+    print("---")
+    print(v)
+    print(type(v))
+    print(dir(v))
+    print("---")
