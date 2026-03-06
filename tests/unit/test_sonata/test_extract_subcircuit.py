@@ -37,7 +37,6 @@ def test_recursive_rebase_paths(tmp_path):
         "list_paths": [str(tmp_path / "d.txt"), "e.txt"]
     }
 
-    # create files for exists()
     for f in ["a.txt", "c.txt", "d.txt"]:
         (tmp_path / f).touch()
 
@@ -107,9 +106,6 @@ def test_copy_mod_files(tmp_path):
     (mod_dir / "channel.mod").write_text("mod content")
 
     output_root = tmp_path / "output"
-
-    # --- call ---
     extract_subcircuit._copy_mod_files(str(circuit_file), str(output_root))
 
-    # --- assert ---
     assert (output_root / "mod" / "channel.mod").exists()

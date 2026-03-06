@@ -1189,26 +1189,31 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
 
 
 def split_subcircuit(
-    output,
-    node_set_name,
-    circuit,
-    do_virtual,
-    create_external,
-    list_of_virtual_sources_to_ignore=(),
-):
-    """Split a single subcircuit out of circuit, based on nodeset
+    output: str | Path,
+    node_set_name: str,
+    circuit: str | bluepysnap.Circuit,
+    do_virtual: bool,
+    create_external: bool,
+    list_of_virtual_sources_to_ignore: list[str] | tuple[str] = (),
+) -> bluepysnap.Circuit:
+    """Split a single subcircuit out of circuit, based on nodeset.
 
     Args:
-        output(str): path where files will be written
-        node_set_name(str): name of nodeset to extract
-        circuit(bluepysnap.Circuit|str): Sonata circuit object or path to circuit_config sonata file
-        do_virtual(bool): whether to split out the virtual nodes that target the cells
-            contained in the specified nodeset
-        create_external(bool): whether to create new virtual populations of all the
-            incoming connections
-        list_of_virtual_sources_to_ignore (list[str] or tuple[str], default=()): Only considered if
-            do_virtual==True. List of names of virtual source node populations. Virtual edge
-            populations associated with these sources will NOT be extracted into the subcircuit.
+        output: Path where files will be written.
+        node_set_name: Name of nodeset to extract.
+        circuit: Sonata circuit object or path to a
+            circuit_config SONATA file.
+        do_virtual: Whether to split out the virtual nodes that target the
+            cells contained in the specified nodeset.
+        create_external: Whether to create new virtual populations for all
+            incoming connections.
+        list_of_virtual_sources_to_ignore:
+            Only considered if do_virtual is True. Names of virtual source node
+            populations to ignore; associated virtual edge populations will not
+            be extracted.
+
+    Returns:
+        The input circuit object.
     """
     # pylint: disable=too-many-locals
     output = Path(output)

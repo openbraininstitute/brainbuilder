@@ -122,11 +122,3 @@ def extract_subcircuit(
     _copy_mod_files(circuit_path=circuit_path, output_root=output)
 
     L.info("Extraction DONE")
-
-
-def insp(v):
-    print("---")
-    print(v)
-    print(type(v))
-    print(dir(v))
-    print("---")
