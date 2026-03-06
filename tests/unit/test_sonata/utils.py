@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
+import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -46,3 +48,65 @@ def assert_h5_files_equal(actual_path, expected_path):
 
 def assert_json_files_equal(actual_path, expected_path):
     assert load_json(actual_path) == load_json(expected_path)
+
+def replace_json_values(path, replacements):
+    """
+    Recursively replace values in a JSON file based on a dict {key: new_value}.
+    When a key matches, its value is replaced.
+    """
+
+    def _replace(obj):
+        if isinstance(obj, dict):
+            return {
+                k: (replacements[k] if k in replacements else _replace(v))
+                for k, v in obj.items()
+            }
+        if isinstance(obj, list):
+            return [_replace(v) for v in obj]
+        return obj
+
+    with open(path) as f:
+        data = json.load(f)
+
+    data = _replace(data)
+
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+
+def move_and_symlink(src: Path, dst_dir: Path):
+    """
+    Move a file or folder to dst_dir and create a symlink at the original location.
+    The name stays the same.
+    """
+    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    dst_path = dst_dir / src.name
+
+    # Move the file/folder
+    shutil.move(str(src), str(dst_path))
+
+    # Create a symlink at the original location pointing to the new location
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.symlink_to(dst_path, target_is_directory=dst_path.is_dir())
+
+def revert_move_and_symlink(symlink_path: Path):
+    """
+    Revert a move-and-symlink operation.
+    
+    - symlink_path: the Path where a symlink currently exists
+    - Moves the real file/folder back to this location
+    - Removes the symlink
+    - Keeps the parent folder of the real file/folder intact
+    """
+
+    if not symlink_path.is_symlink():
+        raise ValueError(f"{symlink_path} is not a symlink")
+
+    # Resolve the actual target (the moved file/folder)
+    target_path = symlink_path.resolve()
+
+    # Remove the symlink
+    symlink_path.unlink()
+
+    # Move the real file/folder back to the original location
+    shutil.move(str(target_path), str(symlink_path))
