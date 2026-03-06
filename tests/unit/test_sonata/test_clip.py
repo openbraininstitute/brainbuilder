@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+import shutil
 from pathlib import Path
 from shutil import copy
 
@@ -6,13 +7,11 @@ import bluepysnap
 import h5py
 import numpy as np
 import pytest
+import utils
 
 from brainbuilder import BrainBuilderError
 from brainbuilder.utils.sonata import clip as test_module
 from brainbuilder.utils.sonata.extract_subcircuit import rebase_config_file
-
-import shutil
-import json
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/clip").resolve()
 
@@ -137,67 +136,7 @@ def _check_copy_filtered_morphologies(old_path, new_path):
         # this was filtered out. Let's check if it is true
         assert not (new_path / ext / f"2.{ext}").exists()
 
-def replace_json_values(path, replacements):
-    """
-    Recursively replace values in a JSON file based on a dict {key: new_value}.
-    When a key matches, its value is replaced.
-    """
 
-    def _replace(obj):
-        if isinstance(obj, dict):
-            return {
-                k: (replacements[k] if k in replacements else _replace(v))
-                for k, v in obj.items()
-            }
-        if isinstance(obj, list):
-            return [_replace(v) for v in obj]
-        return obj
-
-    with open(path) as f:
-        data = json.load(f)
-
-    data = _replace(data)
-
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
-
-def _move_and_symlink(src: Path, dst_dir: Path):
-    """
-    Move a file or folder to dst_dir and create a symlink at the original location.
-    The name stays the same.
-    """
-    dst_dir.mkdir(parents=True, exist_ok=True)
-
-    dst_path = dst_dir / src.name
-
-    # Move the file/folder
-    shutil.move(str(src), str(dst_path))
-
-    # Create a symlink at the original location pointing to the new location
-    src.parent.mkdir(parents=True, exist_ok=True)
-    src.symlink_to(dst_path, target_is_directory=dst_path.is_dir())
-
-def _revert_move_and_symlink(symlink_path: Path):
-    """
-    Revert a move-and-symlink operation.
-    
-    - symlink_path: the Path where a symlink currently exists
-    - Moves the real file/folder back to this location
-    - Removes the symlink
-    - Keeps the parent folder of the real file/folder intact
-    """
-
-    if not symlink_path.is_symlink():
-        raise ValueError(f"{symlink_path} is not a symlink")
-
-    # Resolve the actual target (the moved file/folder)
-    target_path = symlink_path.resolve()
-
-    # Remove the symlink
-    symlink_path.unlink()
-
-    # Move the real file/folder back to the original location
-    shutil.move(str(target_path), str(symlink_path))
 
 def test_copy_filtered_morphologies(tmp_path):
     """TODO
@@ -210,30 +149,30 @@ def test_copy_filtered_morphologies(tmp_path):
     _check_copy_filtered_morphologies(old_path=DATA_PATH, new_path=new_path)
 
     # Symlink in h5v1 folder
-    _move_and_symlink(src=old_path / "h5/1.h5", dst_dir=tmp_path / "other")
+    utils.move_and_symlink(src=old_path / "h5/1.h5", dst_dir=tmp_path / "other")
     _check_copy_filtered_morphologies(old_path=DATA_PATH, new_path=new_path)
-    _revert_move_and_symlink(symlink_path=old_path / "h5/1.h5")
+    utils.revert_move_and_symlink(symlink_path=old_path / "h5/1.h5")
 
     # Symlink the full h5v1 folder
-    _move_and_symlink(src=old_path / "h5", dst_dir=tmp_path / "other")
+    utils.move_and_symlink(src=old_path / "h5", dst_dir=tmp_path / "other")
     _check_copy_filtered_morphologies(old_path=DATA_PATH, new_path=new_path)
-    _revert_move_and_symlink(symlink_path=old_path / "h5")
+    utils.revert_move_and_symlink(symlink_path=old_path / "h5")
 
     # BASE_DIR is absolute
-    replace_json_values(old_path / "circuit_config.json", {"$BASE_DIR": str(old_path.resolve())})
+    utils.replace_json_values(old_path / "circuit_config.json", {"$BASE_DIR": str(old_path.resolve())})
     _check_copy_filtered_morphologies(old_path=DATA_PATH, new_path=new_path)
 
     # BASE_DIR and h5v1 are absolute
-    replace_json_values(old_path / "circuit_config.json", {"h5v1": str(old_path.resolve() / "h5")})
+    utils.replace_json_values(old_path / "circuit_config.json", {"h5v1": str(old_path.resolve() / "h5")})
     _check_copy_filtered_morphologies(old_path=DATA_PATH, new_path=new_path)
 
     # BASE_DIR and h5v1 are absolute. Symlink in h5v1 folder
-    _move_and_symlink(src=old_path / "h5/1.h5", dst_dir=tmp_path / "other")
+    utils.move_and_symlink(src=old_path / "h5/1.h5", dst_dir=tmp_path / "other")
     _check_copy_filtered_morphologies(old_path=DATA_PATH, new_path=new_path)
-    _revert_move_and_symlink(symlink_path=old_path / "h5/1.h5")
+    utils.revert_move_and_symlink(symlink_path=old_path / "h5/1.h5")
 
     # BASE_DIR and h5v1 are absolute. Symlink the full h5v1 folder
-    _move_and_symlink(src=old_path / "h5", dst_dir=tmp_path / "other")
+    utils.move_and_symlink(src=old_path / "h5", dst_dir=tmp_path / "other")
     _check_copy_filtered_morphologies(old_path=DATA_PATH, new_path=new_path)
-    _revert_move_and_symlink(symlink_path=old_path / "h5")
+    utils.revert_move_and_symlink(symlink_path=old_path / "h5")
 

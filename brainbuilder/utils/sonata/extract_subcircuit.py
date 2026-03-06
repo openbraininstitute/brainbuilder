@@ -22,9 +22,8 @@ def _recursive_rebase_paths(config, old_base: Path, new_base: Path) -> None:
 
         # only process paths that exist in the old config
         if path.is_absolute():
-            path_resolved = path.resolve()
             try:
-                return str(new_base / path_resolved.relative_to(old_base))
+                return str(new_base / path.relative_to(old_base))
             except ValueError:
                 return config
         return config
