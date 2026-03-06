@@ -139,7 +139,8 @@ def _check_copy_filtered_morphologies(old_path, new_path):
 
 
 def test_copy_filtered_morphologies(tmp_path):
-    """TODO
+    """Test that morphologies are correctly copied under various symlink
+    and absolute path scenarios, including individual files, folders, and BASE_DIR rebasing.
     """
     old_path = tmp_path / "clip"
     new_path = tmp_path / "new_clip"
