@@ -20,4 +20,6 @@ This project/research received funding from the European Union’s Horizon 2020 
 
 For license see LICENSE.txt.
 
-Copyright © 2014-2023 Blue Brain Project/EPFL
+Copyright © 2014-2024 Blue Brain Project/EPFL
+
+Copyright © 2025-2026 Open Brain Institute
