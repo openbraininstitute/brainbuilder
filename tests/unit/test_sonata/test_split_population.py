@@ -881,3 +881,48 @@ def test_copy_filtered_edges_advanced(tmp_path):
         expected_syn_ids = [1, 2]
         np.testing.assert_array_equal(syn_ids, expected_syn_ids)
         assert out_edges["0"]["synapse_id"].attrs["edge_population"] == "new_biophysical_edge_pop"
+
+
+N10_DATA_PATH = (Path(__file__).parent / "../data/sonata/split_subcircuit/N_10__top_nodes_dim6/").resolve()
+
+
+def test_split_subcircuit_compound_node_sets_without_virtual(tmp_path):
+    """Without do_virtual, both virtual proj children are dropped, so the compound set is removed."""
+    circuit_config_path = str(N10_DATA_PATH / "circuit_config.json")
+
+    split_population.split_subcircuit(
+        tmp_path, "ID3", circuit_config_path, do_virtual=False, create_external=False
+    )
+
+    node_sets = load_json(tmp_path / "node_sets.json")
+
+    # Both proj_VPM_Small and proj_POm_Small are dropped (virtual populations not in id_mapping)
+    assert "proj_VPM_Small" not in node_sets
+    assert "proj_POm_Small" not in node_sets
+    # Compound set is removed entirely since all children were dropped
+    assert "proj_All_Small" not in node_sets
+
+    # Non-virtual node sets survive
+    assert "ID3" in node_sets
+    assert node_sets["ID3"] == {"node_id": [0], "population": "S1nonbarrel_neurons"}
+    assert "Mosaic" in node_sets
+    assert "All" in node_sets
+
+
+def test_split_subcircuit_compound_node_sets_with_virtual(tmp_path):
+    """With do_virtual, one virtual proj child survives, so the compound set is kept partially."""
+    circuit_config_path = str(N10_DATA_PATH / "circuit_config.json")
+
+    split_population.split_subcircuit(
+        tmp_path, "ID3", circuit_config_path, do_virtual=True, create_external=False
+    )
+
+    node_sets = load_json(tmp_path / "node_sets.json")
+
+    # proj_VPM_Small survives (VPM has matching node IDs)
+    assert "proj_VPM_Small" in node_sets
+    assert node_sets["proj_VPM_Small"]["population"] == "VPM"
+    # proj_POm_Small is dropped (POm has no matching node IDs)
+    assert "proj_POm_Small" not in node_sets
+    # Compound set survives with only the remaining child
+    assert node_sets["proj_All_Small"] == ["proj_VPM_Small"]
