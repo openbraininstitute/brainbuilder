@@ -14,6 +14,7 @@ from brainbuilder.utils.sonata import split_population
 from brainbuilder.utils.sonata import utils as sonata_utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
+SPLIT_SUBCIRCUIT_DATA_PATH = (Path(__file__).parent / "../data/sonata/split_subcircuit/simple/").resolve()
 
 
 def _check_edge_indices(nodes_file, edges_file):
@@ -53,7 +54,7 @@ def test__get_population_name():
 
 
 def test__get_unique_population():
-    nodes = DATA_PATH / "split_subcircuit" / "networks" / "nodes" / "nodes.h5"
+    nodes = SPLIT_SUBCIRCUIT_DATA_PATH / "networks" / "nodes" / "nodes.h5"
     with h5py.File(nodes, "r") as h5:
         with pytest.raises(ValueError):
             split_population._get_unique_population(h5["nodes"])
@@ -455,10 +456,10 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json", False),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"), False),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json"), True),
     ],
 )
 def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
@@ -474,10 +475,10 @@ def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json", False),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"), False),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json"), True),
     ],
 )
 def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
@@ -525,10 +526,10 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json", False),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"), False),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json"), True),
     ],
 )
 def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
@@ -583,10 +584,10 @@ def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json", False),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"), False),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json"), True),
     ],
 )
 def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit):
@@ -716,7 +717,7 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
 
 def test_split_subcircuit_edge_indices(tmp_path):
     node_set_name = "mtype_a"
-    circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
+    circuit_config_path = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
 
     split_population.split_subcircuit(
         tmp_path, node_set_name, circuit_config_path, do_virtual=False, create_external=False
