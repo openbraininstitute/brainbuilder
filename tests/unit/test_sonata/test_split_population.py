@@ -14,7 +14,7 @@ from brainbuilder.utils.sonata import split_population
 from brainbuilder.utils.sonata import utils as sonata_utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
-SPLIT_SUBCIRCUIT_DATA_PATH = (Path(__file__).parent / "../data/sonata/split_subcircuit/simple/").resolve()
+SPLIT_SUBCIRCUIT_DATA_PATH = (Path(__file__).parent / "../data/sonata/split_subcircuit/").resolve()
 
 
 def _check_edge_indices(nodes_file, edges_file):
@@ -457,7 +457,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             assert len(edge_pops) == 4
 
         node_sets = load_json(path / "node_sets.json")
-        assert node_sets == {
+        expected_node_sets = {
             "mtype_a": {"mtype": "a"},
             "mtype_b": {"mtype": "b"},
             "someA": {"node_id": [0, 1], "population": "A"},
@@ -465,6 +465,11 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             "someB": {"node_id": [1, 2], "population": "B"},
             "noC": {"node_id": [], "population": "C"},
         }
+        if has_virtual:
+            expected_node_sets["compound_virtual"] = ["child_V1", "child_V2"]
+            expected_node_sets["child_V1"] = {"population": "V1", "node_id": [0, 1, 2]}
+            expected_node_sets["child_V2"] = {"population": "V2", "node_id": [0]}
+        assert node_sets == expected_node_sets
 
         expected_mapping = {
             "A": {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": _orig_id_map([0, 2, 4], "A"), "original_name": _orig_name_map("A")},
@@ -742,6 +747,8 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
         "allB": {"node_id": [0, 1], "population": "B"},
         "someB": {"node_id": [1], "population": "B"},
         "noC": {"node_id": [], "population": "C"},
+        "compound_virtual": ["child_V1"],
+        "child_V1": {"population": "V1", "node_id": [0]},
     }
 
 
@@ -881,48 +888,3 @@ def test_copy_filtered_edges_advanced(tmp_path):
         expected_syn_ids = [1, 2]
         np.testing.assert_array_equal(syn_ids, expected_syn_ids)
         assert out_edges["0"]["synapse_id"].attrs["edge_population"] == "new_biophysical_edge_pop"
-
-
-N10_DATA_PATH = (Path(__file__).parent / "../data/sonata/split_subcircuit/N_10__top_nodes_dim6/").resolve()
-
-
-def test_split_subcircuit_compound_node_sets_without_virtual(tmp_path):
-    """Without do_virtual, both virtual proj children are dropped, so the compound set is removed."""
-    circuit_config_path = str(N10_DATA_PATH / "circuit_config.json")
-
-    split_population.split_subcircuit(
-        tmp_path, "ID3", circuit_config_path, do_virtual=False, create_external=False
-    )
-
-    node_sets = load_json(tmp_path / "node_sets.json")
-
-    # Both proj_VPM_Small and proj_POm_Small are dropped (virtual populations not in id_mapping)
-    assert "proj_VPM_Small" not in node_sets
-    assert "proj_POm_Small" not in node_sets
-    # Compound set is removed entirely since all children were dropped
-    assert "proj_All_Small" not in node_sets
-
-    # Non-virtual node sets survive
-    assert "ID3" in node_sets
-    assert node_sets["ID3"] == {"node_id": [0], "population": "S1nonbarrel_neurons"}
-    assert "Mosaic" in node_sets
-    assert "All" in node_sets
-
-
-def test_split_subcircuit_compound_node_sets_with_virtual(tmp_path):
-    """With do_virtual, one virtual proj child survives, so the compound set is kept partially."""
-    circuit_config_path = str(N10_DATA_PATH / "circuit_config.json")
-
-    split_population.split_subcircuit(
-        tmp_path, "ID3", circuit_config_path, do_virtual=True, create_external=False
-    )
-
-    node_sets = load_json(tmp_path / "node_sets.json")
-
-    # proj_VPM_Small survives (VPM has matching node IDs)
-    assert "proj_VPM_Small" in node_sets
-    assert node_sets["proj_VPM_Small"]["population"] == "VPM"
-    # proj_POm_Small is dropped (POm has no matching node IDs)
-    assert "proj_POm_Small" not in node_sets
-    # Compound set survives with only the remaining child
-    assert node_sets["proj_All_Small"] == ["proj_VPM_Small"]
