@@ -298,6 +298,36 @@ def test__update_node_sets():
     assert ret == expected
 
 
+def test__update_node_sets_compound_filtering():
+    """Compound node sets referencing dropped children should be pruned."""
+    node_sets = {
+        "compound": ["child_a", "child_b"],
+        "child_a": {"population": "A", "node_id": [0, 1]},
+        "child_b": {"population": "B", "node_id": [0, 1]},
+        "external_ref": ["Unknown"],
+        "simple": {"mtype": "foo"},
+    }
+    # Only population A is in the mapping, so child_b gets dropped
+    id_mapping = {
+        "A": pd.DataFrame({"new_id": np.arange(2)}, index=[0, 1]),
+    }
+    ret = split_population._update_node_sets(node_sets, id_mapping)
+
+    assert ret == {
+        "compound": ["child_a"],
+        "child_a": {"population": "A", "node_id": [0, 1]},
+        # child_b dropped (population B not in id_mapping)
+        "external_ref": ["Unknown"],  # external reference preserved
+        "simple": {"mtype": "foo"},
+    }
+
+    # When all children are dropped, the compound set is removed entirely
+    id_mapping_empty = {}
+    ret = split_population._update_node_sets(node_sets, id_mapping_empty)
+    assert "compound" not in ret
+    assert "external_ref" in ret
+
+
 def test_get_subcircuit_external_ids(monkeypatch):
     all_sgids = np.array([10, 10, 11, 11, 12, 12, 10, 10, 11, 11, 12, 12, 10, 10, 11, 11, 12, 12])
     all_tgids = np.array([10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12])

@@ -1135,6 +1135,18 @@ def _update_node_sets(node_sets, id_mapping):
         else:
             ret[name] = rule
 
+    # Filter compound node sets (lists): remove references to children that were
+    # defined in the original node_sets but didn't survive processing.
+    # References to unknown/external names are left untouched.
+    dropped = set(node_sets) - set(ret)
+    ret = {
+        name: (
+            [child for child in rule if child not in dropped] if isinstance(rule, list) else rule
+        )
+        for name, rule in ret.items()
+    }
+    ret = {name: rule for name, rule in ret.items() if not isinstance(rule, list) or rule}
+
     return ret
 
 
