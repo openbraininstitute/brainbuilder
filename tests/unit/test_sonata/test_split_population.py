@@ -328,6 +328,33 @@ def test__update_node_sets_compound_filtering():
     assert "external_ref" in ret
 
 
+def test__update_node_sets_nested_compound_filtering():
+    """Nested compound node sets should be pruned iteratively."""
+    node_sets = {
+        "top": ["mid", "child_a"],
+        "mid": ["child_b", "child_c"],
+        "child_a": {"population": "A", "node_id": [0, 1]},
+        "child_b": {"population": "B", "node_id": [0, 1]},
+        "child_c": {"population": "C", "node_id": [0, 1]},
+    }
+    # Only A survives: mid loses both children and is dropped,
+    # then top loses mid but keeps child_a
+    id_mapping = {
+        "A": pd.DataFrame({"new_id": np.arange(2)}, index=[0, 1]),
+    }
+    ret = split_population._update_node_sets(node_sets, id_mapping)
+
+    assert ret == {
+        "top": ["child_a"],
+        "child_a": {"population": "A", "node_id": [0, 1]},
+    }
+
+    # When nothing survives, everything is cleaned up
+    ret = split_population._update_node_sets(node_sets, {})
+    assert "top" not in ret
+    assert "mid" not in ret
+
+
 def test_get_subcircuit_external_ids(monkeypatch):
     all_sgids = np.array([10, 10, 11, 11, 12, 12, 10, 10, 11, 11, 12, 12, 10, 10, 11, 11, 12, 12])
     all_tgids = np.array([10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12])

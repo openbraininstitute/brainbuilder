@@ -1138,14 +1138,31 @@ def _update_node_sets(node_sets, id_mapping):
     # Filter compound node sets (lists): remove references to children that were
     # defined in the original node_sets but didn't survive processing.
     # References to unknown/external names are left untouched.
-    dropped = set(node_sets) - set(ret)
-    ret = {
-        name: (
-            [child for child in rule if child not in dropped] if isinstance(rule, list) else rule
-        )
-        for name, rule in ret.items()
-    }
-    ret = {name: rule for name, rule in ret.items() if not isinstance(rule, list) or rule}
+    # Uses recursive memoization to handle nested compound sets efficiently.
+    keep = {}
+
+    def _should_keep(name):
+        if name in keep:
+            return keep[name]
+        if name not in ret:
+            keep[name] = False
+            return False
+        rule = ret[name]
+        if not isinstance(rule, list):
+            keep[name] = True
+            return True
+        # Filter children: keep those not originally defined, or defined and surviving
+        filtered = [child for child in rule if child not in node_sets or _should_keep(child)]
+        if filtered:
+            ret[name] = filtered
+            keep[name] = True
+        else:
+            del ret[name]
+            keep[name] = False
+        return keep[name]
+
+    for name in list(ret):
+        _should_keep(name)
 
     return ret
 
