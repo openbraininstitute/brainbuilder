@@ -493,8 +493,10 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             "noC": {"node_id": [], "population": "C"},
         }
         if has_virtual:
-            expected_node_sets["compound_virtual"] = ["child_V1", "child_V2"]
-            expected_node_sets["child_V1"] = {"population": "V1", "node_id": [0, 1, 2]}
+            expected_node_sets["compound_virtual"] = ["compound_V1", "child_V2"]
+            expected_node_sets["compound_V1"] = ["child_V1a", "child_V1b"]
+            expected_node_sets["child_V1a"] = {"population": "V1", "node_id": [0, 1, 2]}
+            expected_node_sets["child_V1b"] = {"population": "V1", "node_id": [0]}
             expected_node_sets["child_V2"] = {"population": "V2", "node_id": [0]}
         assert node_sets == expected_node_sets
 
@@ -774,8 +776,10 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
         "allB": {"node_id": [0, 1], "population": "B"},
         "someB": {"node_id": [1], "population": "B"},
         "noC": {"node_id": [], "population": "C"},
-        "compound_virtual": ["child_V1"],
-        "child_V1": {"population": "V1", "node_id": [0]},
+        "compound_virtual": ["compound_V1"],
+        "compound_V1": ["child_V1a", "child_V1b"],
+        "child_V1a": {"population": "V1", "node_id": [0]},
+        "child_V1b": {"population": "V1", "node_id": [0]},
     }
 
 

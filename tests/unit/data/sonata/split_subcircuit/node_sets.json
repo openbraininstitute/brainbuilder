@@ -5,7 +5,9 @@
     "allB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5] },
     "someB": {"population": "B", "node_id": [2, 3, 4] },
     "noC": {"population": "C", "node_id": [] },
-    "compound_virtual": ["child_V1", "child_V2"],
-    "child_V1": {"population": "V1", "node_id": [0, 1, 2, 3] },
+    "compound_virtual": ["compound_V1", "child_V2"],
+    "compound_V1": ["child_V1a", "child_V1b"],
+    "child_V1a": {"population": "V1", "node_id": [0, 1, 2, 3] },
+    "child_V1b": {"population": "V1", "node_id": [0, 1] },
     "child_V2": {"population": "V2", "node_id": [0] }
 }
