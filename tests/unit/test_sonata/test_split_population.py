@@ -14,6 +14,7 @@ from brainbuilder.utils.sonata import split_population
 from brainbuilder.utils.sonata import utils as sonata_utils
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
+SPLIT_SUBCIRCUIT_DATA_PATH = (Path(__file__).parent / "../data/sonata/split_subcircuit/").resolve()
 
 
 def _check_edge_indices(nodes_file, edges_file):
@@ -53,7 +54,7 @@ def test__get_population_name():
 
 
 def test__get_unique_population():
-    nodes = DATA_PATH / "split_subcircuit" / "networks" / "nodes" / "nodes.h5"
+    nodes = SPLIT_SUBCIRCUIT_DATA_PATH / "networks" / "nodes" / "nodes.h5"
     with h5py.File(nodes, "r") as h5:
         with pytest.raises(ValueError):
             split_population._get_unique_population(h5["nodes"])
@@ -297,6 +298,63 @@ def test__update_node_sets():
     assert ret == expected
 
 
+def test__update_node_sets_compound_filtering():
+    """Compound node sets referencing dropped children should be pruned."""
+    node_sets = {
+        "compound": ["child_a", "child_b"],
+        "child_a": {"population": "A", "node_id": [0, 1]},
+        "child_b": {"population": "B", "node_id": [0, 1]},
+        "external_ref": ["Unknown"],
+        "simple": {"mtype": "foo"},
+    }
+    # Only population A is in the mapping, so child_b gets dropped
+    id_mapping = {
+        "A": pd.DataFrame({"new_id": np.arange(2)}, index=[0, 1]),
+    }
+    ret = split_population._update_node_sets(node_sets, id_mapping)
+
+    assert ret == {
+        "compound": ["child_a"],
+        "child_a": {"population": "A", "node_id": [0, 1]},
+        # child_b dropped (population B not in id_mapping)
+        "external_ref": ["Unknown"],  # external reference preserved
+        "simple": {"mtype": "foo"},
+    }
+
+    # When all children are dropped, the compound set is removed entirely
+    id_mapping_empty = {}
+    ret = split_population._update_node_sets(node_sets, id_mapping_empty)
+    assert "compound" not in ret
+    assert "external_ref" in ret
+
+
+def test__update_node_sets_nested_compound_filtering():
+    """Nested compound node sets should be pruned iteratively."""
+    node_sets = {
+        "top": ["mid", "child_a"],
+        "mid": ["child_b", "child_c"],
+        "child_a": {"population": "A", "node_id": [0, 1]},
+        "child_b": {"population": "B", "node_id": [0, 1]},
+        "child_c": {"population": "C", "node_id": [0, 1]},
+    }
+    # Only A survives: mid loses both children and is dropped,
+    # then top loses mid but keeps child_a
+    id_mapping = {
+        "A": pd.DataFrame({"new_id": np.arange(2)}, index=[0, 1]),
+    }
+    ret = split_population._update_node_sets(node_sets, id_mapping)
+
+    assert ret == {
+        "top": ["child_a"],
+        "child_a": {"population": "A", "node_id": [0, 1]},
+    }
+
+    # When nothing survives, everything is cleaned up
+    ret = split_population._update_node_sets(node_sets, {})
+    assert "top" not in ret
+    assert "mid" not in ret
+
+
 def test_get_subcircuit_external_ids(monkeypatch):
     all_sgids = np.array([10, 10, 11, 11, 12, 12, 10, 10, 11, 11, 12, 12, 10, 10, 11, 11, 12, 12])
     all_tgids = np.array([10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12])
@@ -426,7 +484,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             assert len(edge_pops) == 4
 
         node_sets = load_json(path / "node_sets.json")
-        assert node_sets == {
+        expected_node_sets = {
             "mtype_a": {"mtype": "a"},
             "mtype_b": {"mtype": "b"},
             "someA": {"node_id": [0, 1], "population": "A"},
@@ -434,6 +492,13 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             "someB": {"node_id": [1, 2], "population": "B"},
             "noC": {"node_id": [], "population": "C"},
         }
+        if has_virtual:
+            expected_node_sets["compound_virtual"] = ["compound_V1", "child_V2"]
+            expected_node_sets["compound_V1"] = ["child_V1a", "child_V1b"]
+            expected_node_sets["child_V1a"] = {"population": "V1", "node_id": [0, 1, 2]}
+            expected_node_sets["child_V1b"] = {"population": "V1", "node_id": [0]}
+            expected_node_sets["child_V2"] = {"population": "V2", "node_id": [0]}
+        assert node_sets == expected_node_sets
 
         expected_mapping = {
             "A": {"new_id": [0, 1, 2], "parent_id": [0, 2, 4], "parent_name": "A", "original_id": _orig_id_map([0, 2, 4], "A"), "original_name": _orig_name_map("A")},
@@ -455,10 +520,10 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json", False),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"), False),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json"), True),
     ],
 )
 def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
@@ -474,10 +539,10 @@ def test_split_subcircuit_with_no_externals(tmp_path, circuit, from_subcircuit):
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json", False),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"), False),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json"), True),
     ],
 )
 def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
@@ -525,10 +590,10 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json", False),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"), False),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json"), True),
     ],
 )
 def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
@@ -583,10 +648,10 @@ def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
-        (DATA_PATH / "split_subcircuit" / "circuit_config.json", False),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config.json"), False),
-        (DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json", True),
-        (bluepysnap.Circuit(DATA_PATH / "split_subcircuit" / "circuit_config_subcircuit.json"), True),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json", False),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"), False),
+        (SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json", True),
+        (bluepysnap.Circuit(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config_subcircuit.json"), True),
     ],
 )
 def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit):
@@ -711,12 +776,16 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
         "allB": {"node_id": [0, 1], "population": "B"},
         "someB": {"node_id": [1], "population": "B"},
         "noC": {"node_id": [], "population": "C"},
+        "compound_virtual": ["compound_V1"],
+        "compound_V1": ["child_V1a", "child_V1b"],
+        "child_V1a": {"population": "V1", "node_id": [0]},
+        "child_V1b": {"population": "V1", "node_id": [0]},
     }
 
 
 def test_split_subcircuit_edge_indices(tmp_path):
     node_set_name = "mtype_a"
-    circuit_config_path = str(DATA_PATH / "split_subcircuit" / "circuit_config.json")
+    circuit_config_path = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
 
     split_population.split_subcircuit(
         tmp_path, node_set_name, circuit_config_path, do_virtual=False, create_external=False
