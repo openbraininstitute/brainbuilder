@@ -79,3 +79,24 @@ The following subcommands can be used with: ``brainbuilder targets``
 
 * ``from-mvd3``  Generate .target file from MVD3 (and target definition YAML)
 * ``node-sets``  Generate JSON node sets from MVD3 (and target definition YAML)
+
+
+Tools for converting Allen's V1 circuit into SONATA
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following subcommands can be used with: ``brainbuilder sonata``
+
+ * ``convert-allen-circuit`` Convert nodes and inner connectivity edges file
+ * ``convert-allen-projection-edges`` Convert projection edges file
+ * ``precompute-allen-synapse-locations`` Precompute synapse locations
+ * ``add-nodes-attributes`` Add threshold_current and holding_current data to the nodes file
+
+For example, for the current V1 circuit:
+
+.. code-block:: bash
+
+    brainbuilder sonata precompute-allen-synapse-locations -o obi_circuit2 --nodes-file network/v1_nodes.h5 --node-types-file network/v1_node_types.csv --morphology-dir components/morphologies --edges-files network/v1_v1_edges.h5 network/v1_v1_edge_types.csv —-edges-files network/lgn_v1_edges.h5 network/lgn_v1_edge_types.csv --edges-files network/bkg_v1_edges.h5 network/bkg_v1_edge_types.csv
+    brainbuilder sonata convert-allen-circuit -o 260105 --node-types-file network/v1_node_types.csv --nodes-file network/v1_nodes.h5 --edges-file network/v1_v1_edges.h5 --edge-types-file network/v1_v1_edge_types.csv --precomputed-edges-file obi_circuit2/v1_v1_syn_locations.h5 --syn-parameter-dir components/synaptic_models
+    brainbuilder sonata convert-allen-projection-edges --target-nodes-file network/v1_nodes.h5 --target-node-types-file network/v1_node_types.csv --n-source-nodes 17400  --edges-file network/lgn_v1_edges.h5  --edge-types-file network/lgn_v1_edge_types.csv --precomputed-edges-file obi_circuit2/lgn_v1_syn_locations.h5 -o 260105 —-syn-parameter-dir components/synaptic_models
+    brainbuilder sonata convert-allen-projection-edges --target-nodes-file network/v1_nodes.h5 --target-node-types-file network/v1_node_types.csv --n-source-nodes 1 --edges-file network/bkg_v1_edges.h5  --edge-types-file network/bkg_v1_edge_types.csv --precomputed-edges-file obi_circuit2/bkg_v1_syn_locations.h5 -o 260105 --syn-parameter-dir components/synaptic_models
+    brainbuilder sonata add-nodes-attributes -o output_dir --nodes-file obi_circuit2 nodes_biophysical.h5 --attributes-file network/dynamic_parameters.csv

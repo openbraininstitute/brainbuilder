@@ -437,7 +437,7 @@ def convert_allen_circuit(
     syn_parameter_dir,
     output,
 ):
-    """Convert nodes and inner connectivity edges file for the Allen V1 circuit"""
+    """Convert nodes and inner connectivity edges files for the Allen V1 circuit"""
     from brainbuilder.utils.sonata import convert_allen_v1
     from brainbuilder.utils.sonata import split_population as module
     from voxcell import CellCollection
@@ -632,6 +632,7 @@ def add_nodes_attributes(
     attributes_file,
     output,
 ):
+    """Add threshold_current and holding_current data to the nodes file"""
     from voxcell import CellCollection
     import pandas as pd
 
