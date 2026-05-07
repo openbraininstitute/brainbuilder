@@ -372,11 +372,34 @@ def check_morphology_invariants(h5_morph_dir, morph_names):
 
 
 def _update_dtype(parent_h5, name, target_dtype):
-    """Update dtype of the `parent_h5[name]` h5py dataset to `target_dtype`."""
+    """Update dtype of the `parent_h5[name]` h5py dataset to `target_dtype`.
+
+    If a list is passed as `target_dtype`, the tightest fit will be chosen.
+    """
     h5 = parent_h5[name]
     attrs = dict(h5.attrs)
+    old_dtype = h5.dtype
     L.debug("convert_dtype: %s: %s -> %s", h5.name, h5.dtype, target_dtype)
-    new = np.asarray(h5[:], dtype=target_dtype)
+
+    data = h5[:]
+
+    if isinstance(target_dtype, list):
+        dtype = np.min_scalar_type(data.max())
+        if dtype not in target_dtype:
+            msg = (
+                "The minimum dtype is not provided in the list of acceptable dtypes."
+                " No other heuristics are given"
+            )
+            raise RuntimeError(msg)
+        target_dtype = dtype
+    elif np.issubdtype(target_dtype, np.integer):
+        info = np.iinfo(target_dtype)
+        if data.min() < info.min or data.max() > info.max:
+            msg = f"Data in {name} of dtype {old_dtype} does not fit in {target_dtype}"
+            raise RuntimeError(msg)
+
+    new = np.asarray(data, dtype=target_dtype)
+
     del parent_h5[name]
     parent_h5[name] = new
 
@@ -398,14 +421,14 @@ def resize_datatypes(h5_path, population_name, population_type, attributes):
             overlap = set(property_types).intersection(set(dynamics_params))
             if overlap := overlap.intersection(attributes):
                 raise RuntimeError(
-                    f"Can't update {overlap} since exist in both property and dynamics"
+                    f"Can't update {overlap} since it exists in both property and dynamics"
                 )
             to_update = {a: property_types[a] for a in attributes if a in property_types}
             to_update.update(
                 {
-                    f"dynamics_params/{a}": types
-                    for a, types in dynamics_params.items()
-                    if a in attributes
+                    f"dynamics_params/{a}": dynamics_params[a]
+                    for a in attributes
+                    if a in dynamics_params
                 }
             )
         elif f"edges/{population_name}" in h5:
@@ -466,7 +489,7 @@ def update_node_dtypes(h5_file, population_name, population_type):
             else:
                 parent = group
 
-            if target_dtype != parent[attribute_name].dtype:
+            if target_dtype != parent[attribute_name].dtype or isinstance(target_dtype, list):
                 converted.append(_update_dtype(parent, attribute_name, target_dtype))
 
         if "dynamics_params" in group:
@@ -476,7 +499,7 @@ def update_node_dtypes(h5_file, population_name, population_type):
                     continue
 
                 target_dtype = dynamics_params[param]
-                if target_dtype != parent[param].dtype:
+                if target_dtype != parent[param].dtype or isinstance(target_dtype, list):
                     converted.append(_update_dtype(parent, param, target_dtype))
 
     return dict(converted)
@@ -518,7 +541,7 @@ def update_edge_dtypes(h5_file, population_name, population_type, virtual):
             if target_dtype is str:
                 continue
 
-            if target_dtype != group[attribute_name].dtype:
+            if target_dtype != group[attribute_name].dtype or isinstance(target_dtype, list):
                 converted.append(_update_dtype(group, attribute_name, target_dtype))
 
     return dict(converted)
