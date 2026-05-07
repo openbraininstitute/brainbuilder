@@ -413,3 +413,39 @@ def clip_morphologies(output, circuit, population_name):
     from brainbuilder.utils.sonata import clip
 
     clip.morphologies(output, circuit, population_name)
+
+
+@app.command()
+@click.option(
+    "-f",
+    "--file",
+    required=True,
+    type=REQUIRED_PATH,
+    help="`node` or `edges` file, modified in place",
+)
+@click.option("--population-name", required=True, help="Name of population")
+@click.option("--population-type", required=True, help="Type of population (ex: biophysics)")
+@click.option(
+    "-a",
+    "--attributes",
+    multiple=True,
+    required=True,
+    help="Names of the attributes, can be specified multiple times.",
+)
+def resize_datatypes(file, population_name, population_type, attributes):
+    """In place resize attributes to their minimum sizes for SONATA nodes or edges files"""
+    from brainbuilder.utils.sonata import curate
+
+    updates = curate.resize_datatypes(
+        h5_path=file,
+        population_name=population_name,
+        population_type=population_type,
+        attributes=attributes,
+    )
+
+    updates = "\n".join(
+        f"\t{attr} {old_dtype} -> {new_dtype}" for attr, old_dtype, new_dtype in updates
+    )
+
+    click.secho(f"The following updates were performed:\n{updates}")
+    click.secho(f"One should run `h5repack {file} output.h5` to repack the file", fg="green")

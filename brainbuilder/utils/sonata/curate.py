@@ -386,6 +386,51 @@ def _update_dtype(parent_h5, name, target_dtype):
     return (parent_h5[name].name, target_dtype)
 
 
+def resize_datatypes(h5_path, population_name, population_type, attributes):
+    with h5py.File(h5_path, "r") as h5:
+        if f"nodes/{population_name}" not in h5 and f"edges/{population_name}" not in h5:
+            raise ValueError(f'"{population_name}" dose not exist in `nodes` and `edges`')
+        elif f"nodes/{population_name}" in h5 and f"edges/{population_name}" in h5:
+            raise ValueError(f'"{population_name}" exists in both `nodes` and `edges`')
+        elif f"nodes/{population_name}" in h5:
+            typ_ = "nodes"
+            property_types, dynamics_params = schemas.nodes_schema_types(population_type)
+            overlap = set(property_types).intersection(set(dynamics_params))
+            if overlap := overlap.intersection(attributes):
+                raise RuntimeError(
+                    f"Can't update {overlap} since exist in both property and dynamics"
+                )
+            to_update = {a: property_types[a] for a in attributes if a in property_types}
+            to_update.update(
+                {
+                    f"dynamics_params/{a}": types
+                    for a, types in dynamics_params.items()
+                    if a in attributes
+                }
+            )
+        elif f"edges/{population_name}" in h5:
+            typ_ = "edges"
+            property_types = schemas.edges_schema_types(population_type, virtual=None)
+            to_update = {a: property_types[a] for a in attributes if a in property_types}
+
+    updates = []
+    with h5py.File(h5_path, "r+") as h5:
+        parent_h5 = h5[typ_][population_name]["0"]
+        for attr, dtypes in to_update.items():
+            old_dtype = parent_h5[attr].dtype
+            if isinstance(dtypes, list):
+                max_ = np.max(parent_h5[attr][:])
+                dtype = np.min_scalar_type(max_)
+                if dtype in dtypes and dtype != old_dtype:
+                    _update_dtype(parent_h5, attr, np.dtype(dtype))
+                    updates.append((attr, old_dtype, np.dtype(dtype)))
+            elif old_dtype != dtypes:
+                _update_dtype(parent_h5, attr, np.dtype(dtypes))
+                updates.append((attr, old_dtype, np.dtype(dtypes)))
+
+    return updates
+
+
 def update_node_dtypes(h5_file, population_name, population_type):
     """Update the datatypes of the attributes within a node population to the SONATA spec.
 
