@@ -371,19 +371,39 @@ def check_morphology_invariants(h5_morph_dir, morph_names):
     return incorrect_ordering, have_unifurcations
 
 
+def _select_smallest_dtype(data, candidate_dtypes):
+    """Select the smallest dtype from candidates that can represent all values in data."""
+    for dtype in candidate_dtypes:
+        info = np.iinfo(dtype)
+        if info.min <= data.min() and data.max() <= info.max:
+            return dtype
+    return candidate_dtypes[-1]
+
+
 def _update_dtype(parent_h5, name, target_dtype):
-    """Update dtype of the `parent_h5[name]` h5py dataset to `target_dtype`."""
+    """Update dtype of the `parent_h5[name]` h5py dataset to `target_dtype`.
+
+    If target_dtype is a list of candidate dtypes, the smallest one that can
+    represent all values in the dataset is selected.
+    """
     h5 = parent_h5[name]
     attrs = dict(h5.attrs)
-    L.debug("convert_dtype: %s: %s -> %s", h5.name, h5.dtype, target_dtype)
-    new = np.asarray(h5[:], dtype=target_dtype)
+    data = h5[:]
+
+    if isinstance(target_dtype, list):
+        resolved_dtype = _select_smallest_dtype(data, target_dtype)
+    else:
+        resolved_dtype = target_dtype
+
+    L.debug("convert_dtype: %s: %s -> %s", h5.name, h5.dtype, resolved_dtype)
+    new = np.asarray(data, dtype=resolved_dtype)
     del parent_h5[name]
     parent_h5[name] = new
 
     for k, v in attrs.items():
         parent_h5[name].attrs[k] = v
 
-    return (parent_h5[name].name, target_dtype)
+    return (parent_h5[name].name, resolved_dtype)
 
 
 def update_node_dtypes(h5_file, population_name, population_type):
@@ -473,7 +493,12 @@ def update_edge_dtypes(h5_file, population_name, population_type, virtual):
             if target_dtype is str:
                 continue
 
-            if target_dtype != group[attribute_name].dtype:
+            current_dtype = group[attribute_name].dtype
+            if isinstance(target_dtype, list):
+                needs_conversion = current_dtype not in [np.dtype(t) for t in target_dtype]
+            else:
+                needs_conversion = current_dtype != target_dtype
+            if needs_conversion:
                 converted.append(_update_dtype(group, attribute_name, target_dtype))
 
     return dict(converted)
