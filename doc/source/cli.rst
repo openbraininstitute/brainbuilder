@@ -57,6 +57,7 @@ The following subcommands can be used with: ``brainbuilder sonata``
 * ``clip-morphologies``                    Copy morphologies referenced by a population to a separate output directory
 * ``update-edge-section-types``            Update edge afferent/efferent section types using section_id
 * ``update-projection-efferent-edge-type`` Write projections' efferent section types as axons
+* ``resize-datatypes``                     Update attributes to fit in the smallest acceptable datatype
 
 For the commands starting with _update-_, read more in :ref:`SONATA: Single Child Reindex`
 
