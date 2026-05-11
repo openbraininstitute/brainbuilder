@@ -1159,11 +1159,7 @@ def test_subsubcircuit_externals_merge(tmp_path):
     for pop_name in mapping_c_a:
         assert pop_name in mapping_c_b_a, f"Population {pop_name} missing from C_B_A mapping"
         orig_ids_c_a = sorted(mapping_c_a[pop_name]["original_id"])
-        # For C_B_A, original_ids may be split across primary and secondary (parent2)
-        orig_ids_c_b_a = mapping_c_b_a[pop_name].get("original_id", [])
-        if "original2_id" in mapping_c_b_a[pop_name]:
-            orig_ids_c_b_a = orig_ids_c_b_a + mapping_c_b_a[pop_name]["original2_id"]
-        orig_ids_c_b_a = sorted(orig_ids_c_b_a)
+        orig_ids_c_b_a = sorted(mapping_c_b_a[pop_name]["original_id"])
         assert orig_ids_c_a == orig_ids_c_b_a, (
             f"original_id mismatch for {pop_name}: {orig_ids_c_a} vs {orig_ids_c_b_a}"
         )

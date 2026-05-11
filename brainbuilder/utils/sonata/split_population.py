@@ -798,11 +798,17 @@ def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig
             write_edge_config=write_edge_config, edge_mappings=edge_mappings
         )
         key = (str(output_path), write_edge_config.dst_edge_name)
-        index_info[key] = (output_path, write_edge_config.dst_edge_name, edge_count, sgid_count, tgid_count)
+        index_info[key] = (
+            output_path,
+            write_edge_config.dst_edge_name,
+            edge_count,
+            sgid_count,
+            tgid_count,
+        )
         new_edges_files[write_edge_config.dst_edge_name] = output_path
 
     # Write indexes after all edges are written (handles append case)
-    for (output_path, dst_edge_name, edge_count, sgid_count, tgid_count) in index_info.values():
+    for output_path, dst_edge_name, edge_count, sgid_count, tgid_count in index_info.values():
         if edge_count > 0:
             _write_indexes(
                 edge_file_name=output_path,
@@ -946,8 +952,7 @@ def _gather_new_external_subcircuit(
                 # Check if existing mapping came from a different source population
                 existing_parent = node_pop_name_mapping.get(new_source_pop_name)
                 different_source = (
-                    existing_parent is not None
-                    and existing_parent != edge.source.name
+                    existing_parent is not None and existing_parent != edge.source.name
                 )
 
                 if different_source:
@@ -1015,16 +1020,20 @@ def _gather_new_external_subcircuit(
             if new_source_pop_name in id_mapping_secondary:
                 # Mixed source: only write the secondary (new biophysical) nodes.
                 # The primary (carried-over external) nodes are handled by _filter.
-                nodes_to_write[new_source_pop_name] = [(
-                    node_pop_name_mapping_secondary[new_source_pop_name],
-                    id_mapping_secondary[new_source_pop_name].index.to_numpy(),
-                )]
+                nodes_to_write[new_source_pop_name] = [
+                    (
+                        node_pop_name_mapping_secondary[new_source_pop_name],
+                        id_mapping_secondary[new_source_pop_name].index.to_numpy(),
+                    )
+                ]
             else:
                 # Single source: all nodes come from _gather
-                nodes_to_write[new_source_pop_name] = [(
-                    edge.source.name,
-                    id_mapping[new_source_pop_name].index.to_numpy(),
-                )]
+                nodes_to_write[new_source_pop_name] = [
+                    (
+                        edge.source.name,
+                        id_mapping[new_source_pop_name].index.to_numpy(),
+                    )
+                ]
 
     return write_edge_configs, nodes_to_write, id_mapping_secondary, node_pop_name_mapping_secondary
 
@@ -1297,8 +1306,12 @@ def _set_original_ids(this_mapping: dict, parent_mapping: dict | None) -> None:
 
 
 def _write_mapping(
-    output, parent_circ, id_mapping, node_pop_name_mapping,
-    id_mapping_secondary=None, node_pop_name_mapping_secondary=None,
+    output,
+    parent_circ,
+    id_mapping,
+    node_pop_name_mapping,
+    id_mapping_secondary=None,
+    node_pop_name_mapping_secondary=None,
 ):
     """write the id mappings between the old and new populations for future analysis"""
     if id_mapping_secondary is None:
@@ -1336,10 +1349,21 @@ def _write_mapping(
             )
             # Combine new_ids (primary first, secondary appends)
             primary_entry[NEW_IDS] = primary_entry[NEW_IDS] + sec_entry[NEW_IDS]
+            # Combine original_ids (same original_name, just append)
+            primary_entry[ORIG_IDS] = primary_entry[ORIG_IDS] + sec_entry[ORIG_IDS]
             # Add parent2_* fields
             primary_entry["parent2_id"] = sec_entry[PARENT_IDS]
             primary_entry["parent2_name"] = sec_entry[PARENT_NAME]
-            primary_entry["original2_id"] = sec_entry[ORIG_IDS]
+
+            # Invariant: parent_id + parent2_id lengths == new_id == original_id
+            n_total = len(primary_entry[NEW_IDS])
+            n_parents = len(primary_entry[PARENT_IDS]) + len(primary_entry["parent2_id"])
+            assert n_parents == n_total == len(primary_entry[ORIG_IDS]), (
+                f"Length mismatch for merged population '{pop_name}': "
+                f"parent_id({len(primary_entry[PARENT_IDS])}) + "
+                f"parent2_id({len(primary_entry['parent2_id'])}) = {n_parents}, "
+                f"new_id={n_total}, original_id={len(primary_entry[ORIG_IDS])}"
+            )
 
     mapping_fn = "id_mapping.json"
     utils.dump_json(output / mapping_fn, this_mapping)
@@ -1446,7 +1470,12 @@ def split_subcircuit(
         )
 
         # Phase B: create new externals from biophysical populations now outside subcircuit
-        write_edge_configs_b, nodes_to_write_b, id_mapping_secondary, node_pop_name_mapping_secondary = _gather_new_external_subcircuit(
+        (
+            write_edge_configs_b,
+            nodes_to_write_b,
+            id_mapping_secondary,
+            node_pop_name_mapping_secondary,
+        ) = _gather_new_external_subcircuit(
             output,
             circuit,
             id_mapping,
@@ -1482,8 +1511,12 @@ def split_subcircuit(
         new_edge_files.update(new_virtual_edge_files)
 
     mapping_fn = _write_mapping(
-        output, circuit, id_mapping, node_pop_name_mapping,
-        id_mapping_secondary, node_pop_name_mapping_secondary,
+        output,
+        circuit,
+        id_mapping,
+        node_pop_name_mapping,
+        id_mapping_secondary,
+        node_pop_name_mapping_secondary,
     )
 
     config = copy.deepcopy(circuit.config)
