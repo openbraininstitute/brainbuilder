@@ -963,21 +963,28 @@ def _write_subcircuit_external(
     return new_node_files, new_edges_files
 
 
-def _write_subcircuit_virtual(
-    output,
+def _filter_virtual_typed_subcircuit(
     circuit,
-    edge_populations_to_paths,
     id_mapping,
     node_pop_name_mapping,
+    do_externals,
     list_of_sources_to_ignore=(),
 ):
-    """write all node/edge populations that have virtual nodes as source
+    """Filter and gather virtual-typed source populations for subcircuit extraction.
 
-    Note: the id_mapping dictionary is updated with the used virtual nodes
+    Selects edge populations whose source is typed as virtual and whose target
+    is in `id_mapping`. The `do_externals` flag controls which flavor:
+      - False: only genuine virtuals (excluding external_* populations)
+      - True: only external_* populations
+
+    Updates `id_mapping` and `node_pop_name_mapping` in place with the selected
+    source populations.
+
+    Returns:
+        (virtual_populations, pop_used_source_node_ids):
+            virtual_populations: dict of edge_name -> edge object
+            pop_used_source_node_ids: dict of source_pop_name -> array of used node IDs
     """
-    # pylint: disable=too-many-locals
-    new_node_files = {}
-
     virtual_populations = {
         name: edge
         for name, edge in circuit.edges.items()
@@ -985,7 +992,7 @@ def _write_subcircuit_virtual(
             edge.source.type == "virtual"
             and edge.target.name in id_mapping
             and edge.source.name not in list_of_sources_to_ignore
-            and not edge.source.name.startswith("external_")
+            and (edge.source.name.startswith("external_") == do_externals)
         )
     }
 
@@ -1015,14 +1022,37 @@ def _write_subcircuit_virtual(
         if edge.source.name in pop_used_source_node_ids
     }
 
-    # update the mappings with the virtual nodes
+    # update the mappings with the selected source nodes
     for name, ids in pop_used_source_node_ids.items():
         id_mapping[name] = pd.DataFrame({NEW_IDS: range(len(ids))}, index=ids)
-        # Virtual input sources retain their name unchanged
         node_pop_name_mapping[name] = name
 
-    # write the edges that have the virtual populations as source
+    return virtual_populations, pop_used_source_node_ids
 
+
+def _write_subcircuit(
+    output,
+    circuit,
+    edge_populations_to_paths,
+    id_mapping,
+    virtual_populations,
+    pop_used_source_node_ids,
+):
+    """Write edges and nodes for previously filtered virtual-typed source populations.
+
+    Args:
+        output: Path where files will be written.
+        circuit: bluepysnap Circuit object.
+        edge_populations_to_paths: dict of edge_pop_name -> relative path.
+        id_mapping: dict of pop_name -> DataFrame with new_id column.
+        virtual_populations: dict of edge_name -> edge object (from _filter_virtual_typed_subcircuit).
+        pop_used_source_node_ids: dict of source_pop_name -> array of node IDs
+            (from _filter_virtual_typed_subcircuit).
+
+    Returns:
+        (new_node_files, new_edges_files): dicts of population_name -> path.
+    """
+    # write the edges
     write_edge_configs = []
     for edge_pop_name, edge in virtual_populations.items():
         write_edge_config = WriteEdgeConfig(
@@ -1040,9 +1070,9 @@ def _write_subcircuit_virtual(
 
     new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
 
-    # write virtual nodes based on virtual populations
+    # write nodes
+    new_node_files = {}
     for population_name, ids in pop_used_source_node_ids.items():
-        # Get all properties of the subset of the node population that is relevant
         df = circuit.nodes[population_name].get(ids).reset_index(drop=True)
         nodes_path = Path(output) / population_name / "nodes.h5"
         nodes_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1274,7 +1304,7 @@ def split_subcircuit(
     node_pop_name_mapping = {pop_name: pop_name for pop_name in split_populations.keys()}
 
     # TODO: should function `_write_subcircuit_biological`,
-    # `_write_subcircuit_external`, `_write_subcircuit_virtual`
+    # `_write_subcircuit_external`, `_filter_virtual_typed_subcircuit`/`_write_subcircuit`
     # handle node updates and config updates?
 
     new_node_files, new_edge_files = _write_subcircuit_biological(
@@ -1282,13 +1312,20 @@ def split_subcircuit(
     )
 
     if do_virtual:
-        new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_virtual(
+        virtual_populations, pop_used_source_node_ids = _filter_virtual_typed_subcircuit(
+            circuit,
+            id_mapping,
+            node_pop_name_mapping,
+            False,
+            list_of_virtual_sources_to_ignore,
+        )
+        new_virtual_node_files, new_virtual_edge_files = _write_subcircuit(
             output,
             circuit,
             edge_pop_to_paths,
             id_mapping,
-            node_pop_name_mapping,
-            list_of_virtual_sources_to_ignore,
+            virtual_populations,
+            pop_used_source_node_ids,
         )
 
         new_node_files.update(new_virtual_node_files)
@@ -1297,6 +1334,22 @@ def split_subcircuit(
     existing_node_pop_names = list(new_node_files.keys())
     existing_edge_pop_names = list(new_edge_files.keys())
     if create_external:
+        virtual_populations, pop_used_source_node_ids = _filter_virtual_typed_subcircuit(
+            circuit,
+            id_mapping,
+            node_pop_name_mapping,
+            True,
+            list_of_virtual_sources_to_ignore,
+        )
+        new_virtual_node_files, new_virtual_edge_files = _write_subcircuit(
+            output,
+            circuit,
+            edge_pop_to_paths,
+            id_mapping,
+            virtual_populations,
+            pop_used_source_node_ids,
+        )
+
         new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_external(
             output,
             circuit,
