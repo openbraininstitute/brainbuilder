@@ -95,12 +95,14 @@ def draw_circuit(
         classification = _classify_population(pop_name, pop_type, id_mapping)
         color = pop_colors.get(classification, "white")
 
-        # Get parent IDs for labels if mapping exists
+        # Get original IDs for labels if mapping exists
         parent_ids = None
         if id_mapping and pop_name in id_mapping:
-            parent_ids = id_mapping[pop_name].get(
-                "original_id", id_mapping[pop_name].get("parent_id")
-            )
+            entry = id_mapping[pop_name]
+            parent_ids = entry.get("original_id", entry.get("parent_id"))
+            # Append secondary original IDs if present (merged external populations)
+            if "original2_id" in entry and parent_ids is not None:
+                parent_ids = parent_ids + entry["original2_id"]
 
         if pop.size <= max_nodes_detailed:
             detailed_pops.add(pop_name)
