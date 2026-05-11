@@ -946,18 +946,15 @@ def _write_subcircuit_external(
             )
             write_edge_configs.append(write_edge_config)
 
-            new_nodes[new_source_pop_name] = (
-                edge.source.name,
-                wanted_src_ids.index.to_numpy(),
-            )
+            new_nodes[new_source_pop_name] = edge.source.name
 
     new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
 
     new_node_files = {}
     # write new virtual nodes from originally non-virtual populations
-    for population_name, id_tuple in new_nodes.items():
-        # Get all properties of the subset of the node population that is relevant
-        orig_population_name, ids = id_tuple
+    for population_name, orig_population_name in new_nodes.items():
+        # Use the accumulated id_mapping (which merges IDs across all edges)
+        ids = id_mapping[population_name].index.to_numpy()
         df = circuit.nodes[orig_population_name].get(ids).reset_index(drop=True)
         nodes_path = Path(output) / population_name / "nodes.h5"
         nodes_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1030,7 +1030,7 @@ def test_subsubcircuit_virtual_operates_on_virtuals_only(tmp_path):
     """
     subset_B_A = {
         "subset_B_A": ["subset_B_A_popA", "subset_B_A_popB", "subset_B_A_popC"],
-        "subset_B_A_popA": {"population": "A", "node_id": [1, 2, 5]},
+        "subset_B_A_popA": {"population": "A", "node_id": [1, 5]},
         "subset_B_A_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
         "subset_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
     }
