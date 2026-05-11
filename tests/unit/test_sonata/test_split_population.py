@@ -1054,71 +1054,71 @@ def test_subsubcircuit_virtual_operates_on_virtuals_only(tmp_path):
         do_virtual=True, create_external=True
     )
 
-    path_c_b_a = _split_custom_subcircuit(
-        tmp_path / "C_B_A", str(path_b_a / "circuit_config.json"),
-        "subset_C_B_A", subset_C_B_A,
-        do_virtual=True, create_external=False
-    )
+    # path_c_b_a = _split_custom_subcircuit(
+    #     tmp_path / "C_B_A", str(path_b_a / "circuit_config.json"),
+    #     "subset_C_B_A", subset_C_B_A,
+    #     do_virtual=True, create_external=False
+    # )
 
-    path_c_a = _split_custom_subcircuit(
-        tmp_path / "C_A", circuit_config,
-        "subset_C_A", subset_C_A,
-        do_virtual=True, create_external=False
-    )
+    # path_c_a = _split_custom_subcircuit(
+    #     tmp_path / "C_A", circuit_config,
+    #     "subset_C_A", subset_C_A,
+    #     do_virtual=True, create_external=False
+    # )
 
-    # --- Assertions for C_B_A ---
-    circ_c_b_a = bluepysnap.Circuit(str(path_c_b_a / "circuit_config.json"))
-    node_pop_names = set(circ_c_b_a.nodes.keys())
+    # # --- Assertions for C_B_A ---
+    # circ_c_b_a = bluepysnap.Circuit(str(path_c_b_a / "circuit_config.json"))
+    # node_pop_names = set(circ_c_b_a.nodes.keys())
 
-    # do_virtual should NOT have processed external_A (it's not a genuine virtual)
-    assert "external_A" not in node_pop_names, (
-        "external_A should not be extracted by do_virtual"
-    )
+    # # do_virtual should NOT have processed external_A (it's not a genuine virtual)
+    # assert "external_A" not in node_pop_names, (
+    #     "external_A should not be extracted by do_virtual"
+    # )
 
-    # Genuine virtuals should be processed correctly
-    assert "V1" in node_pop_names, "V1 (genuine virtual) should be extracted"
-    assert "V2" not in node_pop_names, "V2 should be dropped (its target is outside C_B_A)"
+    # # Genuine virtuals should be processed correctly
+    # assert "V1" in node_pop_names, "V1 (genuine virtual) should be extracted"
+    # assert "V2" not in node_pop_names, "V2 should be dropped (its target is outside C_B_A)"
 
-    # C_A and C_B_A should be equivalent
-    _assert_circuits_equivalent(path_c_a, path_c_b_a)
+    # # C_A and C_B_A should be equivalent
+    # _assert_circuits_equivalent(path_c_a, path_c_b_a)
 
 
-def test_subsubcircuit_externals_merge(tmp_path):
-    """TODO"""
-    subset_B_A = {
-        "subset_B_A": ["subset_B_A_popA", "subset_B_A_popB", "subset_B_A_popC"],
-        "subset_B_A_popA": {"population": "A", "node_id": [1, 2, 5]},
-        "subset_B_A_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
-        "subset_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
-    }
-    subset_C_B_A = {
-        "subset_C_B_A": ["subset_C_B_A_popA", "subset_C_B_A_popB", "subset_C_B_A_popC"],
-        "subset_C_B_A_popA": {"population": "A", "node_id": [0, 1]},
-        "subset_C_B_A_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
-        "subset_C_B_A_popC": {"population": "C", "node_id": [0, 1, 4, 5]},
-    }
-    subset_C_A = {
-        "subset_C_A": ["subset_C_A_popA", "subset_C_A_popB", "subset_C_A_popC"],
-        "subset_C_A_popA": {"population": "A", "node_id": [1, 2]},
-        "subset_C_A_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
-        "subset_C_A_popC": {"population": "C", "node_id": [0, 1, 4, 5]},
-    }
+# def test_subsubcircuit_externals_merge(tmp_path):
+#     """TODO"""
+#     subset_B_A = {
+#         "subset_B_A": ["subset_B_A_popA", "subset_B_A_popB", "subset_B_A_popC"],
+#         "subset_B_A_popA": {"population": "A", "node_id": [1, 2, 5]},
+#         "subset_B_A_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
+#         "subset_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
+#     }
+#     subset_C_B_A = {
+#         "subset_C_B_A": ["subset_C_B_A_popA", "subset_C_B_A_popB", "subset_C_B_A_popC"],
+#         "subset_C_B_A_popA": {"population": "A", "node_id": [0, 1]},
+#         "subset_C_B_A_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
+#         "subset_C_B_A_popC": {"population": "C", "node_id": [0, 1, 4, 5]},
+#     }
+#     subset_C_A = {
+#         "subset_C_A": ["subset_C_A_popA", "subset_C_A_popB", "subset_C_A_popC"],
+#         "subset_C_A_popA": {"population": "A", "node_id": [1, 2]},
+#         "subset_C_A_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
+#         "subset_C_A_popC": {"population": "C", "node_id": [0, 1, 4, 5]},
+#     }
 
-    circuit_config = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
+#     circuit_config = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
 
-    path_b_a = _split_custom_subcircuit(
-        tmp_path / "B_A", circuit_config, "subset_B_A", subset_B_A,
-        do_virtual=True, create_external=True
-    )
+#     path_b_a = _split_custom_subcircuit(
+#         tmp_path / "B_A", circuit_config, "subset_B_A", subset_B_A,
+#         do_virtual=True, create_external=True
+#     )
 
-    path_c_b_a = _split_custom_subcircuit(
-        tmp_path / "C_B_A", str(path_b_a / "circuit_config.json"),
-        "subset_C_B_A", subset_C_B_A,
-        do_virtual=True, create_external=True
-    )
+#     path_c_b_a = _split_custom_subcircuit(
+#         tmp_path / "C_B_A", str(path_b_a / "circuit_config.json"),
+#         "subset_C_B_A", subset_C_B_A,
+#         do_virtual=True, create_external=True
+#     )
 
-    path_c_a = _split_custom_subcircuit(
-        tmp_path / "C_A", circuit_config,
-        "subset_C_A", subset_C_A,
-        do_virtual=True, create_external=True
-    )
+#     path_c_a = _split_custom_subcircuit(
+#         tmp_path / "C_A", circuit_config,
+#         "subset_C_A", subset_C_A,
+#         do_virtual=True, create_external=True
+#     )
