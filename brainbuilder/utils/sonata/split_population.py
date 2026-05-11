@@ -1209,24 +1209,25 @@ def _mapping_to_parent_dict(id_mapping, node_pop_name_mapping):
     return mapping
 
 
-def _make_parent_the_original_mapping(this_mapping):
-    for this_pop in this_mapping.keys():
-        this_mapping[this_pop][ORIG_IDS] = this_mapping[this_pop][PARENT_IDS]
-        this_mapping[this_pop][ORIG_NAME] = this_mapping[this_pop][PARENT_NAME]
+def _set_original_ids(this_mapping: dict, parent_mapping: dict | None) -> None:
+    """Set original_id and original_name for each population in the mapping.
 
-
-def _add_mapping_to_original(this_mapping, parent_mapping):
-    for this_pop in this_mapping.keys():
-        parent_pop = this_mapping[this_pop][PARENT_NAME]
-
-        backwards_mapped = pd.Series(
-            parent_mapping[parent_pop][ORIG_IDS], index=parent_mapping[parent_pop][NEW_IDS]
-        )
-        orig_ids = backwards_mapped[this_mapping[this_pop][PARENT_IDS]]
-        orig_name = parent_mapping[parent_pop][ORIG_NAME]
-
-        this_mapping[this_pop][ORIG_IDS] = orig_ids.to_list()
-        this_mapping[this_pop][ORIG_NAME] = orig_name
+    If parent_mapping is None (parent is the root circuit), original_id is
+    copied from parent_id. Otherwise, original_id is traced back through the
+    parent's mapping to the root circuit.
+    """
+    for entry in this_mapping.values():
+        if parent_mapping is None:
+            entry[ORIG_IDS] = entry[PARENT_IDS]
+            entry[ORIG_NAME] = entry[PARENT_NAME]
+        else:
+            parent_pop = entry[PARENT_NAME]
+            backwards_mapped = pd.Series(
+                parent_mapping[parent_pop][ORIG_IDS],
+                index=parent_mapping[parent_pop][NEW_IDS],
+            )
+            entry[ORIG_IDS] = backwards_mapped[entry[PARENT_IDS]].to_list()
+            entry[ORIG_NAME] = parent_mapping[parent_pop][ORIG_NAME]
 
 
 def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
@@ -1234,14 +1235,14 @@ def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
     this_mapping = _mapping_to_parent_dict(id_mapping, node_pop_name_mapping)
 
     provenance = parent_circ.config.get("components", {}).get("provenance", {})
-    if "id_mapping" in provenance:
-        # Currently, bluepysnap does not seem to resolve $BASE_DIR for entries in "provenance".
-        # Therefore I decided to not prepend it and just assume the file exists near the circuit config.
+    # Currently, bluepysnap does not resolve $BASE_DIR for provenance entries,
+    # so assume the mapping file is relative to the circuit config.
+    parent_mapping = None
+    if mapping_path := provenance.get("id_mapping"):
         parent_root = Path(parent_circ._circuit_config_path).parent
-        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
-        _add_mapping_to_original(this_mapping, parent_mapping)
-    else:
-        _make_parent_the_original_mapping(this_mapping)
+        parent_mapping = utils.load_json(parent_root / mapping_path)
+
+    _set_original_ids(this_mapping, parent_mapping)
 
     mapping_fn = "id_mapping.json"
     utils.dump_json(output / mapping_fn, this_mapping)
