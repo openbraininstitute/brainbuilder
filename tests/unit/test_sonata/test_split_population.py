@@ -1087,22 +1087,49 @@ def test_subsubcircuit_externals_merge(tmp_path):
     """TODO"""
     subset_B_A = {
         "subset_B_A": ["subset_B_A_popA", "subset_B_A_popB", "subset_B_A_popC"],
-        "subset_B_A_popA": {"population": "A", "node_id": [1, 2, 5]},
+        "subset_B_A_popA": {"population": "A", "node_id": [1, 2, 3, 5]},
         "subset_B_A_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
         "subset_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
     }
-    subset_C_B_A = {
-        "subset_C_B_A": ["subset_C_B_A_popA", "subset_C_B_A_popB", "subset_C_B_A_popC"],
-        "subset_C_B_A_popA": {"population": "A", "node_id": [0, 1]},
-        "subset_C_B_A_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
-        "subset_C_B_A_popC": {"population": "C", "node_id": [0, 1, 4, 5]},
-    }
     subset_C_A = {
         "subset_C_A": ["subset_C_A_popA", "subset_C_A_popB", "subset_C_A_popC"],
-        "subset_C_A_popA": {"population": "A", "node_id": [1, 2]},
+        "subset_C_A_popA": {"population": "A", "node_id": [1, 2, 3]},
         "subset_C_A_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
-        "subset_C_A_popC": {"population": "C", "node_id": [0, 1, 4, 5]},
+        "subset_C_A_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
     }
+    subset_D_A = {
+        "subset_D_A": ["subset_D_A_popA", "subset_D_A_popB", "subset_D_A_popC"],
+        "subset_D_A_popA": {"population": "A", "node_id": [1, 2]},
+        "subset_D_A_popB": {"population": "B", "node_id": [1, 3, 4]},
+        "subset_D_A_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
+    }
+    subset_C_B_A = {
+        "subset_C_B_A": ["subset_C_B_A_popA", "subset_C_B_A_popB", "subset_C_B_A_popC"],
+        "subset_C_B_A_popA": {"population": "A", "node_id": [0, 1, 2]},
+        "subset_C_B_A_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
+        "subset_C_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
+    }
+    subset_D_B_A = {
+        "subset_D_B_A": ["subset_D_B_A_popA", "subset_D_B_A_popB", "subset_D_B_A_popC"],
+        "subset_D_B_A_popA": {"population": "A", "node_id": [0, 1]},
+        "subset_D_B_A_popB": {"population": "B", "node_id": [1, 3, 4]},
+        "subset_D_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
+    }
+    subset_D_C_A = {
+        "subset_D_C_A": ["subset_D_C_A_popA", "subset_D_C_A_popB", "subset_D_C_A_popC"],
+        "subset_D_C_A_popA": {"population": "A", "node_id": [0, 1]},
+        "subset_D_C_A_popB": {"population": "B", "node_id": [0, 2, 3]},
+        "subset_D_C_A_popC": {"population": "C", "node_id": [0, 1, 2, 3]},
+    }
+    subset_D_C_B_A = {
+        "subset_D_C_B_A": ["subset_D_C_B_A_popA", "subset_D_C_B_A_popB", "subset_D_C_B_A_popC"],
+        "subset_D_C_B_A_popA": {"population": "A", "node_id": [0, 1]},
+        "subset_D_C_B_A_popB": {"population": "B", "node_id": [0, 2, 3]},
+        "subset_D_C_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 3]},
+    }
+
+
+
 
     circuit_config = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
 
@@ -1123,43 +1150,71 @@ def test_subsubcircuit_externals_merge(tmp_path):
         do_virtual=True, create_external=True
     )
 
-
-    # --- Equivalence check: C_A ≈ C_B_A (up to node reordering in externals) ---
-    circ_c_a = bluepysnap.Circuit(str(path_c_a / "circuit_config.json"))
-    circ_c_b_a = bluepysnap.Circuit(str(path_c_b_a / "circuit_config.json"))
-
-    # Same node populations
-    assert set(circ_c_a.nodes.keys()) == set(circ_c_b_a.nodes.keys()), (
-        f"Node populations differ: {set(circ_c_a.nodes.keys())} vs {set(circ_c_b_a.nodes.keys())}"
+    path_d_a = _split_custom_subcircuit(
+        tmp_path / "D_A", circuit_config,
+        "subset_D_A", subset_D_A,
+        do_virtual=True, create_external=True
     )
 
-    # Same edge populations
-    assert set(circ_c_a.edges.keys()) == set(circ_c_b_a.edges.keys()), (
-        f"Edge populations differ: {set(circ_c_a.edges.keys())} vs {set(circ_c_b_a.edges.keys())}"
+    path_d_b_a = _split_custom_subcircuit(
+        tmp_path / "D_B_A", str(path_b_a / "circuit_config.json"),
+        "subset_D_B_A", subset_D_B_A,
+        do_virtual=True, create_external=True
     )
 
-    # Same node counts per population
-    for pop_name in circ_c_a.nodes.keys():
-        assert circ_c_a.nodes[pop_name].size == circ_c_b_a.nodes[pop_name].size, (
-            f"Node count mismatch for {pop_name}: "
-            f"{circ_c_a.nodes[pop_name].size} vs {circ_c_b_a.nodes[pop_name].size}"
-        )
+    path_d_c_a = _split_custom_subcircuit(
+        tmp_path / "D_C_A", str(path_c_a / "circuit_config.json"),
+        "subset_D_C_A", subset_D_C_A,
+        do_virtual=True, create_external=True
+    )
 
-    # Same edge counts per population
-    for edge_name in circ_c_a.edges.keys():
-        assert circ_c_a.edges[edge_name].size == circ_c_b_a.edges[edge_name].size, (
-            f"Edge count mismatch for {edge_name}: "
-            f"{circ_c_a.edges[edge_name].size} vs {circ_c_b_a.edges[edge_name].size}"
-        )
+    path_d_c_b_a = _split_custom_subcircuit(
+        tmp_path / "D_C_B_A", str(path_c_b_a / "circuit_config.json"),
+        "subset_D_C_B_A", subset_D_C_B_A,
+        do_virtual=True, create_external=True
+    )
 
-    # Same original_ids (up to reordering for external populations)
-    mapping_c_a = load_json(path_c_a / "id_mapping.json")
-    mapping_c_b_a = load_json(path_c_b_a / "id_mapping.json")
 
-    for pop_name in mapping_c_a:
-        assert pop_name in mapping_c_b_a, f"Population {pop_name} missing from C_B_A mapping"
-        orig_ids_c_a = sorted(mapping_c_a[pop_name]["original_id"])
-        orig_ids_c_b_a = sorted(mapping_c_b_a[pop_name]["original_id"])
-        assert orig_ids_c_a == orig_ids_c_b_a, (
-            f"original_id mismatch for {pop_name}: {orig_ids_c_a} vs {orig_ids_c_b_a}"
+    # --- Equivalence check helper ---
+    def _assert_equivalent(path_ref, path_test, label):
+        circ_ref = bluepysnap.Circuit(str(path_ref / "circuit_config.json"))
+        circ_test = bluepysnap.Circuit(str(path_test / "circuit_config.json"))
+
+        assert set(circ_ref.nodes.keys()) == set(circ_test.nodes.keys()), (
+            f"[{label}] Node populations differ: "
+            f"{set(circ_ref.nodes.keys())} vs {set(circ_test.nodes.keys())}"
         )
+        assert set(circ_ref.edges.keys()) == set(circ_test.edges.keys()), (
+            f"[{label}] Edge populations differ: "
+            f"{set(circ_ref.edges.keys())} vs {set(circ_test.edges.keys())}"
+        )
+        for pop_name in circ_ref.nodes.keys():
+            assert circ_ref.nodes[pop_name].size == circ_test.nodes[pop_name].size, (
+                f"[{label}] Node count mismatch for {pop_name}: "
+                f"{circ_ref.nodes[pop_name].size} vs {circ_test.nodes[pop_name].size}"
+            )
+        for edge_name in circ_ref.edges.keys():
+            assert circ_ref.edges[edge_name].size == circ_test.edges[edge_name].size, (
+                f"[{label}] Edge count mismatch for {edge_name}: "
+                f"{circ_ref.edges[edge_name].size} vs {circ_test.edges[edge_name].size}"
+            )
+        mapping_ref = load_json(path_ref / "id_mapping.json")
+        mapping_test = load_json(path_test / "id_mapping.json")
+        for pop_name in mapping_ref:
+            assert pop_name in mapping_test, (
+                f"[{label}] Population {pop_name} missing from test mapping"
+            )
+            orig_ids_ref = sorted(mapping_ref[pop_name]["original_id"])
+            orig_ids_test = sorted(mapping_test[pop_name]["original_id"])
+            assert orig_ids_ref == orig_ids_test, (
+                f"[{label}] original_id mismatch for {pop_name}: "
+                f"{orig_ids_ref} vs {orig_ids_test}"
+            )
+
+    # All C circuits should be equivalent
+    _assert_equivalent(path_c_a, path_c_b_a, "C_A vs C_B_A")
+
+    # All D circuits should be equivalent
+    _assert_equivalent(path_d_a, path_d_b_a, "D_A vs D_B_A")
+    _assert_equivalent(path_d_a, path_d_c_a, "D_A vs D_C_A")
+    _assert_equivalent(path_d_a, path_d_c_b_a, "D_A vs D_C_B_A")
