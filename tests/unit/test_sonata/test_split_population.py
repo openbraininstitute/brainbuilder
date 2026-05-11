@@ -883,9 +883,8 @@ def test_copy_filtered_edges_advanced(tmp_path):
         h5_read_chunk_size=3,  # FORCE chunking
         edge_type="synapse_astrocyte"
     )
-    with h5py.File(write_edge_config.input_path, "r") as h5in, h5py.File(write_edge_config.output_path, "w") as h5out:
+    with h5py.File(write_edge_config.output_path, "w") as h5out:
         split_population._copy_filtered_edges(
-            h5in=h5in,
             h5out=h5out,
             write_edge_config=write_edge_config,
             edge_mappings=edge_mappings
