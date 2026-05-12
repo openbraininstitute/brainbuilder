@@ -113,7 +113,9 @@ def draw_circuit(
             detailed_pops.add(pop_name)
             with dot.subgraph(name=f"cluster_{pop_name}") as sub:
                 sub.attr(
-                    label=f"{pop_name} ({pop_type}, {pop.size})", style="filled", color=pop_type.color
+                    label=f"{pop_name} ({pop_type}, {pop.size})",
+                    style="filled",
+                    color=pop_type.color,
                 )
                 prev = None
                 for i in range(pop.size):
