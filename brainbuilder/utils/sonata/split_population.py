@@ -818,6 +818,7 @@ def _gather_new_external_subcircuits(
     node_pop_name_mapping,
     existing_node_pop_names,
     existing_edge_pop_names,
+    external_id_offset=None,
 ):
     """Gather external connectivity: non-virtual sources projecting into the subcircuit.
 
@@ -826,6 +827,11 @@ def _gather_new_external_subcircuits(
     dict suitable for _write_subcircuit.
 
     Updates `id_mapping` and `node_pop_name_mapping` in place.
+
+    Args:
+        external_id_offset: Dict of population_name -> starting new_id offset.
+            Used when merging with pre-existing externals from a parent circuit.
+            If None or population not in dict, offset is 0.
 
     Returns:
         (write_edge_configs, nodes_to_write):
@@ -845,12 +851,8 @@ def _gather_new_external_subcircuits(
 
     write_edge_configs = []
     for name, edge in circuit.edges.items():
-        L.debug("GATHER-ALL: edge=%s, src_type=%s, target=%s, target_in_mapping=%s",
-                name, edge.source.type, edge.target.name, edge.target.name in id_mapping)
         if edge.source.type != "virtual" and edge.target.name in id_mapping:
             wanted_src_ids = circuit.nodes[edge.source.name].ids()
-            L.debug("GATHER: edge=%s, source=%s, target=%s, all_src_ids=%s",
-                    name, edge.source.name, edge.target.name, wanted_src_ids.tolist())
 
             if edge.source.name in id_mapping:
                 wanted_src_ids = wanted_src_ids[
@@ -912,6 +914,9 @@ def _gather_new_external_subcircuits(
                     [existing_mapping, wanted_src_ids.loc[~is_existing]], axis=0
                 )
             else:
+                pop_offset = (external_id_offset or {}).get(new_source_pop_name, 0)
+                if pop_offset:
+                    wanted_src_ids[NEW_IDS] = wanted_src_ids[NEW_IDS] + pop_offset
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
             write_edge_config = WriteEdgeConfig(
@@ -1397,10 +1402,17 @@ def split_subcircuit(
         )
 
         # Phase B: create new externals from biophysical populations now outside subcircuit
-        # Give _gather a clean id_mapping without filter's external entries
+        # Give _gather a clean id_mapping without filter's external entries.
+        # Pass offset so new_ids continue after filter's max for overlapping populations.
         gather_id_mapping = {k: v for k, v in id_mapping.items() if not k.startswith("external_")}
         gather_node_pop_name_mapping = {
             k: v for k, v in node_pop_name_mapping.items() if not k.startswith("external_")
+        }
+        # Compute per-population offset: new_ids continue after filter's max
+        external_offsets = {
+            k: int(v[NEW_IDS].max()) + 1
+            for k, v in id_mapping.items()
+            if k.startswith("external_")
         }
         write_edge_configs_b, nodes_to_write_b = _gather_new_external_subcircuits(
             output,
@@ -1409,30 +1421,19 @@ def split_subcircuit(
             gather_node_pop_name_mapping,
             existing_node_pop_names,
             existing_edge_pop_names,
+            external_id_offset=external_offsets,
         )
 
-        # Merge: for overlapping populations, renumber gather's new_ids and combine
+        # Merge: gather's external populations are already offset.
+        # Move them to id_mapping_secondary (for serialization) or main id_mapping.
         id_mapping_secondary = {}
         for pop_name in list(gather_id_mapping.keys()):
             if not pop_name.startswith("external_"):
                 continue
             gather_df = gather_id_mapping[pop_name]
-            L.debug("MERGE: pop=%s, in id_mapping=%s, gather new_ids=%s",
-                    pop_name, pop_name in id_mapping, gather_df[NEW_IDS].tolist())
             if pop_name in id_mapping:
-                # Overlapping: renumber gather's IDs after filter's max
-                offset = int(id_mapping[pop_name][NEW_IDS].max()) + 1
-                gather_df[NEW_IDS] = gather_df[NEW_IDS] + offset
+                # Overlapping: store as secondary (already offset)
                 id_mapping_secondary[pop_name] = gather_df
-                # Update src_mapping in gather's WriteEdgeConfigs
-                for cfg in write_edge_configs_b:
-                    if cfg.src_node_name == pop_name:
-                        new_mappings = []
-                        for m in cfg.src_mapping:
-                            m_copy = m.copy()
-                            m_copy[NEW_IDS] = m_copy[NEW_IDS] + offset
-                            new_mappings.append(m_copy)
-                        cfg.src_mapping = new_mappings
                 # Append parent name
                 if pop_name in gather_node_pop_name_mapping:
                     for parent in gather_node_pop_name_mapping[pop_name]:
@@ -1482,15 +1483,6 @@ def split_subcircuit(
         node_pop_name_mapping,
         id_mapping_secondary if create_external else None,
     )
-    # Temporary debug assert
-    if create_external and "external_A" in id_mapping_secondary:
-        _sec = id_mapping_secondary["external_A"]
-        _pri = id_mapping["external_A"]
-        assert int(_sec[NEW_IDS].max()) == int(_pri[NEW_IDS].max()) + len(_sec), (
-            f"Secondary new_id mismatch: sec_max={int(_sec[NEW_IDS].max())}, "
-            f"pri_max={int(_pri[NEW_IDS].max())}, sec_len={len(_sec)}"
-        )
-
     config = copy.deepcopy(circuit.config)
 
     node_sets = _update_node_sets(utils.load_json(config["node_sets_file"]), id_mapping)
