@@ -921,25 +921,17 @@ def test_copy_filtered_edges_advanced(tmp_path):
         assert out_edges["0"]["synapse_id"].attrs["edge_population"] == "new_biophysical_edge_pop"
 
 
-# --- Nested extraction tests (C_A ≈ C_B_A) ---
-
-
-def _assert_external_populations_consistent(circuit_path):
-    """Assert that populations named 'external_*' have parent_name != pop_name in id_mapping."""
-    mapping = load_json(Path(circuit_path) / "id_mapping.json")
-    for pop_name, data in mapping.items():
-        if pop_name.startswith("external_"):
-            assert data["parent_name"] != pop_name, (
-                f"External population '{pop_name}' should have parent_name != pop_name, "
-                f"but got parent_name='{data['parent_name']}'"
-            )
-
-
-def _assert_circuits_equivalent(path_a, path_b):
-    """Assert two extracted circuits are equivalent using original IDs.
+def _assert_circuits_equal(path_a, path_b, strict_order=False):
+    """Assert two extracted circuits are equal using original IDs.
 
     Checks that they have the same populations with the same original nodes,
     and the same edges (translated to original IDs).
+
+    Args:
+        path_a: Path to first circuit directory.
+        path_b: Path to second circuit directory.
+        strict_order: If True, require same node and edge ordering.
+            If False (default), allow reordering.
     """
     circ_a = bluepysnap.Circuit(str(Path(path_a) / "circuit_config.json"))
     circ_b = bluepysnap.Circuit(str(Path(path_b) / "circuit_config.json"))
@@ -953,11 +945,17 @@ def _assert_circuits_equivalent(path_a, path_b):
 
     # Same original IDs per population
     for pop_name in circ_a.nodes.keys():
-        orig_a = sorted(mapping_a[pop_name]["original_id"])
-        orig_b = sorted(mapping_b[pop_name]["original_id"])
-        assert orig_a == orig_b, (
-            f"Population '{pop_name}' original_ids differ: {orig_a} vs {orig_b}"
-        )
+        orig_a = mapping_a[pop_name]["original_id"]
+        orig_b = mapping_b[pop_name]["original_id"]
+        if strict_order:
+            assert orig_a == orig_b, (
+                f"Population '{pop_name}' original_ids differ: {orig_a} vs {orig_b}"
+            )
+        else:
+            assert sorted(orig_a) == sorted(orig_b), (
+                f"Population '{pop_name}' original_ids differ: "
+                f"{sorted(orig_a)} vs {sorted(orig_b)}"
+            )
         assert mapping_a[pop_name]["original_name"] == mapping_b[pop_name]["original_name"], (
             f"Population '{pop_name}' original_name differs"
         )
@@ -987,12 +985,18 @@ def _assert_circuits_equivalent(path_a, path_b):
             sgids_b = h5[f"edges/{edge_name}/source_node_id"][:]
             tgids_b = h5[f"edges/{edge_name}/target_node_id"][:]
 
-        edges_a = sorted((orig_src_a[int(s)], orig_tgt_a[int(t)]) for s, t in zip(sgids_a, tgids_a))
-        edges_b = sorted((orig_src_b[int(s)], orig_tgt_b[int(t)]) for s, t in zip(sgids_b, tgids_b))
+        edges_a = [(orig_src_a[int(s)], orig_tgt_a[int(t)]) for s, t in zip(sgids_a, tgids_a)]
+        edges_b = [(orig_src_b[int(s)], orig_tgt_b[int(t)]) for s, t in zip(sgids_b, tgids_b)]
 
-        assert edges_a == edges_b, (
-            f"Edge population '{edge_name}' differs:\n  {edges_a}\n  vs\n  {edges_b}"
-        )
+        if strict_order:
+            assert edges_a == edges_b, (
+                f"Edge population '{edge_name}' differs:\n  {edges_a}\n  vs\n  {edges_b}"
+            )
+        else:
+            assert sorted(edges_a) == sorted(edges_b), (
+                f"Edge population '{edge_name}' differs:\n  "
+                f"{sorted(edges_a)}\n  vs\n  {sorted(edges_b)}"
+            )
 
 
 def _split_custom_subcircuit(output, circuit_config, node_set_name, node_set_def,
@@ -1079,47 +1083,91 @@ def test_subsubcircuit_virtual_operates_on_virtuals_only(tmp_path):
     assert "V2" not in node_pop_names, "V2 should be dropped (its target is outside C_B_A)"
 
     # C_A and C_B_A should be equivalent
-    _assert_circuits_equivalent(path_c_a, path_c_b_a)
+    _assert_circuits_equal(path_c_a, path_c_b_a, True)
 
 
 def test_subsubcircuit_externals_merge(tmp_path):
-    """TODO"""
+    """Nested extraction with create_external merges external populations correctly.
+
+    Verifies that extracting C from B (from A) produces the same result as
+    extracting C directly from A, up to 3 levels of nesting (D).
+    """
+    ### Nomenclature:
+    # X_Y: circuit X derived from parent Y.
+    # Nodes removed from a biophysical population either become external
+    # (if they have at least one edge targeting a kept node) or are discarded.
+    # Virtual nodes are kept only if they have at least one edge to a kept
+    # biophysical node; otherwise they are dropped.
+
+    # B_A from A: keep A:{1,2,3,5}, B:all, C:all
+    # - external_A: {0, 4}
+    # - discarded: A:{} (none)
+    # - V1 kept: {1,2}. V1 dropped: {0,3}
+    # - V2 kept: {0}
     subset_B_A = {
         "subset_B_A": ["subset_B_A_popA", "subset_B_A_popB", "subset_B_A_popC"],
         "subset_B_A_popA": {"population": "A", "node_id": [1, 2, 3, 5]},
         "subset_B_A_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
         "subset_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
     }
+    # C_A from A: keep A:{1,2,3}, B:{1,2,3,4,5}, C:{0,1,2,5}
+    # - external_A: {0, 5}. Discarded A: {4}
+    # - external_C: {3}. Discarded C: {4}
+    # - discarded B: {0}
+    # - V1 kept: {1}. V1 dropped: {2}
+    # - V2 kept: {0}
     subset_C_A = {
         "subset_C_A": ["subset_C_A_popA", "subset_C_A_popB", "subset_C_A_popC"],
         "subset_C_A_popA": {"population": "A", "node_id": [1, 2, 3]},
         "subset_C_A_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
         "subset_C_A_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
     }
+    # D_A from A: keep A:{1,2}, B:{1,3,4}, C:{0,1,2,5}
+    # - external_A: {3, 5}. Discarded A: {0, 4}
+    # - external_B: {2}. Discarded B: {0, 5}
+    # - external_C: {3}. Discarded C: {4}
+    # - V1 kept: {1}. V1 dropped: {2}
+    # - V2 kept: {0}
     subset_D_A = {
         "subset_D_A": ["subset_D_A_popA", "subset_D_A_popB", "subset_D_A_popC"],
         "subset_D_A_popA": {"population": "A", "node_id": [1, 2]},
         "subset_D_A_popB": {"population": "B", "node_id": [1, 3, 4]},
         "subset_D_A_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
     }
+    # C_B_A from B_A (parent has A:local{0,1,2,3}=orig{1,2,3,5}, external_A:orig{0,4}):
+    # - Remove A:local{2} (orig 3) -> merges into external_A
+    # - Remove B:{0} -> discarded
+    # - Remove C:{3,4} -> C:3 external_C, C:4 discarded
+    # Result should equal C_A
     subset_C_B_A = {
         "subset_C_B_A": ["subset_C_B_A_popA", "subset_C_B_A_popB", "subset_C_B_A_popC"],
         "subset_C_B_A_popA": {"population": "A", "node_id": [0, 1, 2]},
         "subset_C_B_A_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
         "subset_C_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
     }
+    # D_B_A from B_A (parent has A:local{0,1,2,3}=orig{1,2,3,5}, external_A:orig{0,4}):
+    # - Remove A:local{1,2} (orig 2,3) -> A:2(orig 3) merges into external_A, A:1(orig 2) discarded
+    # - Remove B:{0,2,5} -> B:2 external_B, rest discarded
+    # - Remove C:{3,4} -> C:3 external_C, C:4 discarded
+    # Result should equal D_A
     subset_D_B_A = {
         "subset_D_B_A": ["subset_D_B_A_popA", "subset_D_B_A_popB", "subset_D_B_A_popC"],
         "subset_D_B_A_popA": {"population": "A", "node_id": [0, 1]},
         "subset_D_B_A_popB": {"population": "B", "node_id": [1, 3, 4]},
         "subset_D_B_A_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
     }
+    # D_C_A from C_A (parent has A:local{0,1,2}=orig{1,2,3}, external_A:orig{0,5}):
+    # - Remove A:local{2} (orig 3) -> merges into external_A
+    # - Remove B:local{1,4} (orig 2,5) -> B:1(orig 2) external_B, B:4(orig 5) discarded
+    # Result should equal D_A
     subset_D_C_A = {
         "subset_D_C_A": ["subset_D_C_A_popA", "subset_D_C_A_popB", "subset_D_C_A_popC"],
         "subset_D_C_A_popA": {"population": "A", "node_id": [0, 1]},
         "subset_D_C_A_popB": {"population": "B", "node_id": [0, 2, 3]},
         "subset_D_C_A_popC": {"population": "C", "node_id": [0, 1, 2, 3]},
     }
+    # D_C_B_A from C_B_A (same original content as C_A):
+    # - Same removals as D_C_A. Result should equal D_A
     subset_D_C_B_A = {
         "subset_D_C_B_A": ["subset_D_C_B_A_popA", "subset_D_C_B_A_popB", "subset_D_C_B_A_popC"],
         "subset_D_C_B_A_popA": {"population": "A", "node_id": [0, 1]},
@@ -1174,46 +1222,10 @@ def test_subsubcircuit_externals_merge(tmp_path):
     )
 
 
-    # --- Equivalence check helper ---
-    def _assert_equivalent(path_ref, path_test, label):
-        circ_ref = bluepysnap.Circuit(str(path_ref / "circuit_config.json"))
-        circ_test = bluepysnap.Circuit(str(path_test / "circuit_config.json"))
+    # All C circuits should be equal
+    _assert_circuits_equal(path_c_a, path_c_b_a)
 
-        assert set(circ_ref.nodes.keys()) == set(circ_test.nodes.keys()), (
-            f"[{label}] Node populations differ: "
-            f"{set(circ_ref.nodes.keys())} vs {set(circ_test.nodes.keys())}"
-        )
-        assert set(circ_ref.edges.keys()) == set(circ_test.edges.keys()), (
-            f"[{label}] Edge populations differ: "
-            f"{set(circ_ref.edges.keys())} vs {set(circ_test.edges.keys())}"
-        )
-        for pop_name in circ_ref.nodes.keys():
-            assert circ_ref.nodes[pop_name].size == circ_test.nodes[pop_name].size, (
-                f"[{label}] Node count mismatch for {pop_name}: "
-                f"{circ_ref.nodes[pop_name].size} vs {circ_test.nodes[pop_name].size}"
-            )
-        for edge_name in circ_ref.edges.keys():
-            assert circ_ref.edges[edge_name].size == circ_test.edges[edge_name].size, (
-                f"[{label}] Edge count mismatch for {edge_name}: "
-                f"{circ_ref.edges[edge_name].size} vs {circ_test.edges[edge_name].size}"
-            )
-        mapping_ref = load_json(path_ref / "id_mapping.json")
-        mapping_test = load_json(path_test / "id_mapping.json")
-        for pop_name in mapping_ref:
-            assert pop_name in mapping_test, (
-                f"[{label}] Population {pop_name} missing from test mapping"
-            )
-            orig_ids_ref = sorted(mapping_ref[pop_name]["original_id"])
-            orig_ids_test = sorted(mapping_test[pop_name]["original_id"])
-            assert orig_ids_ref == orig_ids_test, (
-                f"[{label}] original_id mismatch for {pop_name}: "
-                f"{orig_ids_ref} vs {orig_ids_test}"
-            )
-
-    # All C circuits should be equivalent
-    _assert_equivalent(path_c_a, path_c_b_a, "C_A vs C_B_A")
-
-    # All D circuits should be equivalent
-    _assert_equivalent(path_d_a, path_d_b_a, "D_A vs D_B_A")
-    _assert_equivalent(path_d_a, path_d_c_a, "D_A vs D_C_A")
-    _assert_equivalent(path_d_a, path_d_c_b_a, "D_A vs D_C_B_A")
+    # All D circuits should be equal
+    _assert_circuits_equal(path_d_a, path_d_b_a)
+    _assert_circuits_equal(path_d_a, path_d_c_a)
+    _assert_circuits_equal(path_d_a, path_d_c_b_a)
