@@ -70,6 +70,14 @@ class WriteEdgeConfig:
             Path(self.output_path) if isinstance(self.output_path, str) else self.output_path
         )
 
+    @property
+    def source_node_count(self) -> int:
+        return int(max(np.max(m) for m in self.src_mapping)) + 1
+
+    @property
+    def target_node_count(self) -> int:
+        return int(np.max(self.dst_mapping)) + 1
+
 
 def _create_chunked_slices(length, chunk_size):
     """return `slices` each of size `chunk_size`, that cover `length`"""
@@ -240,35 +248,22 @@ def _h5_get_read_chunk_size():
 
 
 def _copy_filtered_edges(
-    h5out: h5py.File,
     write_edge_config: WriteEdgeConfig,
     edge_mappings: dict[str, tuple[pd.DataFrame, str]] = None,
-):
-    """
-    Copy and filter edge datasets from input HDF5 file(s) to an output HDF5 file.
+) -> int:
+    """Copy and filter edge datasets from input HDF5 file(s) to an output HDF5 file.
 
+    Opens the output file, writes filtered edges, finalizes, and closes.
     Supports multiple input sources (input_path/src_edge_name/src_mapping lists)
     which are processed sequentially into a single output edge population.
 
-    This function:
-        - Reads the source edge population(s) in chunks.
-        - Filters edges based on source and target node mappings.
-        - Copies source/target node IDs and all associated datasets.
-        - Initializes and populates new edge groups, preserving attributes.
-        - Raises errors if invalid IDs or unsupported groups (e.g., @library) are encountered.
-
     Args:
-        h5out (h5py.File): Output HDF5 file to store filtered edges.
-        write_edge_config (WriteEdgeConfig): Configuration specifying
-            source/target populations, edge names, mappings, and read chunk size.
-        edge_mappings (dict[str, tuple[pd.DataFrame, str]]): Optional dict
-            updated with old→new edge ID mappings. The key is the old edge file name,
-            pd.DataFrame is the id remapping and the last str is the new edge file name.
+        write_edge_config: Configuration specifying source/target populations,
+            edge names, mappings, output path, and read chunk size.
+        edge_mappings: Optional dict updated with old->new edge ID mappings.
 
-    Notes:
-        - Only the "dynamics_params" group is currently supported in edge groups.
-        - Supports appendable datasets; existing datasets will raise an error if re-created.
-        - Processing is chunked to handle large edge populations efficiently.
+    Returns:
+        The number of edges written.
     """
     h5_read_chunk_size = (
         write_edge_config.h5_read_chunk_size
@@ -277,89 +272,103 @@ def _copy_filtered_edges(
     )
     is_neuroglial = write_edge_config.edge_type == "synapse_astrocyte"
 
-    # Create output edge group (once, using first input as template)
-    with h5py.File(write_edge_config.input_path[0], "r") as h5_first:
-        first_orig_edges = h5_first["edges"][write_edge_config.src_edge_name[0]]
-        orig_group = _get_unique_group(first_orig_edges)
+    write_edge_config.output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        new_edges = h5out.create_group("edges/" + write_edge_config.dst_edge_name)
-        new_group = new_edges.create_group(GROUP_NAME)
+    with h5py.File(write_edge_config.output_path, "a") as h5out:
+        # Create output edge group (once, using first input as template)
+        with h5py.File(write_edge_config.input_path[0], "r") as h5_first:
+            first_orig_edges = h5_first["edges"][write_edge_config.src_edge_name[0]]
+            orig_group = _get_unique_group(first_orig_edges)
 
-        hdf5.create_appendable_dataset(new_edges, "source_node_id", np.uint64)
-        hdf5.create_appendable_dataset(new_edges, "target_node_id", np.uint64)
+            new_edges = h5out.create_group("edges/" + write_edge_config.dst_edge_name)
+            new_group = new_edges.create_group(GROUP_NAME)
 
-        new_edges["source_node_id"].attrs["node_population"] = write_edge_config.src_node_name
-        new_edges["target_node_id"].attrs["node_population"] = write_edge_config.dst_node_name
+            hdf5.create_appendable_dataset(new_edges, "source_node_id", np.uint64)
+            hdf5.create_appendable_dataset(new_edges, "target_node_id", np.uint64)
 
-        additional_attrs = {}
-        if is_neuroglial:
-            src_syn_edge_pop = orig_group["synapse_id"].attrs["edge_population"]
-            _, dst_syn_edge_pop = edge_mappings[src_syn_edge_pop]
-            additional_attrs["synapse_id"] = {"edge_population": dst_syn_edge_pop}
+            new_edges["source_node_id"].attrs["node_population"] = write_edge_config.src_node_name
+            new_edges["target_node_id"].attrs["node_population"] = write_edge_config.dst_node_name
 
-        _init_edge_group(orig_group, new_group, additional_attrs)
+            additional_attrs = {}
+            if is_neuroglial:
+                src_syn_edge_pop = orig_group["synapse_id"].attrs["edge_population"]
+                _, dst_syn_edge_pop = edge_mappings[src_syn_edge_pop]
+                additional_attrs["synapse_id"] = {"edge_population": dst_syn_edge_pop}
 
-    # Process each input source
-    tgids_new = write_edge_config.dst_mapping.index.to_numpy()
-    assert (tgids_new >= 0).all(), "Target population ids must be positive."
+            _init_edge_group(orig_group, new_group, additional_attrs)
 
-    for input_path, src_edge_name, src_mapping in zip(
-        write_edge_config.input_path,
-        write_edge_config.src_edge_name,
-        write_edge_config.src_mapping,
-    ):
-        sgids_new = src_mapping.index.to_numpy()
-        assert (sgids_new >= 0).all(), "Source population ids must be positive."
+        # Process each input source
+        tgids_new = write_edge_config.dst_mapping.index.to_numpy()
+        assert (tgids_new >= 0).all(), "Target population ids must be positive."
 
-        with h5py.File(input_path, "r") as h5in:
-            orig_edges = h5in["edges"][src_edge_name]
+        for input_path, src_edge_name, src_mapping in zip(
+            write_edge_config.input_path,
+            write_edge_config.src_edge_name,
+            write_edge_config.src_mapping,
+        ):
+            sgids_new = src_mapping.index.to_numpy()
+            assert (sgids_new >= 0).all(), "Source population ids must be positive."
 
-            total_chunks = math.ceil(len(orig_edges["source_node_id"]) / h5_read_chunk_size)
-            L.debug(
-                "Processing %s edges in %s chunks of size %s [src_edge_name=%s]",
-                len(orig_edges["source_node_id"]),
-                total_chunks,
-                h5_read_chunk_size,
-                src_edge_name,
-            )
+            with h5py.File(input_path, "r") as h5in:
+                orig_edges = h5in["edges"][src_edge_name]
 
-            sl_and_masks = _compute_chunks_and_masks(
-                orig_edges=orig_edges,
-                sgids_new=sgids_new,
-                tgids_new=tgids_new,
-                h5_read_chunk_size=h5_read_chunk_size,
-                edge_mappings=edge_mappings,
-                is_neuroglial=is_neuroglial,
-            )
+                total_chunks = math.ceil(len(orig_edges["source_node_id"]) / h5_read_chunk_size)
+                L.debug(
+                    "Processing %s edges in %s chunks of size %s [src_edge_name=%s]",
+                    len(orig_edges["source_node_id"]),
+                    total_chunks,
+                    h5_read_chunk_size,
+                    src_edge_name,
+                )
 
-            if edge_mappings is not None:
-                offset = new_edges["source_node_id"].shape[0]
-                if offset != 0 and is_neuroglial:
-                    raise RuntimeError(
-                        "Cannot append neuroglial edges when edge_mappings is enabled and the "
-                        f"destination already contains {offset} edges."
+                sl_and_masks = _compute_chunks_and_masks(
+                    orig_edges=orig_edges,
+                    sgids_new=sgids_new,
+                    tgids_new=tgids_new,
+                    h5_read_chunk_size=h5_read_chunk_size,
+                    edge_mappings=edge_mappings,
+                    is_neuroglial=is_neuroglial,
+                )
+
+                if edge_mappings is not None:
+                    offset = new_edges["source_node_id"].shape[0]
+                    if offset != 0 and is_neuroglial:
+                        raise RuntimeError(
+                            "Cannot append neuroglial edges when edge_mappings is enabled and the "
+                            f"destination already contains {offset} edges."
+                        )
+
+                    assert src_edge_name not in edge_mappings, (
+                        f"Source edge population '{src_edge_name}' already exists in edge_mappings."
+                    )
+                    edge_mappings[src_edge_name] = (
+                        _compute_edge_mapping(sl_and_masks=sl_and_masks, offset=offset),
+                        write_edge_config.dst_edge_name,
                     )
 
-                assert src_edge_name not in edge_mappings, (
-                    f"Source edge population '{src_edge_name}' already exists in edge_mappings."
-                )
-                edge_mappings[src_edge_name] = (
-                    _compute_edge_mapping(sl_and_masks=sl_and_masks, offset=offset),
-                    write_edge_config.dst_edge_name,
+                _write_masked_edges(
+                    sl_and_masks=sl_and_masks,
+                    new_edges=new_edges,
+                    orig_edges=orig_edges,
+                    src_mapping=src_mapping,
+                    dst_mapping=write_edge_config.dst_mapping,
+                    edge_mappings=edge_mappings,
+                    is_neuroglial=is_neuroglial,
                 )
 
-            _write_masked_edges(
-                sl_and_masks=sl_and_masks,
-                new_edges=new_edges,
-                orig_edges=orig_edges,
-                src_mapping=src_mapping,
-                dst_mapping=write_edge_config.dst_mapping,
-                edge_mappings=edge_mappings,
-                is_neuroglial=is_neuroglial,
-            )
+        edge_count = len(new_edges["source_node_id"])
 
-    L.debug("Finalize edges")
-    _finalize_edges(new_edges)
+        # Verify consistency
+        if edge_count > 0:
+            assert write_edge_config.source_node_count >= int(np.max(new_edges["source_node_id"]))
+            assert write_edge_config.target_node_count >= int(np.max(new_edges["target_node_id"]))
+            L.debug("Finalize edges")
+            _finalize_edges(new_edges)
+        else:
+            # Remove empty population from the file
+            del h5out[f"edges/{write_edge_config.dst_edge_name}"]
+
+    return edge_count
 
 
 def _compute_edge_mapping(sl_and_masks, offset=0):
@@ -443,24 +452,6 @@ def _write_masked_edges(
         _populate_edge_group(orig_edges[GROUP_NAME], new_edges[GROUP_NAME], sl, mask, overrides)
 
 
-def _get_node_counts(
-    h5out: h5py.File, new_edge_pop_name: str, src_mapping: pd.DataFrame, dst_mapping: pd.DataFrame
-):
-    """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
-
-    source_node_count = int(np.max(src_mapping)) + 1
-    target_node_count = int(np.max(dst_mapping)) + 1
-
-    new_edges = h5out["edges"][new_edge_pop_name]
-    edge_count = len(new_edges["source_node_id"])
-
-    if edge_count > 0:
-        assert source_node_count >= int(np.max(new_edges["source_node_id"]))
-        assert target_node_count >= int(np.max(new_edges["target_node_id"]))
-
-    return edge_count, source_node_count, target_node_count
-
-
 def _write_indexes(
     edge_file_name: str | Path, new_pop_name: str, source_node_count: int, target_node_count: int
 ):
@@ -506,15 +497,16 @@ def _write_edges(
             )
 
             L.debug("Writing to  %s", write_edge_config.output_path)
-            with h5py.File(write_edge_config.output_path, "w") as h5out:
-                _copy_filtered_edges(h5out=h5out, write_edge_config=write_edge_config)
-                edge_count, sgid_count, tgid_count = _get_node_counts(
-                    h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
-                )
+            edge_count = _copy_filtered_edges(write_edge_config=write_edge_config)
 
-            # after the h5 file is closed, it's indexed if valid, or it's removed if empty
+            # after the file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
-                _write_indexes(write_edge_config.output_path, edge_pop_name, sgid_count, tgid_count)
+                _write_indexes(
+                    write_edge_config.output_path,
+                    edge_pop_name,
+                    write_edge_config.source_node_count,
+                    write_edge_config.target_node_count,
+                )
                 L.debug("Wrote %s edges to %s", edge_count, write_edge_config.output_path)
                 written_edges += edge_count
             else:
@@ -666,11 +658,11 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
 def _write_subcircuit_edges(
     write_edge_config: WriteEdgeConfig, edge_mappings: dict[str, tuple[pd.DataFrame, str]]
 ):
-    """copy a population to an edge file
+    """Write a filtered edge population to an HDF5 file.
 
-    If DELETED_EMPTY_EDGES_FILE is returned, the file was removed since no
-    populations existed in it any more
-    If DELETED_EMPTY_EDGES_POPULATION is returned, the population was removed
+    Returns:
+        (output_path, edge_count): the path written to (or sentinel if empty),
+        and the number of edges written.
     """
     output_path = write_edge_config.output_path
 
@@ -682,39 +674,24 @@ def _write_subcircuit_edges(
         str(output_path),
     )
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    edge_count = _copy_filtered_edges(
+        write_edge_config=write_edge_config,
+        edge_mappings=edge_mappings,
+    )
 
-    is_file_empty = False
-    with h5py.File(output_path, "a") as h5out:
-        _copy_filtered_edges(
-            h5out=h5out,
-            write_edge_config=write_edge_config,
-            edge_mappings=edge_mappings,
-        )
-
-        # Use combined src_mapping for node count (covers all inputs)
-        combined_src_mapping = pd.concat(write_edge_config.src_mapping)
-        edge_count, sgid_count, tgid_count = _get_node_counts(
-            h5out=h5out,
-            new_edge_pop_name=write_edge_config.dst_edge_name,
-            src_mapping=combined_src_mapping,
-            dst_mapping=write_edge_config.dst_mapping,
-        )
-
-        if edge_count == 0:
-            del h5out[f"/edges/{write_edge_config.dst_edge_name}"]
-            is_file_empty = len(h5out["/edges"]) == 0
-
-    # after the h5 file is closed, it's indexed if valid, or it's removed if empty
     if edge_count > 0:
         L.debug("Wrote %s edges to %s", edge_count, output_path)
-    elif is_file_empty:
-        Path(output_path).unlink(missing_ok=True)
-        output_path = DELETED_EMPTY_EDGES_FILE
-    else:  # population empty, but not file
-        output_path = DELETED_EMPTY_EDGES_POPULATION
+    elif output_path.exists():
+        # Check if the file has any other populations; if not, remove it
+        with h5py.File(output_path, "r") as h5:
+            is_file_empty = len(h5["edges"]) == 0
+        if is_file_empty:
+            output_path.unlink(missing_ok=True)
+            output_path = DELETED_EMPTY_EDGES_FILE
+        else:
+            output_path = DELETED_EMPTY_EDGES_POPULATION
 
-    return output_path, edge_count, sgid_count, tgid_count
+    return output_path, edge_count
 
 
 def _get_storage_path(edge):
@@ -786,7 +763,7 @@ def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig
     )
 
     for write_edge_config in write_edge_configs_sorted:
-        output_path, edge_count, sgid_count, tgid_count = _write_subcircuit_edges(
+        output_path, edge_count = _write_subcircuit_edges(
             write_edge_config=write_edge_config, edge_mappings=edge_mappings
         )
 
@@ -794,8 +771,8 @@ def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig
             _write_indexes(
                 edge_file_name=output_path,
                 new_pop_name=write_edge_config.dst_edge_name,
-                source_node_count=sgid_count,
-                target_node_count=tgid_count,
+                source_node_count=write_edge_config.source_node_count,
+                target_node_count=write_edge_config.target_node_count,
             )
 
         new_edges_files[write_edge_config.dst_edge_name] = output_path
