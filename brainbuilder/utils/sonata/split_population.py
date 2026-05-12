@@ -651,9 +651,13 @@ def _write_subcircuit_edges(
 ):
     """Write a filtered edge population to an HDF5 file.
 
+    If the population has no edges after filtering, it is removed from the file.
+    If the file becomes empty as a result, the file itself is deleted.
+
     Returns:
-        (output_path, edge_count): the path written to (or sentinel if empty),
-        and the number of edges written.
+        (output_path, edge_count): the path written to, and the number of edges.
+        output_path may be DELETED_EMPTY_EDGES_FILE (file removed) or
+        DELETED_EMPTY_EDGES_POPULATION (population removed, file kept).
     """
     output_path = write_edge_config.output_path
 
@@ -807,7 +811,7 @@ def _get_subcircuit_external_ids(all_sgids, all_tgids, wanted_src_ids, wanted_ds
     return ret.sort_index()
 
 
-def _gather_new_external_subcircuit(
+def _gather_new_external_subcircuits(
     output,
     circuit,
     id_mapping,
@@ -839,7 +843,6 @@ def _gather_new_external_subcircuit(
 
     nodes_to_write = {}
     id_mapping_secondary = {}
-    node_pop_name_mapping_secondary = {}
 
     write_edge_configs = []
     for name, edge in circuit.edges.items():
@@ -880,7 +883,7 @@ def _gather_new_external_subcircuit(
                 L.debug("%s already exists as an node population", new_source_pop_name)
                 new_source_pop_name = "external_" + new_source_pop_name
             if new_source_pop_name not in node_pop_name_mapping:
-                node_pop_name_mapping[new_source_pop_name] = edge.source.name
+                node_pop_name_mapping[new_source_pop_name] = [edge.source.name]
 
             output_path = output / (new_name + ".h5")
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -898,10 +901,9 @@ def _gather_new_external_subcircuit(
                 existing_mapping = id_mapping[new_source_pop_name]
 
                 # Check if existing mapping came from a different source population
-                existing_parent = node_pop_name_mapping.get(new_source_pop_name)
-                different_source = (
-                    existing_parent is not None and existing_parent != edge.source.name
-                )
+                # Compare against the first (primary) parent only
+                existing_parents = node_pop_name_mapping.get(new_source_pop_name, [])
+                different_source = existing_parents and existing_parents[0] != edge.source.name
 
                 if different_source:
                     # Nodes from a different parent population — store separately
@@ -929,7 +931,8 @@ def _gather_new_external_subcircuit(
                         new_ids = np.arange(len(wanted_src_ids)) + int(max_existing_id) + 1
                         wanted_src_ids[NEW_IDS] = new_ids
                         id_mapping_secondary[new_source_pop_name] = wanted_src_ids
-                    node_pop_name_mapping_secondary[new_source_pop_name] = edge.source.name
+                    if edge.source.name not in node_pop_name_mapping[new_source_pop_name]:
+                        node_pop_name_mapping[new_source_pop_name].append(edge.source.name)
                 else:
                     is_existing = _isin(wanted_src_ids.index, existing_mapping.index)
                     wanted_src_ids.loc[is_existing] = existing_mapping.loc[
@@ -970,7 +973,7 @@ def _gather_new_external_subcircuit(
                 # The primary (carried-over external) nodes are handled by _filter.
                 nodes_to_write[new_source_pop_name] = [
                     (
-                        node_pop_name_mapping_secondary[new_source_pop_name],
+                        edge.source.name,
                         id_mapping_secondary[new_source_pop_name].index.to_numpy(),
                     )
                 ]
@@ -983,7 +986,7 @@ def _gather_new_external_subcircuit(
                     )
                 ]
 
-    return write_edge_configs, nodes_to_write, id_mapping_secondary, node_pop_name_mapping_secondary
+    return write_edge_configs, nodes_to_write, id_mapping_secondary
 
 
 def _filter_virtual_typed_subcircuit(
@@ -1050,7 +1053,7 @@ def _filter_virtual_typed_subcircuit(
     # update the mappings with the selected source nodes
     for name, ids in pop_used_source_node_ids.items():
         id_mapping[name] = pd.DataFrame({NEW_IDS: range(len(ids))}, index=ids)
-        node_pop_name_mapping[name] = name
+        node_pop_name_mapping[name] = [name]
 
     write_edge_configs = [
         WriteEdgeConfig(
@@ -1221,14 +1224,35 @@ def _update_node_sets(node_sets, id_mapping):
     return ret
 
 
-def _mapping_to_parent_dict(id_mapping, node_pop_name_mapping):
+def _mapping_to_parent_dict(id_mapping, node_pop_name_mapping, id_mapping_secondary=None):
+    """Build the serializable mapping dict from id_mapping and parent names.
+
+    Handles multiple parents per population: first parent uses parent_name/parent_id,
+    subsequent parents use parent2_name/parent2_id, parent3_name/parent3_id, etc.
+    """
+    if id_mapping_secondary is None:
+        id_mapping_secondary = {}
+
     mapping = {}
     for population, df in id_mapping.items():
-        mapping[population] = {
+        parent_names = node_pop_name_mapping[population]
+
+        entry = {
             PARENT_IDS: df.index.to_list(),
             NEW_IDS: df[NEW_IDS].to_list(),
-            PARENT_NAME: node_pop_name_mapping[population],
+            PARENT_NAME: parent_names[0],
         }
+
+        # Add secondary parent(s) if present
+        if population in id_mapping_secondary:
+            sec_df = id_mapping_secondary[population]
+            entry[NEW_IDS] = entry[NEW_IDS] + sec_df[NEW_IDS].to_list()
+            for i, parent_name in enumerate(parent_names[1:], start=2):
+                suffix = str(i)
+                entry[f"parent{suffix}_id"] = sec_df.index.to_list()
+                entry[f"parent{suffix}_name"] = parent_name
+
+        mapping[population] = entry
     return mapping
 
 
@@ -1238,19 +1262,51 @@ def _set_original_ids(this_mapping: dict, parent_mapping: dict | None) -> None:
     If parent_mapping is None (parent is the root circuit), original_id is
     copied from parent_id. Otherwise, original_id is traced back through the
     parent's mapping to the root circuit.
+
+    Handles numbered parent fields (parent2_id/parent2_name, etc.) for
+    populations with multiple parent sources.
     """
     for entry in this_mapping.values():
         if parent_mapping is None:
-            entry[ORIG_IDS] = entry[PARENT_IDS]
+            # Collect all parent_ids across numbered fields
+            all_parent_ids = list(entry[PARENT_IDS])
+            for i in range(2, 100):
+                key = f"parent{i}_id"
+                if key not in entry:
+                    break
+                all_parent_ids.extend(entry[key])
+            entry[ORIG_IDS] = all_parent_ids
             entry[ORIG_NAME] = entry[PARENT_NAME]
         else:
+            # Resolve primary parent
             parent_pop = entry[PARENT_NAME]
             backwards_mapped = pd.Series(
                 parent_mapping[parent_pop][ORIG_IDS],
                 index=parent_mapping[parent_pop][NEW_IDS],
             )
-            entry[ORIG_IDS] = backwards_mapped[entry[PARENT_IDS]].to_list()
-            entry[ORIG_NAME] = parent_mapping[parent_pop][ORIG_NAME]
+            orig_ids = backwards_mapped[entry[PARENT_IDS]].to_list()
+            orig_name = parent_mapping[parent_pop][ORIG_NAME]
+
+            # Resolve numbered parents
+            for i in range(2, 100):
+                id_key = f"parent{i}_id"
+                name_key = f"parent{i}_name"
+                if id_key not in entry:
+                    break
+                parent_pop_i = entry[name_key]
+                backwards_mapped_i = pd.Series(
+                    parent_mapping[parent_pop_i][ORIG_IDS],
+                    index=parent_mapping[parent_pop_i][NEW_IDS],
+                )
+                orig_ids.extend(backwards_mapped_i[entry[id_key]].to_list())
+                # Assert all parents trace back to the same original
+                assert parent_mapping[parent_pop_i][ORIG_NAME] == orig_name, (
+                    f"Cannot merge: original_name mismatch "
+                    f"{orig_name} vs {parent_mapping[parent_pop_i][ORIG_NAME]}"
+                )
+
+            entry[ORIG_IDS] = orig_ids
+            entry[ORIG_NAME] = orig_name
 
 
 def _write_mapping(
@@ -1259,15 +1315,12 @@ def _write_mapping(
     id_mapping,
     node_pop_name_mapping,
     id_mapping_secondary=None,
-    node_pop_name_mapping_secondary=None,
 ):
-    """write the id mappings between the old and new populations for future analysis"""
+    """Write the id mappings between the old and new populations for future analysis."""
     if id_mapping_secondary is None:
         id_mapping_secondary = {}
-    if node_pop_name_mapping_secondary is None:
-        node_pop_name_mapping_secondary = {}
 
-    this_mapping = _mapping_to_parent_dict(id_mapping, node_pop_name_mapping)
+    this_mapping = _mapping_to_parent_dict(id_mapping, node_pop_name_mapping, id_mapping_secondary)
 
     provenance = parent_circ.config.get("components", {}).get("provenance", {})
     # Currently, bluepysnap does not resolve $BASE_DIR for provenance entries,
@@ -1279,39 +1332,19 @@ def _write_mapping(
 
     _set_original_ids(this_mapping, parent_mapping)
 
-    # Merge secondary mappings (from different parent populations) into parent2_* fields
-    if id_mapping_secondary:
-        secondary_dict = _mapping_to_parent_dict(
-            id_mapping_secondary, node_pop_name_mapping_secondary
+    # Validate length invariants for merged populations
+    for pop_name, entry in this_mapping.items():
+        n_new = len(entry[NEW_IDS])
+        n_parent_ids = len(entry[PARENT_IDS])
+        for i in range(2, 100):
+            key = f"parent{i}_id"
+            if key not in entry:
+                break
+            n_parent_ids += len(entry[key])
+        assert n_parent_ids == n_new == len(entry[ORIG_IDS]), (
+            f"Length mismatch for population '{pop_name}': "
+            f"sum(parent*_id)={n_parent_ids}, new_id={n_new}, original_id={len(entry[ORIG_IDS])}"
         )
-        _set_original_ids(secondary_dict, parent_mapping)
-        for pop_name, sec_entry in secondary_dict.items():
-            assert pop_name in this_mapping, (
-                f"Secondary mapping for '{pop_name}' has no primary entry"
-            )
-            primary_entry = this_mapping[pop_name]
-            # Assert original_name matches
-            assert primary_entry[ORIG_NAME] == sec_entry[ORIG_NAME], (
-                f"Cannot merge external population '{pop_name}': "
-                f"original_name mismatch: {primary_entry[ORIG_NAME]} vs {sec_entry[ORIG_NAME]}"
-            )
-            # Combine new_ids (primary first, secondary appends)
-            primary_entry[NEW_IDS] = primary_entry[NEW_IDS] + sec_entry[NEW_IDS]
-            # Combine original_ids (same original_name, just append)
-            primary_entry[ORIG_IDS] = primary_entry[ORIG_IDS] + sec_entry[ORIG_IDS]
-            # Add parent2_* fields
-            primary_entry["parent2_id"] = sec_entry[PARENT_IDS]
-            primary_entry["parent2_name"] = sec_entry[PARENT_NAME]
-
-            # Invariant: parent_id + parent2_id lengths == new_id == original_id
-            n_total = len(primary_entry[NEW_IDS])
-            n_parents = len(primary_entry[PARENT_IDS]) + len(primary_entry["parent2_id"])
-            assert n_parents == n_total == len(primary_entry[ORIG_IDS]), (
-                f"Length mismatch for merged population '{pop_name}': "
-                f"parent_id({len(primary_entry[PARENT_IDS])}) + "
-                f"parent2_id({len(primary_entry['parent2_id'])}) = {n_parents}, "
-                f"new_id={n_total}, original_id={len(primary_entry[ORIG_IDS])}"
-            )
 
     mapping_fn = "id_mapping.json"
     utils.dump_json(output / mapping_fn, this_mapping)
@@ -1371,10 +1404,10 @@ def split_subcircuit(
 
     id_mapping = _get_node_id_mapping(split_populations)
     # Intrinsic input sources retain their name unchanged
-    node_pop_name_mapping = {pop_name: pop_name for pop_name in split_populations.keys()}
+    node_pop_name_mapping = {pop_name: [pop_name] for pop_name in split_populations.keys()}
 
     # TODO: should function `_write_subcircuit_biological`,
-    # `_gather_new_external_subcircuit`, `_filter_virtual_typed_subcircuit`/`_write_subcircuit`
+    # `_gather_new_external_subcircuits`, `_filter_virtual_typed_subcircuit`/`_write_subcircuit`
     # handle node updates and config updates?
 
     new_node_files, new_edge_files = _write_subcircuit_biological(
@@ -1404,7 +1437,6 @@ def split_subcircuit(
     existing_node_pop_names = list(new_node_files.keys())
     existing_edge_pop_names = list(new_edge_files.keys())
     id_mapping_secondary = {}
-    node_pop_name_mapping_secondary = {}
     if create_external:
         # Phase A: carry over existing external_ populations from parent circuit
         write_edge_configs_a, nodes_to_write_a = _filter_virtual_typed_subcircuit(
@@ -1422,8 +1454,7 @@ def split_subcircuit(
             write_edge_configs_b,
             nodes_to_write_b,
             id_mapping_secondary,
-            node_pop_name_mapping_secondary,
-        ) = _gather_new_external_subcircuit(
+        ) = _gather_new_external_subcircuits(
             output,
             circuit,
             id_mapping,
@@ -1469,7 +1500,6 @@ def split_subcircuit(
         id_mapping,
         node_pop_name_mapping,
         id_mapping_secondary,
-        node_pop_name_mapping_secondary,
     )
 
     config = copy.deepcopy(circuit.config)
