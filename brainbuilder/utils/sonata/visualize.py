@@ -3,6 +3,7 @@
 
 import json
 from collections import Counter
+from enum import StrEnum
 from pathlib import Path
 
 import bluepysnap
@@ -11,6 +12,30 @@ import h5py
 # Populations with more nodes than this threshold are shown as a single
 # cluster node with population-level edges instead of individual nodes.
 _MAX_NODES_DETAILED = 10
+
+
+class PopulationType(StrEnum):
+    """Classification of a node population for visualization purposes."""
+
+    BIOPHYSICAL = "biophysical"
+    VIRTUAL = "virtual"
+    EXTERNAL = "external"
+
+    @property
+    def color(self) -> str:
+        return {
+            PopulationType.BIOPHYSICAL: "lightyellow",
+            PopulationType.VIRTUAL: "lightblue",
+            PopulationType.EXTERNAL: "lightsalmon",
+        }.get(self, "white")
+
+    @classmethod
+    def from_population(cls, pop_name: str, pop_type: str | None) -> "PopulationType":
+        if pop_name.startswith("external_"):
+            return cls.EXTERNAL
+        if pop_type == "virtual":
+            return cls.VIRTUAL
+        return cls.BIOPHYSICAL
 
 
 def _load_id_mapping(circuit_config_path):
@@ -30,16 +55,6 @@ def _load_id_mapping(circuit_config_path):
 
     mapping = json.loads(mapping_file.read_text())
     return mapping
-
-
-def _classify_population(pop_name, pop_type, id_mapping):
-    """Classify a population for coloring purposes.
-
-    External if name starts with "external_", otherwise use circuit_config type.
-    """
-    if pop_name.startswith("external_"):
-        return "external"
-    return pop_type or "biophysical"
 
 
 def draw_circuit(
@@ -83,32 +98,22 @@ def draw_circuit(
     if title:
         dot.attr(label=title, labelloc="t", fontsize="14")
 
-    pop_colors = {
-        "virtual": "lightblue",
-        "biophysical": "lightyellow",
-        "external": "lightsalmon",
-    }
     detailed_pops = set()
 
     for pop_name, pop in circuit.nodes.items():
-        pop_type = pop.type or "biophysical"
-        classification = _classify_population(pop_name, pop_type, id_mapping)
-        color = pop_colors.get(classification, "white")
+        pop_type = PopulationType.from_population(pop_name, pop.type)
 
         # Get original IDs for labels if mapping exists
         parent_ids = None
         if id_mapping and pop_name in id_mapping:
             entry = id_mapping[pop_name]
             parent_ids = entry.get("original_id", entry.get("parent_id"))
-            # Append secondary original IDs if present (merged external populations)
-            if "original2_id" in entry and parent_ids is not None:
-                parent_ids = parent_ids + entry["original2_id"]
 
         if pop.size <= max_nodes_detailed:
             detailed_pops.add(pop_name)
             with dot.subgraph(name=f"cluster_{pop_name}") as sub:
                 sub.attr(
-                    label=f"{pop_name} ({classification}, {pop.size})", style="filled", color=color
+                    label=f"{pop_name} ({pop_type}, {pop.size})", style="filled", color=pop_type.color
                 )
                 prev = None
                 for i in range(pop.size):
@@ -120,10 +125,10 @@ def draw_circuit(
         else:
             dot.node(
                 f"{pop_name}__summary",
-                label=f"{pop_name}\n({classification}, {pop.size})",
+                label=f"{pop_name}\n({pop_type}, {pop.size})",
                 shape="box",
                 style="filled",
-                fillcolor=color,
+                fillcolor=pop_type.color,
             )
 
     # Edges — group duplicates and show count
@@ -148,10 +153,6 @@ def draw_circuit(
         else:
             src_node = f"{src_name}__summary" if not src_detailed else f"{src_name}__{sgids[0]}"
             tgt_node = f"{tgt_name}__summary" if not tgt_detailed else f"{tgt_name}__{tgids[0]}"
-            if not src_detailed:
-                src_node = f"{src_name}__summary"
-            if not tgt_detailed:
-                tgt_node = f"{tgt_name}__summary"
             dot.edge(src_node, tgt_node, label=str(len(sgids)), fontsize="8")
 
     if output_path:
