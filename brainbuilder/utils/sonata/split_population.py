@@ -830,7 +830,7 @@ def _gather_new_external_subcircuits(
     Returns:
         (write_edge_configs, nodes_to_write):
             write_edge_configs: list of WriteEdgeConfig
-            nodes_to_write: dict of output_pop_name -> (source_pop_name, node_ids)
+            nodes_to_write: dict of output_pop_name -> list of (source_pop_name, node_ids)
     """
 
     assert all(edge.type != "neuroglial" for edge in circuit.edges.values()), (
@@ -842,12 +842,15 @@ def _gather_new_external_subcircuits(
     )
 
     nodes_to_write = {}
-    id_mapping_secondary = {}
 
     write_edge_configs = []
     for name, edge in circuit.edges.items():
+        L.debug("GATHER-ALL: edge=%s, src_type=%s, target=%s, target_in_mapping=%s",
+                name, edge.source.type, edge.target.name, edge.target.name in id_mapping)
         if edge.source.type != "virtual" and edge.target.name in id_mapping:
             wanted_src_ids = circuit.nodes[edge.source.name].ids()
+            L.debug("GATHER: edge=%s, source=%s, target=%s, all_src_ids=%s",
+                    name, edge.source.name, edge.target.name, wanted_src_ids.tolist())
 
             if edge.source.name in id_mapping:
                 wanted_src_ids = wanted_src_ids[
@@ -856,14 +859,10 @@ def _gather_new_external_subcircuits(
                     )
                 ]
 
-            # only keep ids that are used; this is duplicating work in _copy_edge_attributes
-            # but the alternative is that it keeps track of the new id_mapping; which
-            # seemed less ideal
             with h5py.File(_get_storage_path(edge)) as h5:
                 all_sgids = h5[f"edges/{name}/source_node_id"]
                 all_tgids = h5[f"edges/{name}/target_node_id"]
 
-                # overwrite wanted_src_ids with a DataFrame; the numpy array is not needed
                 wanted_src_ids = _get_subcircuit_external_ids(
                     all_sgids,
                     all_tgids,
@@ -896,60 +895,22 @@ def _gather_new_external_subcircuits(
             )
 
             if new_source_pop_name in id_mapping:
-                # If mapping already exists, only add new IDs w/o changing existing!
-                # (May happen if different target populations have same external source population)
+                # Same source, multiple target populations — deduplicate and extend
                 existing_mapping = id_mapping[new_source_pop_name]
-
-                # Check if existing mapping came from a different source population
-                # Compare against the first (primary) parent only
-                existing_parents = node_pop_name_mapping.get(new_source_pop_name, [])
-                different_source = existing_parents and existing_parents[0] != edge.source.name
-
-                if different_source:
-                    # Nodes from a different parent population — store separately
-                    # to avoid index collisions. Will be merged at write time.
-                    # Deduplicate against already-added secondary nodes
-                    if new_source_pop_name in id_mapping_secondary:
-                        already_added = id_mapping_secondary[new_source_pop_name]
-                        is_existing = _isin(wanted_src_ids.index, already_added.index)
-                        wanted_src_ids.loc[is_existing] = already_added.loc[
-                            wanted_src_ids.loc[is_existing].index
-                        ]
-                        if is_existing.any():
-                            max_existing_id = already_added[NEW_IDS].max()
-                        else:
-                            max_existing_id = existing_mapping[NEW_IDS].max()
-                        n_new = int(np.sum(~is_existing))
-                        if n_new > 0:
-                            new_ids = np.arange(n_new) + int(max_existing_id) + 1
-                            wanted_src_ids.loc[~is_existing, NEW_IDS] = new_ids
-                            id_mapping_secondary[new_source_pop_name] = pd.concat(
-                                [already_added, wanted_src_ids.loc[~is_existing]], axis=0
-                            )
-                    else:
-                        max_existing_id = existing_mapping[NEW_IDS].max()
-                        new_ids = np.arange(len(wanted_src_ids)) + int(max_existing_id) + 1
-                        wanted_src_ids[NEW_IDS] = new_ids
-                        id_mapping_secondary[new_source_pop_name] = wanted_src_ids
-                    if edge.source.name not in node_pop_name_mapping[new_source_pop_name]:
-                        node_pop_name_mapping[new_source_pop_name].append(edge.source.name)
+                is_existing = _isin(wanted_src_ids.index, existing_mapping.index)
+                wanted_src_ids.loc[is_existing] = existing_mapping.loc[
+                    wanted_src_ids.loc[is_existing].index
+                ]
+                if is_existing.any():
+                    max_existing_id = wanted_src_ids[NEW_IDS].loc[is_existing].max()
                 else:
-                    is_existing = _isin(wanted_src_ids.index, existing_mapping.index)
-                    wanted_src_ids.loc[is_existing] = existing_mapping.loc[
-                        wanted_src_ids.loc[is_existing].index
-                    ]
-                    # New node IDs begin at the lowest unused value (max + 1).
-                    if is_existing.any():
-                        max_existing_id = wanted_src_ids[NEW_IDS].loc[is_existing].max()
-                    else:
-                        max_existing_id = existing_mapping[NEW_IDS].max()
-                    new_ids = np.arange(np.sum(~is_existing)) + int(max_existing_id) + 1
-                    wanted_src_ids.loc[~is_existing, NEW_IDS] = new_ids
+                    max_existing_id = existing_mapping[NEW_IDS].max()
+                new_ids = np.arange(np.sum(~is_existing)) + int(max_existing_id) + 1
+                wanted_src_ids.loc[~is_existing, NEW_IDS] = new_ids
 
-                    # And merge new into existing
-                    id_mapping[new_source_pop_name] = pd.concat(
-                        [existing_mapping, wanted_src_ids.loc[~is_existing]], axis=0
-                    )
+                id_mapping[new_source_pop_name] = pd.concat(
+                    [existing_mapping, wanted_src_ids.loc[~is_existing]], axis=0
+                )
             else:
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
@@ -966,27 +927,14 @@ def _gather_new_external_subcircuits(
             )
             write_edge_configs.append(write_edge_config)
 
-            # Build nodes_to_write for this population.
-            # Only include nodes that _gather is responsible for (not filter's).
-            if new_source_pop_name in id_mapping_secondary:
-                # Mixed source: only write the secondary (new biophysical) nodes.
-                # The primary (carried-over external) nodes are handled by _filter.
-                nodes_to_write[new_source_pop_name] = [
-                    (
-                        edge.source.name,
-                        id_mapping_secondary[new_source_pop_name].index.to_numpy(),
-                    )
-                ]
-            else:
-                # Single source: all nodes come from _gather
-                nodes_to_write[new_source_pop_name] = [
-                    (
-                        edge.source.name,
-                        id_mapping[new_source_pop_name].index.to_numpy(),
-                    )
-                ]
+            nodes_to_write[new_source_pop_name] = [
+                (
+                    edge.source.name,
+                    id_mapping[new_source_pop_name].index.to_numpy(),
+                )
+            ]
 
-    return write_edge_configs, nodes_to_write, id_mapping_secondary
+    return write_edge_configs, nodes_to_write
 
 
 def _filter_virtual_typed_subcircuit(
@@ -1436,7 +1384,6 @@ def split_subcircuit(
 
     existing_node_pop_names = list(new_node_files.keys())
     existing_edge_pop_names = list(new_edge_files.keys())
-    id_mapping_secondary = {}
     if create_external:
         # Phase A: carry over existing external_ populations from parent circuit
         write_edge_configs_a, nodes_to_write_a = _filter_virtual_typed_subcircuit(
@@ -1450,18 +1397,53 @@ def split_subcircuit(
         )
 
         # Phase B: create new externals from biophysical populations now outside subcircuit
-        (
-            write_edge_configs_b,
-            nodes_to_write_b,
-            id_mapping_secondary,
-        ) = _gather_new_external_subcircuits(
+        # Give _gather a clean id_mapping without filter's external entries
+        gather_id_mapping = {k: v for k, v in id_mapping.items() if not k.startswith("external_")}
+        gather_node_pop_name_mapping = {
+            k: v for k, v in node_pop_name_mapping.items() if not k.startswith("external_")
+        }
+        write_edge_configs_b, nodes_to_write_b = _gather_new_external_subcircuits(
             output,
             circuit,
-            id_mapping,
-            node_pop_name_mapping,
+            gather_id_mapping,
+            gather_node_pop_name_mapping,
             existing_node_pop_names,
             existing_edge_pop_names,
         )
+
+        # Merge: for overlapping populations, renumber gather's new_ids and combine
+        id_mapping_secondary = {}
+        for pop_name in list(gather_id_mapping.keys()):
+            if not pop_name.startswith("external_"):
+                continue
+            gather_df = gather_id_mapping[pop_name]
+            L.debug("MERGE: pop=%s, in id_mapping=%s, gather new_ids=%s",
+                    pop_name, pop_name in id_mapping, gather_df[NEW_IDS].tolist())
+            if pop_name in id_mapping:
+                # Overlapping: renumber gather's IDs after filter's max
+                offset = int(id_mapping[pop_name][NEW_IDS].max()) + 1
+                gather_df[NEW_IDS] = gather_df[NEW_IDS] + offset
+                id_mapping_secondary[pop_name] = gather_df
+                # Update src_mapping in gather's WriteEdgeConfigs
+                for cfg in write_edge_configs_b:
+                    if cfg.src_node_name == pop_name:
+                        new_mappings = []
+                        for m in cfg.src_mapping:
+                            m_copy = m.copy()
+                            m_copy[NEW_IDS] = m_copy[NEW_IDS] + offset
+                            new_mappings.append(m_copy)
+                        cfg.src_mapping = new_mappings
+                # Append parent name
+                if pop_name in gather_node_pop_name_mapping:
+                    for parent in gather_node_pop_name_mapping[pop_name]:
+                        if parent not in node_pop_name_mapping.get(pop_name, []):
+                            node_pop_name_mapping[pop_name].append(parent)
+            else:
+                # Non-overlapping: just move to main id_mapping
+                id_mapping[pop_name] = gather_df
+                node_pop_name_mapping[pop_name] = gather_node_pop_name_mapping.get(
+                    pop_name, [pop_name]
+                )
 
         # Merge edge configs: combine configs with same dst_edge_name into
         # a single multi-input config; leave others as-is.
@@ -1469,7 +1451,6 @@ def split_subcircuit(
         merged_edge_configs = list(write_edge_configs_a)
         for cfg_b in write_edge_configs_b:
             if cfg_b.dst_edge_name in filter_configs_by_name:
-                # Merge into existing config (append inputs)
                 cfg_a = filter_configs_by_name[cfg_b.dst_edge_name]
                 cfg_a.input_path = cfg_a.input_path + cfg_b.input_path
                 cfg_a.src_edge_name = cfg_a.src_edge_name + cfg_b.src_edge_name
@@ -1499,8 +1480,16 @@ def split_subcircuit(
         circuit,
         id_mapping,
         node_pop_name_mapping,
-        id_mapping_secondary,
+        id_mapping_secondary if create_external else None,
     )
+    # Temporary debug assert
+    if create_external and "external_A" in id_mapping_secondary:
+        _sec = id_mapping_secondary["external_A"]
+        _pri = id_mapping["external_A"]
+        assert int(_sec[NEW_IDS].max()) == int(_pri[NEW_IDS].max()) + len(_sec), (
+            f"Secondary new_id mismatch: sec_max={int(_sec[NEW_IDS].max())}, "
+            f"pri_max={int(_pri[NEW_IDS].max())}, sec_len={len(_sec)}"
+        )
 
     config = copy.deepcopy(circuit.config)
 
