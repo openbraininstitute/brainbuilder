@@ -452,15 +452,6 @@ def _write_masked_edges(
         _populate_edge_group(orig_edges[GROUP_NAME], new_edges[GROUP_NAME], sl, mask, overrides)
 
 
-def _write_indexes(
-    edge_file_name: str | Path, new_pop_name: str, source_node_count: int, target_node_count: int
-):
-    """ibid"""
-    libsonata.EdgePopulation.write_indices(
-        str(edge_file_name), new_pop_name, source_node_count, target_node_count
-    )
-
-
 def _check_all_edges_used(h5in, written_edges):
     """Verify that the number of written edges matches the number of initial edges."""
     orig_edges = h5in["edges"][_get_unique_population(h5in["edges"])]
@@ -501,8 +492,8 @@ def _write_edges(
 
             # after the file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
-                _write_indexes(
-                    write_edge_config.output_path,
+                libsonata.EdgePopulation.write_indices(
+                    str(write_edge_config.output_path),
                     edge_pop_name,
                     write_edge_config.source_node_count,
                     write_edge_config.target_node_count,
@@ -768,11 +759,11 @@ def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig
         )
 
         if edge_count > 0:
-            _write_indexes(
-                edge_file_name=output_path,
-                new_pop_name=write_edge_config.dst_edge_name,
-                source_node_count=write_edge_config.source_node_count,
-                target_node_count=write_edge_config.target_node_count,
+            libsonata.EdgePopulation.write_indices(
+                str(output_path),
+                write_edge_config.dst_edge_name,
+                write_edge_config.source_node_count,
+                write_edge_config.target_node_count,
             )
 
         new_edges_files[write_edge_config.dst_edge_name] = output_path
