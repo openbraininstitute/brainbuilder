@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+import shutil
 from pathlib import Path
 
 import bluepysnap
@@ -9,7 +10,7 @@ import pytest
 import utils
 from numpy.testing import assert_array_equal
 
-from brainbuilder.utils import load_json
+from brainbuilder.utils import load_json, dump_json
 from brainbuilder.utils.sonata import split_population
 from brainbuilder.utils.sonata import utils as sonata_utils
 
@@ -919,3 +920,68 @@ def test_copy_filtered_edges_advanced(tmp_path):
         expected_syn_ids = [1, 2]
         np.testing.assert_array_equal(syn_ids, expected_syn_ids)
         assert out_edges["0"]["synapse_id"].attrs["edge_population"] == "new_biophysical_edge_pop"
+
+
+def _split_custom_subcircuit(output, circuit_config, node_set_name, node_set_def,
+                            do_virtual=False, create_external=False):
+    """Run split_subcircuit after injecting a custom node_set into a copy of the circuit.
+
+    Copies the circuit directory to a sibling of `output`, injects `node_set_def`
+    into the node_sets.json, and runs the extraction.
+
+    Returns:
+        Path to the output directory (same as `output`).
+    """
+    fixture = output.parent / (output.name + "_fixture")
+    shutil.copytree(Path(circuit_config).parent, fixture)
+
+    node_sets = load_json(fixture / "node_sets.json")
+    node_sets.update(node_set_def)
+    dump_json(fixture / "node_sets.json", node_sets)
+
+    split_population.split_subcircuit(
+        output, node_set_name, str(fixture / "circuit_config.json"),
+        do_virtual=do_virtual, create_external=create_external
+    )
+    return output
+
+
+def test_external_no_nan_when_no_overlap_between_batches(tmp_path):
+    """Test that external merge doesn't produce NaN when edge batches have disjoint source nodes.
+
+    Triggers the bug where _write_subcircuit_external processes multiple edge populations
+    (A__B, A__C) that share the same external source population (external_A), but the
+    second batch's wanted_src_ids have zero overlap with the first batch's mapping.
+
+    Without the fix, `wanted_src_ids[NEW_IDS].loc[is_existing].max()` returns NaN
+    when is_existing is all False, corrupting the id_mapping.
+    """
+    # Keep only A node 5 (mtype 'b'). Keep all B and C nodes.
+    # External from A__B: source node 0 (targets B:0, B:2)
+    # External from A__C: source nodes 3, 4 (target C:2, C:4)
+    # These sets are disjoint: {0} ∩ {3, 4} = ∅
+    # The second batch processed will have is_existing all False → triggers the NaN bug.
+    node_set_def = {
+        "nan_trigger": ["nan_trigger_popA", "nan_trigger_popB", "nan_trigger_popC"],
+        "nan_trigger_popA": {"population": "A", "node_id": [5]},
+        "nan_trigger_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
+        "nan_trigger_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
+    }
+
+    circuit_config = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
+
+    output = _split_custom_subcircuit(
+        tmp_path / "out", circuit_config, "nan_trigger", node_set_def,
+        do_virtual=False, create_external=True
+    )
+
+    # Verify no NaN in the id_mapping
+    mapping = load_json(output / "id_mapping.json")
+    assert "external_A" in mapping
+    ext_a = mapping["external_A"]
+    # All new_ids should be integers (no NaN)
+    assert all(isinstance(x, int) for x in ext_a["new_id"]), (
+        f"NaN detected in external_A new_id: {ext_a['new_id']}"
+    )
+    # new_ids should be contiguous starting from 0
+    assert ext_a["new_id"] == list(range(len(ext_a["new_id"])))

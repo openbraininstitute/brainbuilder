@@ -916,11 +916,14 @@ def _write_subcircuit_external(
                 wanted_src_ids.loc[is_existing] = existing_mapping.loc[
                     wanted_src_ids.loc[is_existing].index
                 ]
-                new_ids = (
-                    np.arange(np.sum(~is_existing))
-                    + wanted_src_ids[NEW_IDS].loc[is_existing].max()
-                    + 1
-                )  # New node IDs begin at the lowest unused value (max + 1)
+                # New node IDs begin at the lowest unused value (max + 1).
+                # Use existing_mapping max when no overlap exists (is_existing all False),
+                # otherwise use the max from the overlapping entries in wanted_src_ids.
+                if is_existing.any():
+                    max_existing_id = wanted_src_ids[NEW_IDS].loc[is_existing].max()
+                else:
+                    max_existing_id = existing_mapping[NEW_IDS].max()
+                new_ids = np.arange(np.sum(~is_existing)) + int(max_existing_id) + 1
                 wanted_src_ids.loc[~is_existing, NEW_IDS] = new_ids
 
                 # And merge new into existing
