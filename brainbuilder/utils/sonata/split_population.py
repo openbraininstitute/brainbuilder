@@ -887,9 +887,8 @@ def _gather_new_external_subcircuits(
                 node_pop_name_mapping[new_source_pop_name] = [edge.source.name]
 
             output_path = output / (new_name + ".h5")
-            output_path.parent.mkdir(parents=True, exist_ok=True)
             L.debug(
-                "Writing edges %s for %s -> %s [%s]",
+                "Gathering external edges %s for %s -> %s [%s]",
                 name,
                 edge.source.name,
                 edge.target.name,
@@ -1410,9 +1409,7 @@ def split_subcircuit(
         }
         # Compute per-population offset: new_ids continue after filter's max
         external_offsets = {
-            k: int(v[NEW_IDS].max()) + 1
-            for k, v in id_mapping.items()
-            if k.startswith("external_")
+            k: int(v[NEW_IDS].max()) + 1 for k, v in id_mapping.items() if k.startswith("external_")
         }
         write_edge_configs_b, nodes_to_write_b = _gather_new_external_subcircuits(
             output,
