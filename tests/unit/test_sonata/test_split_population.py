@@ -947,20 +947,13 @@ def _split_custom_subcircuit(output, circuit_config, node_set_name, node_set_def
 
 
 def test_external_no_nan_when_no_overlap_between_batches(tmp_path):
-    """Test that external merge doesn't produce NaN when edge batches have disjoint source nodes.
+    """External merge must not produce NaN when edge batches have disjoint source nodes.
 
-    Triggers the bug where _write_subcircuit_external processes multiple edge populations
-    (A__B, A__C) that share the same external source population (external_A), but the
-    second batch's wanted_src_ids have zero overlap with the first batch's mapping.
-
-    Without the fix, `wanted_src_ids[NEW_IDS].loc[is_existing].max()` returns NaN
-    when is_existing is all False, corrupting the id_mapping.
+    Setup: keep only A node 5, all B and C nodes.
+    External from A__B uses source node {0}; external from A__C uses {3, 4}.
+    The sets are disjoint, so the second batch has zero overlap with the first
+    batch's id_mapping (is_existing all False).
     """
-    # Keep only A node 5 (mtype 'b'). Keep all B and C nodes.
-    # External from A__B: source node 0 (targets B:0, B:2)
-    # External from A__C: source nodes 3, 4 (target C:2, C:4)
-    # These sets are disjoint: {0} ∩ {3, 4} = ∅
-    # The second batch processed will have is_existing all False → triggers the NaN bug.
     node_set_def = {
         "nan_trigger": ["nan_trigger_popA", "nan_trigger_popB", "nan_trigger_popC"],
         "nan_trigger_popA": {"population": "A", "node_id": [5]},
