@@ -983,6 +983,7 @@ def _write_subcircuit_virtual(
             edge.source.type == "virtual"
             and edge.target.name in id_mapping
             and edge.source.name not in list_of_sources_to_ignore
+            and not edge.source.name.startswith("external_")
         )
     }
 
