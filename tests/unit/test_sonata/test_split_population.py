@@ -888,13 +888,11 @@ def test_copy_filtered_edges_advanced(tmp_path):
         h5_read_chunk_size=3,  # FORCE chunking
         edge_type="synapse_astrocyte"
     )
-    with h5py.File(write_edge_config.input_path, "r") as h5in:
-        split_population._copy_filtered_edges(
-            h5in=h5in,
-            write_edge_config=write_edge_config,
-            id_mapping=id_mapping,
-            edge_mappings=edge_mappings
-        )
+    split_population._copy_filtered_edges(
+        write_edge_config=write_edge_config,
+        id_mapping=id_mapping,
+        edge_mappings=edge_mappings
+    )
 
     # Verification
     keep, new_name = edge_mappings["orig_src_edge_pop"]
@@ -1220,9 +1218,9 @@ def test_subsubcircuit_externals_merge(tmp_path):
     )
 
     # All C circuits should be equal
-    # assert_circuits_equal(path_c3_c1, path_c3_c2_c1)
+    assert_circuits_equal(path_c3_c1, path_c3_c2_c1)
 
     # All D circuits should be equal
-    # assert_circuits_equal(path_c4_c1, path_c4_c2_c1)
-    # assert_circuits_equal(path_c4_c1, path_c4_c3_c1)
-    # assert_circuits_equal(path_c4_c1, path_c4_c3_c2_c1)
+    assert_circuits_equal(path_c4_c1, path_c4_c2_c1)
+    assert_circuits_equal(path_c4_c1, path_c4_c3_c1)
+    assert_circuits_equal(path_c4_c1, path_c4_c3_c2_c1)
