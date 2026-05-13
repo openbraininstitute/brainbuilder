@@ -48,24 +48,35 @@ ORIG_NAME = "original_name"
 
 @dataclass
 class WriteEdgeConfig:
-    input_path: str | Path
+    input_path: str | Path | list[str | Path]
     output_path: str | Path
     src_node_name: str
     dst_node_name: str
-    src_edge_name: str
+    src_edge_name: str | list[str]
     dst_edge_name: str
-    src_mapping: pd.DataFrame
+    src_mapping: pd.DataFrame | list[pd.DataFrame]
     dst_mapping: pd.DataFrame
     h5_read_chunk_size: int | None = None
     edge_type: type[bytes] | None = None
 
     def __post_init__(self):
-        self.input_path = (
-            Path(self.input_path) if isinstance(self.input_path, str) else self.input_path
-        )
+        # Normalize to lists for uniform processing
+        if not isinstance(self.input_path, list):
+            self.input_path = [self.input_path]
+            self.src_edge_name = [self.src_edge_name]
+            self.src_mapping = [self.src_mapping]
+        self.input_path = [Path(p) if isinstance(p, str) else p for p in self.input_path]
         self.output_path = (
             Path(self.output_path) if isinstance(self.output_path, str) else self.output_path
         )
+
+    @property
+    def source_node_count(self) -> int:
+        return int(max(np.max(m) for m in self.src_mapping)) + 1
+
+    @property
+    def target_node_count(self) -> int:
+        return int(np.max(self.dst_mapping)) + 1
 
 
 def _create_chunked_slices(length, chunk_size):
@@ -237,124 +248,127 @@ def _h5_get_read_chunk_size():
 
 
 def _copy_filtered_edges(
-    h5in: h5py.File,
-    h5out: h5py.File,
     write_edge_config: WriteEdgeConfig,
     edge_mappings: dict[str, tuple[pd.DataFrame, str]] = None,
-):
-    """
-    Copy and filter edge datasets from an input HDF5 file to an output HDF5 file.
+) -> int:
+    """Copy and filter edge datasets from input HDF5 file(s) to an output HDF5 file.
 
-    This function:
-        - Reads the source edge population in chunks.
-        - Filters edges based on source and target node mappings.
-        - Copies source/target node IDs and all associated datasets.
-        - Initializes and populates new edge groups, preserving attributes.
-        - Raises errors if invalid IDs or unsupported groups (e.g., @library) are encountered.
+    Opens the output file, writes filtered edges, finalizes, and closes.
+    Supports multiple input sources (input_path/src_edge_name/src_mapping lists)
+    which are processed sequentially into a single output edge population.
 
     Args:
-        h5in (h5py.File): Input HDF5 file containing original edges.
-        h5out (h5py.File): Output HDF5 file to store filtered edges.
-        write_edge_config (WriteEdgeConfig): Configuration specifying
-            source/target populations, edge names, mappings, and read chunk size.
-        edge_mappings (dict[str, tuple[pd.DataFrame, str]]): Optional dict
-            updated with old→new edge ID mappings. The key is the old edge file name,
-            pd.DataFrame is the id remapping and the last str is the new edge file name.
+        write_edge_config: Configuration specifying source/target populations,
+            edge names, mappings, output path, and read chunk size.
+        edge_mappings: Optional dict updated with old->new edge ID mappings.
 
-    Notes:
-        - Only the "dynamics_params" group is currently supported in edge groups.
-        - Supports appendable datasets; existing datasets will raise an error if re-created.
-        - Processing is chunked to handle large edge populations efficiently.
+    Returns:
+        The number of edges written.
     """
-    # extract values
     h5_read_chunk_size = (
         write_edge_config.h5_read_chunk_size
         if write_edge_config.h5_read_chunk_size is not None
         else _h5_get_read_chunk_size()
     )
     is_neuroglial = write_edge_config.edge_type == "synapse_astrocyte"
-    # get groups
-    orig_edges = h5in["edges"][write_edge_config.src_edge_name]
-    orig_group = _get_unique_group(orig_edges)
-    new_edges = h5out.create_group("edges/" + write_edge_config.dst_edge_name)
-    new_group = new_edges.create_group(GROUP_NAME)
 
-    hdf5.create_appendable_dataset(new_edges, "source_node_id", np.uint64)
-    hdf5.create_appendable_dataset(new_edges, "target_node_id", np.uint64)
+    write_edge_config.output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # since create_appendable_dataset already fails if we append to an existing
-    # dataset, the following attribute assignments are safe
-    new_edges["source_node_id"].attrs["node_population"] = write_edge_config.src_node_name
-    new_edges["target_node_id"].attrs["node_population"] = write_edge_config.dst_node_name
+    with h5py.File(write_edge_config.output_path, "a") as h5out:
+        # Create output edge group (once, using first input as template)
+        with h5py.File(write_edge_config.input_path[0], "r") as h5_first:
+            first_orig_edges = h5_first["edges"][write_edge_config.src_edge_name[0]]
+            orig_group = _get_unique_group(first_orig_edges)
 
-    additional_attrs = {}
-    if is_neuroglial:
-        # find new name of synapse_edge_pop
-        src_syn_edge_pop = orig_edges[GROUP_NAME]["synapse_id"].attrs["edge_population"]
-        _, dst_syn_edge_pop = edge_mappings[src_syn_edge_pop]
-        # create dataset and add correct attr
-        additional_attrs["synapse_id"] = {"edge_population": dst_syn_edge_pop}
+            new_edges = h5out.create_group("edges/" + write_edge_config.dst_edge_name)
+            new_group = new_edges.create_group(GROUP_NAME)
 
-    _init_edge_group(orig_group, new_group, additional_attrs)
+            hdf5.create_appendable_dataset(new_edges, "source_node_id", np.uint64)
+            hdf5.create_appendable_dataset(new_edges, "target_node_id", np.uint64)
 
-    sgids_new = write_edge_config.src_mapping.index.to_numpy()
-    tgids_new = write_edge_config.dst_mapping.index.to_numpy()
-    assert (sgids_new >= 0).all(), "Source population ids must be positive."
-    assert (tgids_new >= 0).all(), "Target population ids must be positive."
+            new_edges["source_node_id"].attrs["node_population"] = write_edge_config.src_node_name
+            new_edges["target_node_id"].attrs["node_population"] = write_edge_config.dst_node_name
 
-    total_chunks = math.ceil(len(orig_edges["source_node_id"]) / h5_read_chunk_size)
-    L.debug(
-        "Processing %s edges in %s chunks of size %s [src_edge_name=%s]",
-        len(orig_edges["source_node_id"]),
-        total_chunks,
-        h5_read_chunk_size,
-        write_edge_config.src_edge_name,
-    )
+            additional_attrs = {}
+            if is_neuroglial:
+                src_syn_edge_pop = orig_group["synapse_id"].attrs["edge_population"]
+                _, dst_syn_edge_pop = edge_mappings[src_syn_edge_pop]
+                additional_attrs["synapse_id"] = {"edge_population": dst_syn_edge_pop}
 
-    sl_and_masks = _compute_chunks_and_masks(
-        orig_edges=orig_edges,
-        sgids_new=sgids_new,
-        tgids_new=tgids_new,
-        h5_read_chunk_size=h5_read_chunk_size,
-        edge_mappings=edge_mappings,
-        is_neuroglial=is_neuroglial,
-    )
+            _init_edge_group(orig_group, new_group, additional_attrs)
 
-    if edge_mappings is not None:
-        offset = new_edges["source_node_id"].shape[0]
-        if offset != 0:
-            raise RuntimeError(
-                "Cannot append edges when edge_mappings is enabled and the destination already "
-                f"contains {offset} edges. The current implementation only supports edges created "
-                "in a single pass and does not capture cross-generation connections "
-                "(old astrocyte -> new neuron or new astrocyte -> old neuron). "
-                "Only new->new connections would be handled correctly. "
-                "Appending is therefore blocked as a safety safeguard."
-            )
+        # Process each input source
+        tgids_new = write_edge_config.dst_mapping.index.to_numpy()
+        assert (tgids_new >= 0).all(), "Target population ids must be positive."
 
-        assert write_edge_config.src_edge_name not in edge_mappings, (
-            f"Source edge population '{write_edge_config.src_edge_name}' "
-            "already exists in edge_mappings. "
-            "Cannot overwrite an existing mapping; check your inputs or "
-            "ensure edge populations are unique."
-        )
-        edge_mappings[write_edge_config.src_edge_name] = (
-            _compute_edge_mapping(sl_and_masks=sl_and_masks, offset=offset),
-            write_edge_config.dst_edge_name,
-        )
+        for input_path, src_edge_name, src_mapping in zip(
+            write_edge_config.input_path,
+            write_edge_config.src_edge_name,
+            write_edge_config.src_mapping,
+        ):
+            sgids_new = src_mapping.index.to_numpy()
+            assert (sgids_new >= 0).all(), "Source population ids must be positive."
 
-    _write_masked_edges(
-        sl_and_masks=sl_and_masks,
-        new_edges=new_edges,
-        orig_edges=orig_edges,
-        src_mapping=write_edge_config.src_mapping,
-        dst_mapping=write_edge_config.dst_mapping,
-        edge_mappings=edge_mappings,
-        is_neuroglial=is_neuroglial,
-    )
+            with h5py.File(input_path, "r") as h5in:
+                orig_edges = h5in["edges"][src_edge_name]
 
-    L.debug("Finalize edges")
-    _finalize_edges(new_edges)
+                total_chunks = math.ceil(len(orig_edges["source_node_id"]) / h5_read_chunk_size)
+                L.debug(
+                    "Processing %s edges in %s chunks of size %s [src_edge_name=%s]",
+                    len(orig_edges["source_node_id"]),
+                    total_chunks,
+                    h5_read_chunk_size,
+                    src_edge_name,
+                )
+
+                sl_and_masks = _compute_chunks_and_masks(
+                    orig_edges=orig_edges,
+                    sgids_new=sgids_new,
+                    tgids_new=tgids_new,
+                    h5_read_chunk_size=h5_read_chunk_size,
+                    edge_mappings=edge_mappings,
+                    is_neuroglial=is_neuroglial,
+                )
+
+                if edge_mappings is not None:
+                    offset = new_edges["source_node_id"].shape[0]
+                    if offset != 0 and is_neuroglial:
+                        raise RuntimeError(
+                            "Cannot append neuroglial edges when edge_mappings is enabled and the "
+                            f"destination already contains {offset} edges."
+                        )
+
+                    assert src_edge_name not in edge_mappings, (
+                        f"Source edge population '{src_edge_name}' already exists in edge_mappings."
+                    )
+                    edge_mappings[src_edge_name] = (
+                        _compute_edge_mapping(sl_and_masks=sl_and_masks, offset=offset),
+                        write_edge_config.dst_edge_name,
+                    )
+
+                _write_masked_edges(
+                    sl_and_masks=sl_and_masks,
+                    new_edges=new_edges,
+                    orig_edges=orig_edges,
+                    src_mapping=src_mapping,
+                    dst_mapping=write_edge_config.dst_mapping,
+                    edge_mappings=edge_mappings,
+                    is_neuroglial=is_neuroglial,
+                )
+
+        edge_count = len(new_edges["source_node_id"])
+
+        # Verify consistency
+        if edge_count > 0:
+            assert write_edge_config.source_node_count >= int(np.max(new_edges["source_node_id"]))
+            assert write_edge_config.target_node_count >= int(np.max(new_edges["target_node_id"]))
+            L.debug("Finalize edges")
+            _finalize_edges(new_edges)
+        else:
+            # Remove empty population from the file
+            del h5out[f"edges/{write_edge_config.dst_edge_name}"]
+
+    return edge_count
 
 
 def _compute_edge_mapping(sl_and_masks, offset=0):
@@ -438,33 +452,6 @@ def _write_masked_edges(
         _populate_edge_group(orig_edges[GROUP_NAME], new_edges[GROUP_NAME], sl, mask, overrides)
 
 
-def _get_node_counts(
-    h5out: h5py.File, new_edge_pop_name: str, src_mapping: pd.DataFrame, dst_mapping: pd.DataFrame
-):
-    """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
-
-    source_node_count = int(np.max(src_mapping)) + 1
-    target_node_count = int(np.max(dst_mapping)) + 1
-
-    new_edges = h5out["edges"][new_edge_pop_name]
-    edge_count = len(new_edges["source_node_id"])
-
-    if edge_count > 0:
-        assert source_node_count >= int(np.max(new_edges["source_node_id"]))
-        assert target_node_count >= int(np.max(new_edges["target_node_id"]))
-
-    return edge_count, source_node_count, target_node_count
-
-
-def _write_indexes(
-    edge_file_name: str | Path, new_pop_name: str, source_node_count: int, target_node_count: int
-):
-    """ibid"""
-    libsonata.EdgePopulation.write_indices(
-        str(edge_file_name), new_pop_name, source_node_count, target_node_count
-    )
-
-
 def _check_all_edges_used(h5in, written_edges):
     """Verify that the number of written edges matches the number of initial edges."""
     orig_edges = h5in["edges"][_get_unique_population(h5in["edges"])]
@@ -501,15 +488,16 @@ def _write_edges(
             )
 
             L.debug("Writing to  %s", write_edge_config.output_path)
-            with h5py.File(write_edge_config.output_path, "w") as h5out:
-                _copy_filtered_edges(h5in=h5in, h5out=h5out, write_edge_config=write_edge_config)
-                edge_count, sgid_count, tgid_count = _get_node_counts(
-                    h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
-                )
+            edge_count = _copy_filtered_edges(write_edge_config=write_edge_config)
 
-            # after the h5 file is closed, it's indexed if valid, or it's removed if empty
+            # after the file is closed, it's indexed if valid, or it's removed if empty
             if edge_count > 0:
-                _write_indexes(write_edge_config.output_path, edge_pop_name, sgid_count, tgid_count)
+                libsonata.EdgePopulation.write_indices(
+                    str(write_edge_config.output_path),
+                    edge_pop_name,
+                    write_edge_config.source_node_count,
+                    write_edge_config.target_node_count,
+                )
                 L.debug("Wrote %s edges to %s", edge_count, write_edge_config.output_path)
                 written_edges += edge_count
             else:
@@ -661,11 +649,15 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
 def _write_subcircuit_edges(
     write_edge_config: WriteEdgeConfig, edge_mappings: dict[str, tuple[pd.DataFrame, str]]
 ):
-    """copy a population to an edge file
+    """Write a filtered edge population to an HDF5 file.
 
-    If DELETED_EMPTY_EDGES_FILE is returned, the file was removed since no
-    populations existed in it any more
-    If DELETED_EMPTY_EDGES_POPULATION is returned, the population was removed
+    If the population has no edges after filtering, it is removed from the file.
+    If the file becomes empty as a result, the file itself is deleted.
+
+    Returns:
+        (output_path, edge_count): the path written to, and the number of edges.
+        output_path may be DELETED_EMPTY_EDGES_FILE (file removed) or
+        DELETED_EMPTY_EDGES_POPULATION (population removed, file kept).
     """
     output_path = write_edge_config.output_path
 
@@ -677,47 +669,24 @@ def _write_subcircuit_edges(
         str(output_path),
     )
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    edge_count = _copy_filtered_edges(
+        write_edge_config=write_edge_config,
+        edge_mappings=edge_mappings,
+    )
 
-    with h5py.File(write_edge_config.input_path, "r") as h5in:
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        is_file_empty = False
-
-        with h5py.File(output_path, "a") as h5out:
-            _copy_filtered_edges(
-                h5in=h5in,
-                h5out=h5out,
-                write_edge_config=write_edge_config,
-                edge_mappings=edge_mappings,
-            )
-
-            edge_count, sgid_count, tgid_count = _get_node_counts(
-                h5out=h5out,
-                new_edge_pop_name=write_edge_config.dst_edge_name,
-                src_mapping=write_edge_config.src_mapping,
-                dst_mapping=write_edge_config.dst_mapping,
-            )
-
-            if edge_count == 0:
-                del h5out[f"/edges/{write_edge_config.dst_edge_name}"]
-                is_file_empty = len(h5out["/edges"]) == 0
-
-        # after the h5 file is closed, it's indexed if valid, or it's removed if empty
-        if edge_count > 0:
-            _write_indexes(
-                edge_file_name=write_edge_config.output_path,
-                new_pop_name=write_edge_config.dst_edge_name,
-                source_node_count=sgid_count,
-                target_node_count=tgid_count,
-            )
-            L.debug("Wrote %s edges to %s", edge_count, output_path)
-        elif is_file_empty:
-            Path(output_path).unlink(missing_ok=True)
+    if edge_count > 0:
+        L.debug("Wrote %s edges to %s", edge_count, output_path)
+    elif output_path.exists():
+        # Check if the file has any other populations; if not, remove it
+        with h5py.File(output_path, "r") as h5:
+            is_file_empty = len(h5["edges"]) == 0
+        if is_file_empty:
+            output_path.unlink(missing_ok=True)
             output_path = DELETED_EMPTY_EDGES_FILE
-        else:  # population empty, but not file
+        else:
             output_path = DELETED_EMPTY_EDGES_POPULATION
 
-        return output_path
+    return output_path, edge_count
 
 
 def _get_storage_path(edge):
@@ -789,9 +758,19 @@ def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig
     )
 
     for write_edge_config in write_edge_configs_sorted:
-        new_edges_files[write_edge_config.dst_edge_name] = _write_subcircuit_edges(
+        output_path, edge_count = _write_subcircuit_edges(
             write_edge_config=write_edge_config, edge_mappings=edge_mappings
         )
+
+        if edge_count > 0:
+            libsonata.EdgePopulation.write_indices(
+                str(output_path),
+                write_edge_config.dst_edge_name,
+                write_edge_config.source_node_count,
+                write_edge_config.target_node_count,
+            )
+
+        new_edges_files[write_edge_config.dst_edge_name] = output_path
 
     return new_edges_files
 
@@ -832,20 +811,32 @@ def _get_subcircuit_external_ids(all_sgids, all_tgids, wanted_src_ids, wanted_ds
     return ret.sort_index()
 
 
-def _write_subcircuit_external(
+def _gather_new_external_subcircuits(
     output,
     circuit,
     id_mapping,
     node_pop_name_mapping,
     existing_node_pop_names,
     existing_edge_pop_names,
+    external_id_offset=None,
 ):
-    """Write external connectivity.
+    """Gather external connectivity: non-virtual sources projecting into the subcircuit.
 
-    returns: (new_node_files, new_edges_files); with, respectively,
-    dictionaries with node and edge population_name -> path
+    Identifies source nodes that are NOT in the subcircuit but have edges targeting
+    nodes that ARE in the subcircuit. Builds WriteEdgeConfigs and a nodes_to_write
+    dict suitable for _write_subcircuit.
 
-    Warning: this writes `id_mapping` in place
+    Updates `id_mapping` and `node_pop_name_mapping` in place.
+
+    Args:
+        external_id_offset: Dict of population_name -> starting new_id offset.
+            Used when merging with pre-existing externals from a parent circuit.
+            If None or population not in dict, offset is 0.
+
+    Returns:
+        (write_edge_configs, nodes_to_write):
+            write_edge_configs: list of WriteEdgeConfig
+            nodes_to_write: dict of output_pop_name -> list of (source_pop_name, node_ids)
     """
 
     assert all(edge.type != "neuroglial" for edge in circuit.edges.values()), (
@@ -856,7 +847,7 @@ def _write_subcircuit_external(
         "that multiplies the amount of additional files required."
     )
 
-    new_nodes = {}
+    nodes_to_write = {}
 
     write_edge_configs = []
     for name, edge in circuit.edges.items():
@@ -870,14 +861,10 @@ def _write_subcircuit_external(
                     )
                 ]
 
-            # only keep ids that are used; this is duplicating work in _copy_edge_attributes
-            # but the alternative is that it keeps track of the new id_mapping; which
-            # seemed less ideal
             with h5py.File(_get_storage_path(edge)) as h5:
                 all_sgids = h5[f"edges/{name}/source_node_id"]
                 all_tgids = h5[f"edges/{name}/target_node_id"]
 
-                # overwrite wanted_src_ids with a DataFrame; the numpy array is not needed
                 wanted_src_ids = _get_subcircuit_external_ids(
                     all_sgids,
                     all_tgids,
@@ -896,12 +883,12 @@ def _write_subcircuit_external(
             while new_source_pop_name in existing_node_pop_names:
                 L.debug("%s already exists as an node population", new_source_pop_name)
                 new_source_pop_name = "external_" + new_source_pop_name
-            node_pop_name_mapping[new_source_pop_name] = edge.source.name
+            if new_source_pop_name not in node_pop_name_mapping:
+                node_pop_name_mapping[new_source_pop_name] = [edge.source.name]
 
             output_path = output / (new_name + ".h5")
-            output_path.parent.mkdir(parents=True, exist_ok=True)
             L.debug(
-                "Writing edges %s for %s -> %s [%s]",
+                "Gathering external edges %s for %s -> %s [%s]",
                 name,
                 edge.source.name,
                 edge.target.name,
@@ -909,25 +896,25 @@ def _write_subcircuit_external(
             )
 
             if new_source_pop_name in id_mapping:
-                # If mapping already exists, only add new IDs w/o changing existing!
-                # (May happen if different target populations have same external source population)
+                # Same source, multiple target populations — deduplicate and extend
                 existing_mapping = id_mapping[new_source_pop_name]
                 is_existing = _isin(wanted_src_ids.index, existing_mapping.index)
                 wanted_src_ids.loc[is_existing] = existing_mapping.loc[
                     wanted_src_ids.loc[is_existing].index
                 ]
-                new_ids = (
-                    np.arange(np.sum(~is_existing))
-                    + wanted_src_ids[NEW_IDS].loc[is_existing].max()
-                    + 1
-                )  # New node IDs begin at the lowest unused value (max + 1)
+                if is_existing.any():
+                    max_existing_id = wanted_src_ids[NEW_IDS].loc[is_existing].max()
+                else:
+                    max_existing_id = existing_mapping[NEW_IDS].max()
+                new_ids = np.arange(np.sum(~is_existing)) + int(max_existing_id) + 1
                 wanted_src_ids.loc[~is_existing, NEW_IDS] = new_ids
 
-                # And merge new into existing
                 id_mapping[new_source_pop_name] = pd.concat(
                     [existing_mapping, wanted_src_ids.loc[~is_existing]], axis=0
                 )
             else:
+                pop_offset = (external_id_offset or {}).get(new_source_pop_name, 0)
+                wanted_src_ids[NEW_IDS] = wanted_src_ids[NEW_IDS] + pop_offset
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
             write_edge_config = WriteEdgeConfig(
@@ -943,41 +930,40 @@ def _write_subcircuit_external(
             )
             write_edge_configs.append(write_edge_config)
 
-            new_nodes[new_source_pop_name] = (
-                edge.source.name,
-                wanted_src_ids.index.to_numpy(),
-            )
+            nodes_to_write[new_source_pop_name] = [
+                (
+                    edge.source.name,
+                    id_mapping[new_source_pop_name].index.to_numpy(),
+                )
+            ]
 
-    new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
-
-    new_node_files = {}
-    # write new virtual nodes from originally non-virtual populations
-    for population_name, id_tuple in new_nodes.items():
-        # Get all properties of the subset of the node population that is relevant
-        orig_population_name, ids = id_tuple
-        df = circuit.nodes[orig_population_name].get(ids).reset_index(drop=True)
-        nodes_path = Path(output) / population_name / "nodes.h5"
-        nodes_path.parent.mkdir(parents=True, exist_ok=True)
-        new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
-
-    return new_node_files, new_edges_files
+    return write_edge_configs, nodes_to_write
 
 
-def _write_subcircuit_virtual(
+def _filter_virtual_typed_subcircuit(
     output,
     circuit,
     edge_populations_to_paths,
     id_mapping,
     node_pop_name_mapping,
+    do_externals,
     list_of_sources_to_ignore=(),
 ):
-    """write all node/edge populations that have virtual nodes as source
+    """Filter and gather virtual-typed source populations for subcircuit extraction.
 
-    Note: the id_mapping dictionary is updated with the used virtual nodes
+    Selects edge populations whose source is typed as virtual and whose target
+    is in `id_mapping`. The `do_externals` flag controls which flavor:
+      - False: only genuine virtuals (excluding external_* populations)
+      - True: only external_* populations
+
+    Updates `id_mapping` and `node_pop_name_mapping` in place with the selected
+    source populations.
+
+    Returns:
+        (write_edge_configs, nodes_to_write):
+            write_edge_configs: list of WriteEdgeConfig
+            nodes_to_write: dict of output_pop_name -> (source_pop_name, node_ids)
     """
-    # pylint: disable=too-many-locals
-    new_node_files = {}
-
     virtual_populations = {
         name: edge
         for name, edge in circuit.edges.items()
@@ -985,6 +971,7 @@ def _write_subcircuit_virtual(
             edge.source.type == "virtual"
             and edge.target.name in id_mapping
             and edge.source.name not in list_of_sources_to_ignore
+            and (edge.source.name.startswith("external_") == do_externals)
         )
     }
 
@@ -1014,19 +1001,15 @@ def _write_subcircuit_virtual(
         if edge.source.name in pop_used_source_node_ids
     }
 
-    # update the mappings with the virtual nodes
+    # update the mappings with the selected source nodes
     for name, ids in pop_used_source_node_ids.items():
         id_mapping[name] = pd.DataFrame({NEW_IDS: range(len(ids))}, index=ids)
-        # Virtual input sources retain their name unchanged
-        node_pop_name_mapping[name] = name
+        node_pop_name_mapping[name] = [name]
 
-    # write the edges that have the virtual populations as source
-
-    write_edge_configs = []
-    for edge_pop_name, edge in virtual_populations.items():
-        write_edge_config = WriteEdgeConfig(
+    write_edge_configs = [
+        WriteEdgeConfig(
             output_path=Path(output) / edge_populations_to_paths[edge_pop_name],
-            input_path=_get_storage_path(edge),  # Where to read from
+            input_path=_get_storage_path(edge),
             src_node_name=edge.source.name,
             dst_node_name=edge.target.name,
             src_edge_name=edge_pop_name,
@@ -1035,14 +1018,39 @@ def _write_subcircuit_virtual(
             dst_mapping=id_mapping[edge.target.name],
             edge_type=edge.type,
         )
-        write_edge_configs.append(write_edge_config)
+        for edge_pop_name, edge in virtual_populations.items()
+    ]
+    nodes_to_write = {name: [(name, ids)] for name, ids in pop_used_source_node_ids.items()}
 
+    return write_edge_configs, nodes_to_write
+
+
+def _write_subcircuit(
+    output,
+    circuit,
+    write_edge_configs,
+    nodes_to_write,
+):
+    """Write edges and nodes for a subcircuit extraction step.
+
+    Args:
+        output: Path where files will be written.
+        circuit: bluepysnap Circuit object.
+        write_edge_configs: list of WriteEdgeConfig (fully constructed).
+        nodes_to_write: dict of output_pop_name -> list of (source_pop_name, node_ids).
+            Each entry is a list of sources to read and concatenate for that
+            output population. source_pop_name is the population to read from
+            in the circuit, node_ids are the IDs to extract.
+
+    Returns:
+        (new_node_files, new_edges_files): dicts of population_name -> path.
+    """
     new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
 
-    # write virtual nodes based on virtual populations
-    for population_name, ids in pop_used_source_node_ids.items():
-        # Get all properties of the subset of the node population that is relevant
-        df = circuit.nodes[population_name].get(ids).reset_index(drop=True)
+    new_node_files = {}
+    for population_name, sources in nodes_to_write.items():
+        dfs = [circuit.nodes[src_pop].get(ids) for src_pop, ids in sources]
+        df = pd.concat(dfs, ignore_index=True)
         nodes_path = Path(output) / population_name / "nodes.h5"
         nodes_path.parent.mkdir(parents=True, exist_ok=True)
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
@@ -1167,50 +1175,127 @@ def _update_node_sets(node_sets, id_mapping):
     return ret
 
 
-def _mapping_to_parent_dict(id_mapping, node_pop_name_mapping):
+def _mapping_to_parent_dict(id_mapping, node_pop_name_mapping, id_mapping_secondary=None):
+    """Build the serializable mapping dict from id_mapping and parent names.
+
+    Handles multiple parents per population: first parent uses parent_name/parent_id,
+    subsequent parents use parent2_name/parent2_id, parent3_name/parent3_id, etc.
+    """
+    if id_mapping_secondary is None:
+        id_mapping_secondary = {}
+
     mapping = {}
     for population, df in id_mapping.items():
-        mapping[population] = {
+        parent_names = node_pop_name_mapping[population]
+
+        entry = {
             PARENT_IDS: df.index.to_list(),
             NEW_IDS: df[NEW_IDS].to_list(),
-            PARENT_NAME: node_pop_name_mapping[population],
+            PARENT_NAME: parent_names[0],
         }
+
+        # Add secondary parent(s) if present
+        if population in id_mapping_secondary:
+            sec_df = id_mapping_secondary[population]
+            entry[NEW_IDS] = entry[NEW_IDS] + sec_df[NEW_IDS].to_list()
+            for i, parent_name in enumerate(parent_names[1:], start=2):
+                suffix = str(i)
+                entry[f"parent{suffix}_id"] = sec_df.index.to_list()
+                entry[f"parent{suffix}_name"] = parent_name
+
+        mapping[population] = entry
     return mapping
 
 
-def _make_parent_the_original_mapping(this_mapping):
-    for this_pop in this_mapping.keys():
-        this_mapping[this_pop][ORIG_IDS] = this_mapping[this_pop][PARENT_IDS]
-        this_mapping[this_pop][ORIG_NAME] = this_mapping[this_pop][PARENT_NAME]
+def _set_original_ids(this_mapping: dict, parent_mapping: dict | None) -> None:
+    """Set original_id and original_name for each population in the mapping.
+
+    If parent_mapping is None (parent is the root circuit), original_id is
+    copied from parent_id. Otherwise, original_id is traced back through the
+    parent's mapping to the root circuit.
+
+    Handles numbered parent fields (parent2_id/parent2_name, etc.) for
+    populations with multiple parent sources.
+    """
+    for entry in this_mapping.values():
+        if parent_mapping is None:
+            # Collect all parent_ids across numbered fields
+            all_parent_ids = list(entry[PARENT_IDS])
+            for i in range(2, 100):
+                key = f"parent{i}_id"
+                if key not in entry:
+                    break
+                all_parent_ids.extend(entry[key])
+            entry[ORIG_IDS] = all_parent_ids
+            entry[ORIG_NAME] = entry[PARENT_NAME]
+        else:
+            # Resolve primary parent
+            parent_pop = entry[PARENT_NAME]
+            backwards_mapped = pd.Series(
+                parent_mapping[parent_pop][ORIG_IDS],
+                index=parent_mapping[parent_pop][NEW_IDS],
+            )
+            orig_ids = backwards_mapped[entry[PARENT_IDS]].to_list()
+            orig_name = parent_mapping[parent_pop][ORIG_NAME]
+
+            # Resolve numbered parents
+            for i in range(2, 100):
+                id_key = f"parent{i}_id"
+                name_key = f"parent{i}_name"
+                if id_key not in entry:
+                    break
+                parent_pop_i = entry[name_key]
+                backwards_mapped_i = pd.Series(
+                    parent_mapping[parent_pop_i][ORIG_IDS],
+                    index=parent_mapping[parent_pop_i][NEW_IDS],
+                )
+                orig_ids.extend(backwards_mapped_i[entry[id_key]].to_list())
+                # Assert all parents trace back to the same original
+                assert parent_mapping[parent_pop_i][ORIG_NAME] == orig_name, (
+                    f"Cannot merge: original_name mismatch "
+                    f"{orig_name} vs {parent_mapping[parent_pop_i][ORIG_NAME]}"
+                )
+
+            entry[ORIG_IDS] = orig_ids
+            entry[ORIG_NAME] = orig_name
 
 
-def _add_mapping_to_original(this_mapping, parent_mapping):
-    for this_pop in this_mapping.keys():
-        parent_pop = this_mapping[this_pop][PARENT_NAME]
+def _write_mapping(
+    output,
+    parent_circ,
+    id_mapping,
+    node_pop_name_mapping,
+    id_mapping_secondary=None,
+):
+    """Write the id mappings between the old and new populations for future analysis."""
+    if id_mapping_secondary is None:
+        id_mapping_secondary = {}
 
-        backwards_mapped = pd.Series(
-            parent_mapping[parent_pop][ORIG_IDS], index=parent_mapping[parent_pop][NEW_IDS]
-        )
-        orig_ids = backwards_mapped[this_mapping[this_pop][PARENT_IDS]]
-        orig_name = parent_mapping[parent_pop][ORIG_NAME]
-
-        this_mapping[this_pop][ORIG_IDS] = orig_ids.to_list()
-        this_mapping[this_pop][ORIG_NAME] = orig_name
-
-
-def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
-    """write the id mappings between the old and new populations for future analysis"""
-    this_mapping = _mapping_to_parent_dict(id_mapping, node_pop_name_mapping)
+    this_mapping = _mapping_to_parent_dict(id_mapping, node_pop_name_mapping, id_mapping_secondary)
 
     provenance = parent_circ.config.get("components", {}).get("provenance", {})
-    if "id_mapping" in provenance:
-        # Currently, bluepysnap does not seem to resolve $BASE_DIR for entries in "provenance".
-        # Therefore I decided to not prepend it and just assume the file exists near the circuit config.
+    # Currently, bluepysnap does not resolve $BASE_DIR for provenance entries,
+    # so assume the mapping file is relative to the circuit config.
+    parent_mapping = None
+    if mapping_path := provenance.get("id_mapping"):
         parent_root = Path(parent_circ._circuit_config_path).parent
-        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
-        _add_mapping_to_original(this_mapping, parent_mapping)
-    else:
-        _make_parent_the_original_mapping(this_mapping)
+        parent_mapping = utils.load_json(parent_root / mapping_path)
+
+    _set_original_ids(this_mapping, parent_mapping)
+
+    # Validate length invariants for merged populations
+    for pop_name, entry in this_mapping.items():
+        n_new = len(entry[NEW_IDS])
+        n_parent_ids = len(entry[PARENT_IDS])
+        for i in range(2, 100):
+            key = f"parent{i}_id"
+            if key not in entry:
+                break
+            n_parent_ids += len(entry[key])
+        assert n_parent_ids == n_new == len(entry[ORIG_IDS]), (
+            f"Length mismatch for population '{pop_name}': "
+            f"sum(parent*_id)={n_parent_ids}, new_id={n_new}, original_id={len(entry[ORIG_IDS])}"
+        )
 
     mapping_fn = "id_mapping.json"
     utils.dump_json(output / mapping_fn, this_mapping)
@@ -1270,10 +1355,10 @@ def split_subcircuit(
 
     id_mapping = _get_node_id_mapping(split_populations)
     # Intrinsic input sources retain their name unchanged
-    node_pop_name_mapping = {pop_name: pop_name for pop_name in split_populations.keys()}
+    node_pop_name_mapping = {pop_name: [pop_name] for pop_name in split_populations.keys()}
 
     # TODO: should function `_write_subcircuit_biological`,
-    # `_write_subcircuit_external`, `_write_subcircuit_virtual`
+    # `_gather_new_external_subcircuits`, `_filter_virtual_typed_subcircuit`/`_write_subcircuit`
     # handle node updates and config updates?
 
     new_node_files, new_edge_files = _write_subcircuit_biological(
@@ -1281,13 +1366,20 @@ def split_subcircuit(
     )
 
     if do_virtual:
-        new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_virtual(
+        write_edge_configs, nodes_to_write = _filter_virtual_typed_subcircuit(
             output,
             circuit,
             edge_pop_to_paths,
             id_mapping,
             node_pop_name_mapping,
+            False,
             list_of_virtual_sources_to_ignore,
+        )
+        new_virtual_node_files, new_virtual_edge_files = _write_subcircuit(
+            output,
+            circuit,
+            write_edge_configs,
+            nodes_to_write,
         )
 
         new_node_files.update(new_virtual_node_files)
@@ -1296,20 +1388,97 @@ def split_subcircuit(
     existing_node_pop_names = list(new_node_files.keys())
     existing_edge_pop_names = list(new_edge_files.keys())
     if create_external:
-        new_virtual_node_files, new_virtual_edge_files = _write_subcircuit_external(
+        # Phase A: carry over existing external_ populations from parent circuit
+        write_edge_configs_a, nodes_to_write_a = _filter_virtual_typed_subcircuit(
             output,
             circuit,
+            edge_pop_to_paths,
             id_mapping,
             node_pop_name_mapping,
+            True,
+            list_of_virtual_sources_to_ignore,
+        )
+
+        # Phase B: create new externals from biophysical populations now outside subcircuit
+        # Give _gather a clean id_mapping without filter's external entries.
+        # Pass offset so new_ids continue after filter's max for overlapping populations.
+        gather_id_mapping = {k: v for k, v in id_mapping.items() if not k.startswith("external_")}
+        gather_node_pop_name_mapping = {
+            k: v for k, v in node_pop_name_mapping.items() if not k.startswith("external_")
+        }
+        # Compute per-population offset: new_ids continue after filter's max
+        external_offsets = {
+            k: int(v[NEW_IDS].max()) + 1 for k, v in id_mapping.items() if k.startswith("external_")
+        }
+        write_edge_configs_b, nodes_to_write_b = _gather_new_external_subcircuits(
+            output,
+            circuit,
+            gather_id_mapping,
+            gather_node_pop_name_mapping,
             existing_node_pop_names,
             existing_edge_pop_names,
+            external_id_offset=external_offsets,
+        )
+
+        # Merge: gather's external populations are already offset.
+        # Move them to id_mapping_secondary (for serialization) or main id_mapping.
+        id_mapping_secondary = {}
+        for pop_name in list(gather_id_mapping.keys()):
+            if not pop_name.startswith("external_"):
+                continue
+            gather_df = gather_id_mapping[pop_name]
+            if pop_name in id_mapping:
+                # Overlapping: store as secondary (already offset)
+                id_mapping_secondary[pop_name] = gather_df
+                # Append parent name
+                if pop_name in gather_node_pop_name_mapping:
+                    for parent in gather_node_pop_name_mapping[pop_name]:
+                        if parent not in node_pop_name_mapping.get(pop_name, []):
+                            node_pop_name_mapping[pop_name].append(parent)
+            else:
+                # Non-overlapping: just move to main id_mapping
+                id_mapping[pop_name] = gather_df
+                node_pop_name_mapping[pop_name] = gather_node_pop_name_mapping.get(
+                    pop_name, [pop_name]
+                )
+
+        # Merge edge configs: combine configs with same dst_edge_name into
+        # a single multi-input config; leave others as-is.
+        filter_configs_by_name = {cfg.dst_edge_name: cfg for cfg in write_edge_configs_a}
+        merged_edge_configs = list(write_edge_configs_a)
+        for cfg_b in write_edge_configs_b:
+            if cfg_b.dst_edge_name in filter_configs_by_name:
+                cfg_a = filter_configs_by_name[cfg_b.dst_edge_name]
+                cfg_a.input_path = cfg_a.input_path + cfg_b.input_path
+                cfg_a.src_edge_name = cfg_a.src_edge_name + cfg_b.src_edge_name
+                cfg_a.src_mapping = cfg_a.src_mapping + cfg_b.src_mapping
+            else:
+                merged_edge_configs.append(cfg_b)
+
+        merged_nodes_to_write = dict(nodes_to_write_a)
+        for pop_name, sources in nodes_to_write_b.items():
+            if pop_name in merged_nodes_to_write:
+                merged_nodes_to_write[pop_name] = merged_nodes_to_write[pop_name] + sources
+            else:
+                merged_nodes_to_write[pop_name] = sources
+
+        new_virtual_node_files, new_virtual_edge_files = _write_subcircuit(
+            output,
+            circuit,
+            merged_edge_configs,
+            merged_nodes_to_write,
         )
 
         new_node_files.update(new_virtual_node_files)
         new_edge_files.update(new_virtual_edge_files)
 
-    mapping_fn = _write_mapping(output, circuit, id_mapping, node_pop_name_mapping)
-
+    mapping_fn = _write_mapping(
+        output,
+        circuit,
+        id_mapping,
+        node_pop_name_mapping,
+        id_mapping_secondary if create_external else None,
+    )
     config = copy.deepcopy(circuit.config)
 
     node_sets = _update_node_sets(utils.load_json(config["node_sets_file"]), id_mapping)
