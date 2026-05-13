@@ -916,11 +916,12 @@ def _write_subcircuit_external(
                 wanted_src_ids.loc[is_existing] = existing_mapping.loc[
                     wanted_src_ids.loc[is_existing].index
                 ]
-                new_ids = (
-                    np.arange(np.sum(~is_existing))
-                    + wanted_src_ids[NEW_IDS].loc[is_existing].max()
-                    + 1
-                )  # New node IDs begin at the lowest unused value (max + 1)
+                if not is_existing.any():
+                    # no existing IDs are reused, so new ids begin at the maximum
+                    max_existing_id = existing_mapping[NEW_IDS].max()
+                else:
+                    max_existing_id = wanted_src_ids[NEW_IDS].loc[is_existing].max()
+                new_ids = np.arange(np.sum(~is_existing)) + int(max_existing_id) + 1
                 wanted_src_ids.loc[~is_existing, NEW_IDS] = new_ids
 
                 # And merge new into existing
