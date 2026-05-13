@@ -914,8 +914,7 @@ def _gather_new_external_subcircuits(
                 )
             else:
                 pop_offset = (external_id_offset or {}).get(new_source_pop_name, 0)
-                if pop_offset:
-                    wanted_src_ids[NEW_IDS] = wanted_src_ids[NEW_IDS] + pop_offset
+                wanted_src_ids[NEW_IDS] = wanted_src_ids[NEW_IDS] + pop_offset
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
             write_edge_config = WriteEdgeConfig(
