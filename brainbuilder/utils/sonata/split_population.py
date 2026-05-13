@@ -925,21 +925,27 @@ def _gather_subcircuit_external(
     return write_edge_configs, new_nodes
 
 
-def _gather_subcircuit_virtual(
+def _gather_subcircuit_virtual_typed(
     output,
     circuit,
     edge_populations_to_paths,
     id_mapping,
+    do_externals=False,
     list_of_sources_to_ignore=(),
 ):
-    """Gather edge configs and node IDs for virtual populations in a subcircuit.
+    """Gather edge configs and node IDs for virtual-typed populations in a subcircuit.
 
-    Mutates id_mapping with the virtual node entries.
+    Selects edge populations whose source is typed as virtual and whose target
+    is in id_mapping. The do_externals flag controls which flavor:
+      - False: only genuine virtuals (excluding external_* populations)
+      - True: only external_* populations
+
+    Mutates id_mapping with the selected source node entries.
 
     Returns:
         tuple: (write_edge_configs, pop_used_source_node_ids)
             - write_edge_configs: list[WriteEdgeConfig]
-            - pop_used_source_node_ids: dict[str, np.ndarray] mapping virtual pop name to node IDs
+            - pop_used_source_node_ids: dict[str, np.ndarray] mapping pop name to node IDs
     """
     # pylint: disable=too-many-locals
 
@@ -950,7 +956,7 @@ def _gather_subcircuit_virtual(
             edge.source.type == "virtual"
             and edge.target.name in id_mapping
             and edge.source.name not in list_of_sources_to_ignore
-            and not edge.source.name.startswith("external_")
+            and (edge.source.name.startswith("external_") == do_externals)
         )
     }
 
@@ -1134,10 +1140,19 @@ def _resolve_original_ids(id_mapping, parent_circ):
 
         for pop_name, df in id_mapping.items():
             parent_pop = df[SOURCE].iloc[0]
+            if parent_pop not in parent_mapping:
+                # Population not in parent mapping (e.g., newly created) — original == parent
+                id_mapping[pop_name] = df.assign(**{ORIG_IDS: df.index.to_numpy()})
+                continue
             backwards_mapped = pd.Series(
                 parent_mapping[parent_pop][ORIG_IDS], index=parent_mapping[parent_pop][NEW_IDS]
             )
-            id_mapping[pop_name] = df.assign(**{ORIG_IDS: backwards_mapped[df.index].to_numpy()})
+            # Only resolve IDs that exist in the parent mapping
+            resolvable = df.index.isin(backwards_mapped.index)
+            orig_ids = df.index.to_numpy().copy().astype(object)
+            if resolvable.any():
+                orig_ids[resolvable] = backwards_mapped[df.index[resolvable]].to_numpy()
+            id_mapping[pop_name] = df.assign(**{ORIG_IDS: orig_ids})
     else:
         for pop_name, df in id_mapping.items():
             id_mapping[pop_name] = df.assign(**{ORIG_IDS: df.index.to_numpy()})
@@ -1241,12 +1256,25 @@ def split_subcircuit(
     virt_edge_configs = []
     virt_node_ids = {}
     if do_virtual:
-        virt_edge_configs, virt_node_ids = _gather_subcircuit_virtual(
+        virt_edge_configs, virt_node_ids = _gather_subcircuit_virtual_typed(
             output,
             circuit,
             edge_pop_to_paths,
             id_mapping,
-            list_of_virtual_sources_to_ignore,
+            do_externals=False,
+            list_of_sources_to_ignore=list_of_virtual_sources_to_ignore,
+        )
+
+    # Filter existing external populations (keep only nodes that still project into subcircuit)
+    existing_ext_edge_configs = []
+    existing_ext_node_ids = {}
+    if create_external:
+        existing_ext_edge_configs, existing_ext_node_ids = _gather_subcircuit_virtual_typed(
+            output,
+            circuit,
+            edge_pop_to_paths,
+            id_mapping,
+            do_externals=True,
         )
 
     ext_edge_configs = []
@@ -1277,9 +1305,16 @@ def split_subcircuit(
     )
 
     # Write external edges separately (no neuroglial, independent edge_mappings)
-    if ext_edge_configs:
+    # For now, if both existing-external and newly-externalized configs exist for the same
+    # population, only write the newly-externalized ones (merge not yet implemented).
+    ext_pop_names = {cfg.src_node_name for cfg in ext_edge_configs}
+    filtered_existing_ext = [
+        cfg for cfg in existing_ext_edge_configs if cfg.src_node_name not in ext_pop_names
+    ]
+    all_ext_edge_configs = filtered_existing_ext + ext_edge_configs
+    if all_ext_edge_configs:
         ext_edge_files = _orchestrate_write_subcircuit_edges(
-            write_edge_configs=ext_edge_configs, id_mapping=id_mapping
+            write_edge_configs=all_ext_edge_configs, id_mapping=id_mapping
         )
         new_edge_files.update(ext_edge_files)
 
@@ -1289,7 +1324,15 @@ def split_subcircuit(
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
-    # Write external nodes
+    # Write existing external nodes (filtered from parent, skip if biophysical gather handles it)
+    for population_name, ids in existing_ext_node_ids.items():
+        if population_name in ext_nodes:
+            continue  # Will be written by the newly-externalized path
+        df = circuit.nodes[population_name].get(ids)
+        nodes_path = Path(output) / population_name / "nodes.h5"
+        new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
+
+    # Write newly-externalized nodes
     for population_name, orig_population_name in ext_nodes.items():
         ids = id_mapping[population_name].index.to_numpy()
         df = circuit.nodes[orig_population_name].get(ids)
