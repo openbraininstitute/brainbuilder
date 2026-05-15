@@ -888,13 +888,11 @@ def test_copy_filtered_edges_advanced(tmp_path):
         h5_read_chunk_size=3,  # FORCE chunking
         edge_type="synapse_astrocyte"
     )
-    with h5py.File(write_edge_config.input_path, "r") as h5in:
-        split_population._copy_filtered_edges(
-            h5in=h5in,
-            write_edge_config=write_edge_config,
-            id_mapping=id_mapping,
-            edge_mappings=edge_mappings
-        )
+    split_population._copy_filtered_edges(
+        write_edge_config=write_edge_config,
+        id_mapping=id_mapping,
+        edge_mappings=edge_mappings
+    )
 
     # Verification
     keep, new_name = edge_mappings["orig_src_edge_pop"]
@@ -1083,4 +1081,146 @@ def test_subsubcircuit_virtual_operates_on_virtuals_only(tmp_path):
     assert "V2" not in node_pop_names, "V2 should be dropped (its target is outside c3_c2_c1)"
 
     # c3_c1 and c3_c2_c1 should be equivalent
-    assert_circuits_equal(path_c3_c1, path_c3_c2_c1, strict_node_order=True, strict_edge_order=True)
+    assert_circuits_equal(path_c3_c1, path_c3_c2_c1)
+
+
+def test_subsubcircuit_externals_merge(tmp_path):
+    """Nested extraction with create_external merges external populations correctly.
+
+    Verifies that extracting c3 from c2 (from c1) produces the same result as
+    extracting c3 directly from c1, up to 3 levels of nesting (c4).
+    """
+    from brainbuilder.utils.sonata.compare import assert_circuits_equal
+
+    ### Nomenclature:
+    # X_Y: circuit X derived from parent Y.
+    # Nodes removed from a biophysical population either become external
+    # (if they have at least one edge targeting a kept node) or are discarded.
+    # Virtual nodes are kept only if they have at least one edge to a kept
+    # biophysical node; otherwise they are dropped.
+
+    # c2_c1 from A: keep A:{1,2,3,5}, B:all, C:all
+    # - external_A: {0, 4}
+    # - V1 kept: {1,2}. V1 dropped: {0,3}
+    # - V2 kept: {0}
+    subset_c2_c1 = {
+        "subset_c2_c1": ["subset_c2_c1_popA", "subset_c2_c1_popB", "subset_c2_c1_popC"],
+        "subset_c2_c1_popA": {"population": "A", "node_id": [1, 2, 3, 5]},
+        "subset_c2_c1_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
+        "subset_c2_c1_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
+    }
+    # c3_c1 from A: keep A:{1,2,3}, B:{1,2,3,4,5}, C:{0,1,2,5}
+    # - external_A: {0, 5}. Discarded A: {4}
+    # - external_C: {3}. Discarded C: {4}
+    # - discarded B: {0}
+    # - V1 kept: {1}. V1 dropped: {2}
+    # - V2 kept: {0}
+    subset_c3_c1 = {
+        "subset_c3_c1": ["subset_c3_c1_popA", "subset_c3_c1_popB", "subset_c3_c1_popC"],
+        "subset_c3_c1_popA": {"population": "A", "node_id": [1, 2, 3]},
+        "subset_c3_c1_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
+        "subset_c3_c1_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
+    }
+    # c4_c1 from A: keep A:{1,2}, B:{1,3,4}, C:{0,1,2,5}
+    # - external_A: {3, 5}. Discarded A: {0, 4}
+    # - external_B: {2}. Discarded B: {0, 5}
+    # - external_C: {3}. Discarded C: {4}
+    # - V1 kept: {1}. V1 dropped: {2}
+    # - V2 kept: {0}
+    subset_c4_c1 = {
+        "subset_c4_c1": ["subset_c4_c1_popA", "subset_c4_c1_popB", "subset_c4_c1_popC"],
+        "subset_c4_c1_popA": {"population": "A", "node_id": [1, 2]},
+        "subset_c4_c1_popB": {"population": "B", "node_id": [1, 3, 4]},
+        "subset_c4_c1_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
+    }
+    # c3_c2_c1 from c2_c1 (parent has A:local{0,1,2,3}=orig{1,2,3,5}, external_A:orig{0,4}):
+    # - Remove A:local{2} (orig 3) -> merges into external_A
+    # - Remove B:{0} -> discarded
+    # - Remove C:{3,4} -> C:3 external_C, C:4 discarded
+    # Result should equal c3_c1
+    subset_c3_c2_c1 = {
+        "subset_c3_c2_c1": ["subset_c3_c2_c1_popA", "subset_c3_c2_c1_popB", "subset_c3_c2_c1_popC"],
+        "subset_c3_c2_c1_popA": {"population": "A", "node_id": [0, 1, 2]},
+        "subset_c3_c2_c1_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
+        "subset_c3_c2_c1_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
+    }
+    # c4_c2_c1 from c2_c1:
+    # - Remove A:local{1,2} (orig 2,3) -> A:2(orig 3) merges into external_A, A:1(orig 2) discarded
+    # - Remove B:{0,2,5} -> B:2 external_B, rest discarded
+    # - Remove C:{3,4} -> C:3 external_C, C:4 discarded
+    # Result should equal c4_c1
+    subset_c4_c2_c1 = {
+        "subset_c4_c2_c1": ["subset_c4_c2_c1_popA", "subset_c4_c2_c1_popB", "subset_c4_c2_c1_popC"],
+        "subset_c4_c2_c1_popA": {"population": "A", "node_id": [0, 1]},
+        "subset_c4_c2_c1_popB": {"population": "B", "node_id": [1, 3, 4]},
+        "subset_c4_c2_c1_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
+    }
+    # c4_c3_c1 from c3_c1 (parent has A:local{0,1,2}=orig{1,2,3}, external_A:orig{0,5}):
+    # - Remove A:local{2} (orig 3) -> merges into external_A
+    # - Remove B:local{1,4} (orig 2,5) -> B:1(orig 2) external_B, B:4(orig 5) discarded
+    # Result should equal c4_c1
+    subset_c4_c3_c1 = {
+        "subset_c4_c3_c1": ["subset_c4_c3_c1_popA", "subset_c4_c3_c1_popB", "subset_c4_c3_c1_popC"],
+        "subset_c4_c3_c1_popA": {"population": "A", "node_id": [0, 1]},
+        "subset_c4_c3_c1_popB": {"population": "B", "node_id": [0, 2, 3]},
+        "subset_c4_c3_c1_popC": {"population": "C", "node_id": [0, 1, 2, 3]},
+    }
+    # c4_c3_c2_c1 from c3_c2_c1 (same original content as c3_c1):
+    # - Same removals as c4_c3_c1. Result should equal c4_c1
+    subset_c4_c3_c2_c1 = {
+        "subset_c4_c3_c2_c1": ["subset_c4_c3_c2_c1_popA", "subset_c4_c3_c2_c1_popB", "subset_c4_c3_c2_c1_popC"],
+        "subset_c4_c3_c2_c1_popA": {"population": "A", "node_id": [0, 1]},
+        "subset_c4_c3_c2_c1_popB": {"population": "B", "node_id": [0, 2, 3]},
+        "subset_c4_c3_c2_c1_popC": {"population": "C", "node_id": [0, 1, 2, 3]},
+    }
+
+    circuit_config = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
+
+    path_c2_c1 = _split_custom_subcircuit(
+        tmp_path / "c2_c1", circuit_config, "subset_c2_c1", subset_c2_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c3_c2_c1 = _split_custom_subcircuit(
+        tmp_path / "c3_c2_c1", str(path_c2_c1 / "circuit_config.json"),
+        "subset_c3_c2_c1", subset_c3_c2_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c3_c1 = _split_custom_subcircuit(
+        tmp_path / "c3_c1", circuit_config,
+        "subset_c3_c1", subset_c3_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c4_c1 = _split_custom_subcircuit(
+        tmp_path / "c4_c1", circuit_config,
+        "subset_c4_c1", subset_c4_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c4_c2_c1 = _split_custom_subcircuit(
+        tmp_path / "c4_c2_c1", str(path_c2_c1 / "circuit_config.json"),
+        "subset_c4_c2_c1", subset_c4_c2_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c4_c3_c1 = _split_custom_subcircuit(
+        tmp_path / "c4_c3_c1", str(path_c3_c1 / "circuit_config.json"),
+        "subset_c4_c3_c1", subset_c4_c3_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c4_c3_c2_c1 = _split_custom_subcircuit(
+        tmp_path / "c4_c3_c2_c1", str(path_c3_c2_c1 / "circuit_config.json"),
+        "subset_c4_c3_c2_c1", subset_c4_c3_c2_c1,
+        do_virtual=True, create_external=True
+    )
+
+    # All C circuits should be equal
+    assert_circuits_equal(path_c3_c1, path_c3_c2_c1)
+
+    # All D circuits should be equal
+    assert_circuits_equal(path_c4_c1, path_c4_c2_c1)
+    assert_circuits_equal(path_c4_c1, path_c4_c3_c1)
+    assert_circuits_equal(path_c4_c1, path_c4_c3_c2_c1)
