@@ -336,9 +336,7 @@ def _copy_filtered_edges(
                     _init_edge_group(orig_group, new_group, additional_attrs)
                     is_append = True  # subsequent sources append
 
-                total_chunks = math.ceil(
-                    len(orig_edges["source_node_id"]) / h5_read_chunk_size
-                )
+                total_chunks = math.ceil(len(orig_edges["source_node_id"]) / h5_read_chunk_size)
                 L.debug(
                     "Processing %s edges in %s chunks of size %s [src_edge_name=%s]",
                     len(orig_edges["source_node_id"]),
@@ -365,8 +363,7 @@ def _copy_filtered_edges(
                         )
 
                     assert src_edge_name not in edge_mappings, (
-                        f"Source edge population '{src_edge_name}' "
-                        "already exists in edge_mappings."
+                        f"Source edge population '{src_edge_name}' already exists in edge_mappings."
                     )
                     edge_mappings[src_edge_name] = (
                         _compute_edge_mapping(sl_and_masks=sl_and_masks, offset=offset),
@@ -1186,7 +1183,9 @@ def _resolve_original_ids(id_mapping, parent_circ):
                     orig_ids.loc[group_df.index[resolvable]] = backwards_mapped[
                         group_df.index[resolvable]
                     ].to_numpy()
-                    orig_ids.loc[group_df.index[~resolvable]] = group_df.index[~resolvable].to_numpy()
+                    orig_ids.loc[group_df.index[~resolvable]] = group_df.index[
+                        ~resolvable
+                    ].to_numpy()
             id_mapping[pop_name] = df.assign(**{ORIG_IDS: orig_ids.to_numpy()})
     else:
         for pop_name, df in id_mapping.items():
@@ -1307,7 +1306,9 @@ def split_subcircuit(
     ext_nodes = {}
     if create_external:
         existing_node_pop_names = list(split_populations.keys()) + list(virt_node_ids.keys())
-        existing_edge_pop_names = [cfg.dst_edge_name for cfg in bio_edge_configs + virt_edge_configs]
+        existing_edge_pop_names = [
+            cfg.dst_edge_name for cfg in bio_edge_configs + virt_edge_configs
+        ]
 
         existing_ext_edge_configs, existing_ext_node_ids = _gather_subcircuit_virtual_typed(
             output,
