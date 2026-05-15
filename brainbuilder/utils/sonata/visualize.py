@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Visualize a SONATA circuit as a graph with populations as clusters."""
 
-import json
 from collections import Counter
 from pathlib import Path
 
 import bluepysnap
 import h5py
+
+from brainbuilder.utils import load_json
 
 # Populations with more nodes than this threshold are shown as a single
 # cluster node with population-level edges instead of individual nodes.
@@ -32,7 +33,7 @@ def _load_id_mapping(circuit_config_path):
     Returns:
         dict: pop_name -> list of parent_ids, or None if no mapping exists.
     """
-    config = json.loads(Path(circuit_config_path).read_text())
+    config = load_json(circuit_config_path)
     mapping_path = config.get("components", {}).get("provenance", {}).get("id_mapping")
     if not mapping_path:
         return None
@@ -41,8 +42,7 @@ def _load_id_mapping(circuit_config_path):
     if not mapping_file.exists():
         return None
 
-    mapping = json.loads(mapping_file.read_text())
-    return mapping
+    return load_json(mapping_file)
 
 
 def draw_circuit(
