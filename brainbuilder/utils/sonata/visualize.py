@@ -14,10 +14,13 @@ from brainbuilder.utils import load_json
 _MAX_NODES_DETAILED = 10
 
 
-_TYPE_COLORS: dict[str, str] = {
-    "virtual": "lightblue",
-    "external": "lightsalmon",
-}
+def _color_for_type(type_label: str) -> str:
+    """Return a stable pastel color for a population type, derived from its name."""
+    h = hash(type_label) & 0xFFFFFF
+    r = 180 + (h & 0xFF) % 60
+    g = 180 + ((h >> 8) & 0xFF) % 60
+    b = 180 + ((h >> 16) & 0xFF) % 60
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 def _population_type(pop_name: str, pop_type: str | None) -> str:
@@ -87,7 +90,7 @@ def draw_circuit(
 
     for pop_name, pop in circuit.nodes.items():
         pop_type = _population_type(pop_name, pop.type)
-        color = _TYPE_COLORS.get(pop_type, "lightyellow")
+        color = _color_for_type(pop_type)
 
         parent_ids = None
         if id_mapping and pop_name in id_mapping:
