@@ -449,3 +449,22 @@ def resize_datatypes(file, population_name, population_type, attributes):
 
     click.secho(f"The following updates were performed:\n{updates}")
     click.secho(f"One should run `h5repack {file} output.h5` to repack the file", fg="green")
+
+
+@app.command()
+@click.argument("circuit-config", type=REQUIRED_PATH)
+@click.option("-o", "--output", help="Save to file (e.g., circuit.png). Otherwise opens viewer.")
+@click.option("-t", "--title", help="Title for the graph (default: parent directory name)")
+def visualize(circuit_config, output, title):
+    """Display a graph of circuit connectivity grouped by population.
+
+    Requires: pip install brainbuilder[viz] and system graphviz.
+    """
+    from brainbuilder.utils.sonata.visualize import draw_circuit
+
+    if not title:
+        title = Path(circuit_config).parent.name
+
+    draw_circuit(circuit_config, output_path=output, title=title)
+    if output:
+        click.echo(f"Saved to {output}")

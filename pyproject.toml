@@ -52,6 +52,7 @@ include = ["brainbuilder*"]
 [project.optional-dependencies]
 all = []  # for compatibility
 reindex = []  # for compatibility
+viz = ["graphviz"]
 
 [project.urls]
 Homepage = "https://openbraininstitute/brainbuilder"
