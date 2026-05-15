@@ -978,3 +978,39 @@ def test_external_no_nan_when_no_overlap_between_batches(tmp_path):
     )
     # new_ids should be contiguous starting from 0
     assert ext_a["new_id"] == list(range(len(ext_a["new_id"])))
+
+
+def test_external_nodes_file_contains_all_merged_ids(tmp_path):
+    """Test that external nodes.h5 contains IDs from all edges.
+
+    Scenario (same disjoint-batch setup as test_external_no_nan_when_no_overlap_between_batches):
+    - A__B contributes external node 0
+    - A__C contributes external nodes 3, 4
+    The nodes.h5 must contain all 3 external nodes.
+    """
+    node_set_def = {
+        "merge_trigger": ["merge_trigger_popA", "merge_trigger_popB", "merge_trigger_popC"],
+        "merge_trigger_popA": {"population": "A", "node_id": [5]},
+        "merge_trigger_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
+        "merge_trigger_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
+    }
+
+    circuit_config = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
+
+    output = _split_custom_subcircuit(
+        tmp_path / "out", circuit_config, "merge_trigger", node_set_def,
+        do_virtual=False, create_external=True
+    )
+
+    mapping = load_json(output / "id_mapping.json")
+    ext_a = mapping["external_A"]
+    assert len(ext_a["parent_id"]) == 3, (
+        f"Expected 3 external nodes, got {len(ext_a['parent_id'])}: {ext_a['parent_id']}"
+    )
+
+    # nodes.h5 must be consistent with id_mapping
+    with h5py.File(output / "external_A" / "nodes.h5", "r") as h5:
+        node_count = len(h5["nodes/external_A/0/model_type"])
+        assert node_count == 3, (
+            f"nodes.h5 has {node_count} nodes but id_mapping has 3"
+        )
