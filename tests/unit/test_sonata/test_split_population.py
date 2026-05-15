@@ -983,7 +983,7 @@ def test_external_no_nan_when_no_overlap_between_batches(tmp_path):
 def test_external_nodes_file_contains_all_merged_ids(tmp_path):
     """Test that external nodes.h5 contains IDs from all edges.
 
-    Scenario (same disjoint-batch setup as the NaN test):
+    Scenario (same disjoint-batch setup as test_external_no_nan_when_no_overlap_between_batches):
     - A__B contributes external node 0
     - A__C contributes external nodes 3, 4
     The nodes.h5 must contain all 3 external nodes.
