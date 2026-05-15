@@ -74,7 +74,7 @@ def draw_circuit(
             "Also requires system graphviz: brew install graphviz"
         ) from e
 
-    circuit = bluepysnap.Circuit(str(circuit_config_path))
+    circuit = bluepysnap.Circuit(circuit_config_path)
     id_mapping = _load_id_mapping(circuit_config_path)
 
     dot = graphviz.Digraph("circuit", format="png")
