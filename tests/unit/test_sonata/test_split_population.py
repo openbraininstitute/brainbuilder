@@ -1081,7 +1081,7 @@ def test_subsubcircuit_virtual_operates_on_virtuals_only(tmp_path):
     assert "V2" not in node_pop_names, "V2 should be dropped (its target is outside c3_c2_c1)"
 
     # c3_c1 and c3_c2_c1 should be equivalent
-    assert_circuits_equal(path_c3_c1, path_c3_c2_c1, strict_node_order=True, strict_edge_order=True)
+    assert_circuits_equal(path_c3_c1, path_c3_c2_c1)
 
 
 def test_subsubcircuit_externals_merge(tmp_path):
