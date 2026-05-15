@@ -5,7 +5,7 @@ from collections import Counter
 from pathlib import Path
 
 import bluepysnap
-import h5py
+from bluepysnap.sonata_constants import Edge
 
 from brainbuilder.utils import load_json
 
@@ -63,10 +63,7 @@ def draw_circuit(
             Otherwise, render to a temp file and open it.
         max_nodes_detailed: Populations with more nodes than this are shown
             as a single summary node.
-
-    Requires:
-        pip install brainbuilder[viz]
-        System graphviz: brew install graphviz (macOS) / apt install graphviz (Linux)
+        title: Optional title displayed at the top of the graph.
     """
     try:
         import graphviz
@@ -92,7 +89,6 @@ def draw_circuit(
         pop_type = _population_type(pop_name, pop.type)
         color = _TYPE_COLORS.get(pop_type, "lightyellow")
 
-        # Get original IDs for labels if mapping exists
         parent_ids = None
         if id_mapping and pop_name in id_mapping:
             entry = id_mapping[pop_name]
@@ -129,9 +125,9 @@ def draw_circuit(
         src_detailed = src_name in detailed_pops
         tgt_detailed = tgt_name in detailed_pops
 
-        with h5py.File(edge.h5_filepath, "r") as h5:
-            sgids = h5[f"edges/{edge_name}/source_node_id"][:]
-            tgids = h5[f"edges/{edge_name}/target_node_id"][:]
+        edges_df = edge.get(edge.ids(), [Edge.SOURCE_NODE_ID, Edge.TARGET_NODE_ID])
+        sgids = edges_df[Edge.SOURCE_NODE_ID].to_numpy()
+        tgids = edges_df[Edge.TARGET_NODE_ID].to_numpy()
 
         if src_detailed and tgt_detailed:
             edge_counts = Counter(zip(sgids.tolist(), tgids.tolist()))
