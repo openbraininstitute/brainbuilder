@@ -1192,6 +1192,57 @@ def _resolve_original_ids(id_mapping, parent_circ):
             id_mapping[pop_name] = df.assign(**{ORIG_IDS: df.index.to_numpy()})
 
 
+def _sort_nodes_by_original_id(id_mapping, ext_nodes):
+    """Sort node populations by original_id and reassign new_id sequentially.
+
+    Ensures deterministic node ordering regardless of gather order. Currently only
+    external populations need reordering (biophysical and virtual are already sorted
+    by construction).
+    """
+    for population_name in id_mapping:
+        df = id_mapping[population_name]
+        if population_name not in ext_nodes:
+            assert df[ORIG_IDS].is_monotonic_increasing, (
+                f"Population '{population_name}' expected to be already sorted by original_id"
+            )
+            continue
+        if df.index.dtype == float:
+            df.index = df.index.astype(int)
+        df_sorted = df.sort_values(ORIG_IDS)
+        df_sorted[NEW_IDS] = range(len(df_sorted))
+        id_mapping[population_name] = df_sorted
+
+
+def _merge_external_edge_configs(output, existing_ext_edge_configs, ext_edge_configs, id_mapping):
+    """Build merged WriteEdgeConfigs for external edges.
+
+    In nested extractions, an external edge population may have edges from two input
+    files: the parent's existing external edges and newly-externalized edges from the
+    parent's biophysical file. This function combines them into single multi-input
+    configs with source_filter so _copy_filtered_edges processes each input against
+    the correct subset of id_mapping.
+    """
+    merged = []
+    existing_by_dst = {}
+
+    for cfg in existing_ext_edge_configs:
+        cfg.output_path = Path(output) / (cfg.dst_edge_name + ".h5")
+        cfg.inputs = [(p, e, cfg.src_node_name) for p, e, _ in cfg.inputs]
+        existing_by_dst[cfg.dst_edge_name] = cfg
+
+    for cfg in ext_edge_configs:
+        sources = id_mapping[cfg.src_mapping][SOURCE].unique()
+        src_pop = next(s for s in sources if s != cfg.src_node_name)
+        cfg.inputs = [(p, e, src_pop) for p, e, _ in cfg.inputs]
+        if cfg.dst_edge_name in existing_by_dst:
+            existing_cfg = existing_by_dst.pop(cfg.dst_edge_name)
+            cfg.inputs = existing_cfg.inputs + cfg.inputs
+        merged.append(cfg)
+
+    merged.extend(existing_by_dst.values())
+    return merged
+
+
 def _write_mapping(
     output: Path, parent_circ: bluepysnap.Circuit, id_mapping: dict[str, pd.DataFrame]
 ) -> str:
@@ -1329,6 +1380,11 @@ def split_subcircuit(
     _resolve_original_ids(id_mapping, circuit)
 
     # --- MANIPULATE phase ---
+    _sort_nodes_by_original_id(id_mapping, ext_nodes)
+
+    merged_ext_edge_configs = _merge_external_edge_configs(
+        output, existing_ext_edge_configs, ext_edge_configs, id_mapping
+    )
 
     # --- WRITE phase ---
     # Write biophysical nodes
@@ -1339,31 +1395,6 @@ def split_subcircuit(
     new_edge_files = _orchestrate_write_subcircuit_edges(
         write_edge_configs=bio_virt_edge_configs, id_mapping=id_mapping
     )
-
-    # Write external edges separately (no neuroglial, independent edge_mappings)
-    # Merge existing-external and newly-externalized configs that share the same
-    # dst_edge_name into single multi-input configs with source filters.
-    merged_ext_edge_configs = []
-    existing_ext_by_dst = {}
-    for cfg in existing_ext_edge_configs:
-        cfg.output_path = Path(output) / (cfg.dst_edge_name + ".h5")
-        # Add source_filter to existing external inputs
-        cfg.inputs = [(p, e, cfg.src_node_name) for p, e, _ in cfg.inputs]
-        existing_ext_by_dst[cfg.dst_edge_name] = cfg
-
-    for cfg in ext_edge_configs:
-        # Add source_filter to newly-externalized inputs (source = the biophysical pop name)
-        src_pop = id_mapping[cfg.src_mapping][SOURCE].iloc[-1]  # last entry is from biophysical
-        cfg.inputs = [(p, e, src_pop) for p, e, _ in cfg.inputs]
-        if cfg.dst_edge_name in existing_ext_by_dst:
-            # Merge: prepend existing external's inputs
-            existing_cfg = existing_ext_by_dst.pop(cfg.dst_edge_name)
-            cfg.inputs = existing_cfg.inputs + cfg.inputs
-        merged_ext_edge_configs.append(cfg)
-
-    # Add remaining existing-external configs that have no newly-externalized counterpart
-    for cfg in existing_ext_by_dst.values():
-        merged_ext_edge_configs.append(cfg)
 
     if merged_ext_edge_configs:
         ext_edge_files = _orchestrate_write_subcircuit_edges(
