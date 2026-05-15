@@ -27,8 +27,8 @@ def assert_circuits_equal(path_a, path_b, strict_order=False):
     path_a = Path(path_a)
     path_b = Path(path_b)
 
-    circ_a = bluepysnap.Circuit(str(path_a / "circuit_config.json"))
-    circ_b = bluepysnap.Circuit(str(path_b / "circuit_config.json"))
+    circ_a = bluepysnap.Circuit(path_a / "circuit_config.json")
+    circ_b = bluepysnap.Circuit(path_b / "circuit_config.json")
     mapping_a = load_json(path_a / "id_mapping.json")
     mapping_b = load_json(path_b / "id_mapping.json")
 
