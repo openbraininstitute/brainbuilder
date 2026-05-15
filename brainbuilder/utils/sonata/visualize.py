@@ -3,7 +3,6 @@
 
 import json
 from collections import Counter
-from enum import StrEnum
 from pathlib import Path
 
 import bluepysnap
@@ -14,28 +13,17 @@ import h5py
 _MAX_NODES_DETAILED = 10
 
 
-class PopulationType(StrEnum):
-    """Classification of a node population for visualization purposes."""
+_TYPE_COLORS: dict[str, str] = {
+    "virtual": "lightblue",
+    "external": "lightsalmon",
+}
 
-    BIOPHYSICAL = "biophysical"
-    VIRTUAL = "virtual"
-    EXTERNAL = "external"
 
-    @property
-    def color(self) -> str:
-        return {
-            PopulationType.BIOPHYSICAL: "lightyellow",
-            PopulationType.VIRTUAL: "lightblue",
-            PopulationType.EXTERNAL: "lightsalmon",
-        }.get(self, "white")
-
-    @classmethod
-    def from_population(cls, pop_name: str, pop_type: str | None) -> "PopulationType":
-        if pop_name.startswith("external_"):
-            return cls.EXTERNAL
-        if pop_type == "virtual":
-            return cls.VIRTUAL
-        return cls.BIOPHYSICAL
+def _population_type(pop_name: str, pop_type: str | None) -> str:
+    """Derive a display type label for a node population."""
+    if pop_name.startswith("external_"):
+        return "external"
+    return pop_type or "local"
 
 
 def _load_id_mapping(circuit_config_path):
@@ -101,7 +89,8 @@ def draw_circuit(
     detailed_pops = set()
 
     for pop_name, pop in circuit.nodes.items():
-        pop_type = PopulationType.from_population(pop_name, pop.type)
+        pop_type = _population_type(pop_name, pop.type)
+        color = _TYPE_COLORS.get(pop_type, "lightyellow")
 
         # Get original IDs for labels if mapping exists
         parent_ids = None
@@ -115,7 +104,7 @@ def draw_circuit(
                 sub.attr(
                     label=f"{pop_name} ({pop_type}, {pop.size})",
                     style="filled",
-                    color=pop_type.color,
+                    color=color,
                 )
                 prev = None
                 for i in range(pop.size):
@@ -130,7 +119,7 @@ def draw_circuit(
                 label=f"{pop_name}\n({pop_type}, {pop.size})",
                 shape="box",
                 style="filled",
-                fillcolor=pop_type.color,
+                fillcolor=color,
             )
 
     # Edges — group duplicates and show count
