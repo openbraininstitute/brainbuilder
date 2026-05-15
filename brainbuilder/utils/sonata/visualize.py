@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Visualize a SONATA circuit as a graph with populations as clusters."""
 
-from collections import Counter
+import hashlib
+import tempfile
 from pathlib import Path
 
 import bluepysnap
@@ -14,21 +15,18 @@ from brainbuilder.utils import load_json
 _MAX_NODES_DETAILED = 10
 
 
-_TYPE_COLORS = {
-    "external": "lightsalmon",
-    "virtual": "lightblue",
-}
-_DEFAULT_COLOR = "lightyellow"  # biophysical / local / others
-
-
 def _color_for_type(type_label: str) -> str:
-    """Return a stable color for a population type.
+    """Return a stable pastel color for a population type, derived from its name.
 
-    External and virtual populations have fixed colors so that equivalent
-    circuits always render consistently. All other types (biophysical, local,
-    etc.) share a single default color.
+    Uses MD5 hashing to guarantee the same type always maps to the same color
+    across different runs and machines (unlike Python's built-in hash which is
+    randomized per process).
     """
-    return _TYPE_COLORS.get(type_label, _DEFAULT_COLOR)
+    digest = hashlib.md5(type_label.encode()).digest()
+    r = 180 + digest[0] % 60
+    g = 180 + digest[1] % 60
+    b = 180 + digest[2] % 60
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 def _population_type(pop_name: str, pop_type: str | None) -> str:
@@ -137,11 +135,9 @@ def draw_circuit(
         tgt_detailed = tgt_name in detailed_pops
 
         edges_df = edge.get(edge.ids(), [Edge.SOURCE_NODE_ID, Edge.TARGET_NODE_ID])
-        sgids = edges_df[Edge.SOURCE_NODE_ID].to_numpy()
-        tgids = edges_df[Edge.TARGET_NODE_ID].to_numpy()
 
         if src_detailed and tgt_detailed:
-            edge_counts = Counter(zip(sgids.tolist(), tgids.tolist()))
+            edge_counts = edges_df.value_counts()
             for (s, t), count in edge_counts.items():
                 attrs = {}
                 if count > 1:
@@ -149,15 +145,19 @@ def draw_circuit(
                     attrs["fontsize"] = "8"
                 dot.edge(f"{src_name}__{s}", f"{tgt_name}__{t}", **attrs)
         else:
-            src_node = f"{src_name}__summary" if not src_detailed else f"{src_name}__{sgids[0]}"
-            tgt_node = f"{tgt_name}__summary" if not tgt_detailed else f"{tgt_name}__{tgids[0]}"
-            dot.edge(src_node, tgt_node, label=str(len(sgids)), fontsize="8")
+            src_node = (
+                f"{src_name}__summary"
+                if not src_detailed
+                else f"{src_name}__{edges_df[Edge.SOURCE_NODE_ID].iloc[0]}"
+            )
+            tgt_node = (
+                f"{tgt_name}__summary"
+                if not tgt_detailed
+                else f"{tgt_name}__{edges_df[Edge.TARGET_NODE_ID].iloc[0]}"
+            )
+            dot.edge(src_node, tgt_node, label=str(len(edges_df)), fontsize="8")
 
     if output_path:
         dot.render(outfile=output_path, cleanup=True)
     else:
-        import tempfile
-
-        filename = title.replace(" ", "_") if title else "circuit"
-        filepath = Path(tempfile.gettempdir()) / filename
-        dot.render(filename=str(filepath), view=True, cleanup=True)
+        dot.render(directory=tempfile.gettempdir(), view=True, cleanup=True)
