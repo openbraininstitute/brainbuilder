@@ -512,7 +512,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             expected_mapping["V2"] = {"new_id": [0], "parent_id": [0], "parent_name": "V2", "original_id": _orig_id_map([0], "V2"), "original_name": _orig_name_map("V2")}
 
         if has_external:
-            expected_mapping["external_A"] = {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": _orig_id_map([5, 3], "A"), "original_name": _orig_name_map("A")}
+            expected_mapping["external_A"] = {"new_id": [0, 1], "parent_id": [3, 5], "parent_name": "A", "original_id": _orig_id_map([3, 5], "A"), "original_name": _orig_name_map("A")}
 
         mapping = load_json(path / "id_mapping.json")
         assert mapping == expected_mapping
@@ -557,9 +557,9 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
 
     mapping = load_json(tmp_path / "id_mapping.json")
     if from_subcircuit:
-        assert mapping["external_A"] == {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": [1005, 1003], "original_name": "AllA"}
+        assert mapping["external_A"] == {"new_id": [0, 1], "parent_id": [3, 5], "parent_name": "A", "original_id": [1003, 1005], "original_name": "AllA"}
     else:
-        assert mapping["external_A"] == {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": [5, 3], "original_name": "A"}
+        assert mapping["external_A"] == {"new_id": [0, 1], "parent_id": [3, 5], "parent_name": "A", "original_id": [3, 5], "original_name": "A"}
     assert "external_B" not in mapping
     assert "external_C" not in mapping
 
@@ -571,7 +571,7 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
         assert h5["edges/external_A__B/target_node_id"].attrs["node_population"] == "B"
         assert len(h5["edges/external_A__B/0/delay"]) == 1
         assert h5["edges/external_A__B/0/delay"][0] == 0.5
-        assert list(h5["edges/external_A__B/source_node_id"]) == [0]
+        assert list(h5["edges/external_A__B/source_node_id"]) == [1]
         assert list(h5["edges/external_A__B/target_node_id"]) == [3]
 
     with h5py.File(tmp_path / "external_A__C.h5", "r") as h5:
@@ -580,7 +580,7 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
         assert len(h5["edges/external_A__C/0/delay"]) == 2
         assert h5["edges/external_A__C/0/delay"][0] == 0.5
         assert h5["edges/external_A__C/0/delay"][1] == 0.5
-        assert list(h5["edges/external_A__C/source_node_id"]) == [0, 1]
+        assert list(h5["edges/external_A__C/source_node_id"]) == [1, 0]
         assert list(h5["edges/external_A__C/target_node_id"]) == [3, 1]
 
     networks = load_json(tmp_path / "circuit_config.json")["networks"]
@@ -1081,7 +1081,7 @@ def test_subsubcircuit_virtual_operates_on_virtuals_only(tmp_path):
     assert "V2" not in node_pop_names, "V2 should be dropped (its target is outside c3_c2_c1)"
 
     # c3_c1 and c3_c2_c1 should be equivalent
-    assert_circuits_equal(path_c3_c1, path_c3_c2_c1)
+    assert_circuits_equal(path_c3_c1, path_c3_c2_c1, strict_node_order=True)
 
 
 def test_subsubcircuit_externals_merge(tmp_path):
@@ -1218,9 +1218,9 @@ def test_subsubcircuit_externals_merge(tmp_path):
     )
 
     # All C circuits should be equal
-    assert_circuits_equal(path_c3_c1, path_c3_c2_c1)
+    assert_circuits_equal(path_c3_c1, path_c3_c2_c1, strict_node_order=True)
 
     # All D circuits should be equal
-    assert_circuits_equal(path_c4_c1, path_c4_c2_c1)
-    assert_circuits_equal(path_c4_c1, path_c4_c3_c1)
-    assert_circuits_equal(path_c4_c1, path_c4_c3_c2_c1)
+    assert_circuits_equal(path_c4_c1, path_c4_c2_c1, strict_node_order=True)
+    assert_circuits_equal(path_c4_c1, path_c4_c3_c1, strict_node_order=True)
+    assert_circuits_equal(path_c4_c1, path_c4_c3_c2_c1, strict_node_order=True)
