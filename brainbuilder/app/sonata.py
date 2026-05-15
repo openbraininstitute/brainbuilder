@@ -474,12 +474,18 @@ def visualize(circuit_config, output, title):
 @click.argument("circuit-a", type=REQUIRED_PATH_DIR)
 @click.argument("circuit-b", type=REQUIRED_PATH_DIR)
 @click.option(
-    "--strict-order",
+    "--strict-node-order",
     is_flag=True,
     default=False,
-    help="Require same node and edge ordering",
+    help="Require same node ordering per population",
 )
-def compare(circuit_a, circuit_b, strict_order):
+@click.option(
+    "--strict-edge-order",
+    is_flag=True,
+    default=False,
+    help="Require same edge ordering per edge population",
+)
+def compare(circuit_a, circuit_b, strict_node_order, strict_edge_order):
     """Compare two extracted circuits for equivalence using original IDs.
 
     Both directories must contain circuit_config.json and id_mapping.json.
@@ -488,7 +494,12 @@ def compare(circuit_a, circuit_b, strict_order):
     from brainbuilder.utils.sonata.compare import assert_circuits_equal
 
     try:
-        assert_circuits_equal(circuit_a, circuit_b, strict_order=strict_order)
+        assert_circuits_equal(
+            circuit_a,
+            circuit_b,
+            strict_node_order=strict_node_order,
+            strict_edge_order=strict_edge_order,
+        )
         click.secho("Circuits are equal.", fg="green")
     except AssertionError as e:
         click.secho(f"Circuits differ: {e}", fg="red")

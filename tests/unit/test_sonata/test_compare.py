@@ -52,7 +52,7 @@ def test_assert_circuits_equal_same_extraction(tmp_path):
 
     # Should not raise
     assert_circuits_equal(path_a, path_b)
-    assert_circuits_equal(path_a, path_b, strict_order=True)
+    assert_circuits_equal(path_a, path_b, strict_node_order=True, strict_edge_order=True)
 
 
 def test_assert_circuits_equal_different_subsets_fail(tmp_path):

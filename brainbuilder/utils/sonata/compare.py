@@ -9,7 +9,7 @@ import h5py
 from brainbuilder.utils import load_json
 
 
-def assert_circuits_equal(path_a, path_b, strict_order=False):
+def assert_circuits_equal(path_a, path_b, strict_node_order=False, strict_edge_order=False):
     """Assert two extracted circuits are equal using original IDs.
 
     Checks that they have the same populations with the same original nodes,
@@ -18,8 +18,8 @@ def assert_circuits_equal(path_a, path_b, strict_order=False):
     Args:
         path_a: Path to first circuit directory.
         path_b: Path to second circuit directory.
-        strict_order: If True, require same node and edge ordering.
-            If False (default), allow reordering.
+        strict_node_order: If True, require same node ordering per population.
+        strict_edge_order: If True, require same edge ordering per edge population.
 
     Raises:
         AssertionError: If the circuits differ.
@@ -41,7 +41,7 @@ def assert_circuits_equal(path_a, path_b, strict_order=False):
     for pop_name in circ_a.nodes.keys():
         orig_a = mapping_a[pop_name]["original_id"]
         orig_b = mapping_b[pop_name]["original_id"]
-        if strict_order:
+        if strict_node_order:
             assert orig_a == orig_b, (
                 f"Population '{pop_name}' original_ids differ: {orig_a} vs {orig_b}"
             )
@@ -81,7 +81,7 @@ def assert_circuits_equal(path_a, path_b, strict_order=False):
         edges_a = [(orig_src_a[int(s)], orig_tgt_a[int(t)]) for s, t in zip(sgids_a, tgids_a)]
         edges_b = [(orig_src_b[int(s)], orig_tgt_b[int(t)]) for s, t in zip(sgids_b, tgids_b)]
 
-        if strict_order:
+        if strict_edge_order:
             assert edges_a == edges_b, (
                 f"Edge population '{edge_name}' differs:\n  {edges_a}\n  vs\n  {edges_b}"
             )
