@@ -981,16 +981,12 @@ def test_external_no_nan_when_no_overlap_between_batches(tmp_path):
 
 
 def test_external_nodes_file_contains_all_merged_ids(tmp_path):
-    """Test that external nodes.h5 contains IDs from ALL edges, not just the last.
+    """Test that external nodes.h5 contains IDs from all edges.
 
-    The bug: new_nodes dict was overwritten on each edge iteration, so only the
-    last edge's source IDs were written to nodes.h5. The fix uses the accumulated
-    id_mapping index instead.
-
-    Uses the same disjoint-batch scenario as the NaN test:
+    Scenario (same disjoint-batch setup as the NaN test):
     - A__B contributes external node 0
     - A__C contributes external nodes 3, 4
-    The nodes.h5 must contain all 3 nodes, not just {3, 4} from the last edge.
+    The nodes.h5 must contain all 3 external nodes.
     """
     node_set_def = {
         "merge_trigger": ["merge_trigger_popA", "merge_trigger_popB", "merge_trigger_popC"],
@@ -1006,17 +1002,15 @@ def test_external_nodes_file_contains_all_merged_ids(tmp_path):
         do_virtual=False, create_external=True
     )
 
-    # id_mapping should have all 3 external nodes
     mapping = load_json(output / "id_mapping.json")
     ext_a = mapping["external_A"]
     assert len(ext_a["parent_id"]) == 3, (
         f"Expected 3 external nodes, got {len(ext_a['parent_id'])}: {ext_a['parent_id']}"
     )
 
-    # The nodes.h5 file must contain the same number of nodes as the id_mapping
+    # nodes.h5 must be consistent with id_mapping
     with h5py.File(output / "external_A" / "nodes.h5", "r") as h5:
         node_count = len(h5["nodes/external_A/0/model_type"])
         assert node_count == 3, (
-            f"nodes.h5 has {node_count} nodes but id_mapping has 3. "
-            "Nodes file is missing merged IDs from multiple edges."
+            f"nodes.h5 has {node_count} nodes but id_mapping has 3"
         )
