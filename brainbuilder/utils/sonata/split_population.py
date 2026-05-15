@@ -54,8 +54,8 @@ class WriteEdgeConfig:
     dst_node_name: str
     src_edge_name: str
     dst_edge_name: str
-    src_mapping: pd.DataFrame
-    dst_mapping: pd.DataFrame
+    src_mapping: str
+    dst_mapping: str
     h5_read_chunk_size: int | None = None
     edge_type: type[bytes] | None = None
 
@@ -240,6 +240,7 @@ def _copy_filtered_edges(
     h5in: h5py.File,
     h5out: h5py.File,
     write_edge_config: WriteEdgeConfig,
+    id_mapping: dict[str, pd.DataFrame],
     edge_mappings: dict[str, tuple[pd.DataFrame, str]] = None,
 ):
     """
@@ -297,8 +298,8 @@ def _copy_filtered_edges(
 
     _init_edge_group(orig_group, new_group, additional_attrs)
 
-    sgids_new = write_edge_config.src_mapping.index.to_numpy()
-    tgids_new = write_edge_config.dst_mapping.index.to_numpy()
+    sgids_new = id_mapping[write_edge_config.src_mapping].index.to_numpy()
+    tgids_new = id_mapping[write_edge_config.dst_mapping].index.to_numpy()
     assert (sgids_new >= 0).all(), "Source population ids must be positive."
     assert (tgids_new >= 0).all(), "Target population ids must be positive."
 
@@ -347,8 +348,8 @@ def _copy_filtered_edges(
         sl_and_masks=sl_and_masks,
         new_edges=new_edges,
         orig_edges=orig_edges,
-        src_mapping=write_edge_config.src_mapping,
-        dst_mapping=write_edge_config.dst_mapping,
+        src_mapping=id_mapping[write_edge_config.src_mapping],
+        dst_mapping=id_mapping[write_edge_config.dst_mapping],
         edge_mappings=edge_mappings,
         is_neuroglial=is_neuroglial,
     )
@@ -439,12 +440,16 @@ def _write_masked_edges(
 
 
 def _get_node_counts(
-    h5out: h5py.File, new_edge_pop_name: str, src_mapping: pd.DataFrame, dst_mapping: pd.DataFrame
+    h5out: h5py.File,
+    new_edge_pop_name: str,
+    id_mapping: dict[str, pd.DataFrame],
+    src_mapping: str,
+    dst_mapping: str,
 ):
     """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
 
-    source_node_count = int(np.max(src_mapping)) + 1
-    target_node_count = int(np.max(dst_mapping)) + 1
+    source_node_count = int(np.max(id_mapping[src_mapping])) + 1
+    target_node_count = int(np.max(id_mapping[dst_mapping])) + 1
 
     new_edges = h5out["edges"][new_edge_pop_name]
     edge_count = len(new_edges["source_node_id"])
@@ -495,16 +500,21 @@ def _write_edges(
                 dst_node_name=dst_node_pop,
                 src_edge_name=_get_unique_population(h5in["edges"]),
                 dst_edge_name=edge_pop_name,
-                src_mapping=id_mapping[src_node_pop],
-                dst_mapping=id_mapping[dst_node_pop],
+                src_mapping=src_node_pop,
+                dst_mapping=dst_node_pop,
                 h5_read_chunk_size=h5_read_chunk_size,
             )
 
             L.debug("Writing to  %s", write_edge_config.output_path)
             with h5py.File(write_edge_config.output_path, "w") as h5out:
-                _copy_filtered_edges(h5in=h5in, h5out=h5out, write_edge_config=write_edge_config)
+                _copy_filtered_edges(
+                    h5in=h5in,
+                    h5out=h5out,
+                    write_edge_config=write_edge_config,
+                    id_mapping=id_mapping,
+                )
                 edge_count, sgid_count, tgid_count = _get_node_counts(
-                    h5out, edge_pop_name, id_mapping[src_node_pop], id_mapping[dst_node_pop]
+                    h5out, edge_pop_name, id_mapping, src_node_pop, dst_node_pop
                 )
 
             # after the h5 file is closed, it's indexed if valid, or it's removed if empty
@@ -659,7 +669,9 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
 
 
 def _write_subcircuit_edges(
-    write_edge_config: WriteEdgeConfig, edge_mappings: dict[str, tuple[pd.DataFrame, str]]
+    write_edge_config: WriteEdgeConfig,
+    id_mapping: dict[str, pd.DataFrame],
+    edge_mappings: dict[str, tuple[pd.DataFrame, str]],
 ):
     """copy a population to an edge file
 
@@ -688,12 +700,14 @@ def _write_subcircuit_edges(
                 h5in=h5in,
                 h5out=h5out,
                 write_edge_config=write_edge_config,
+                id_mapping=id_mapping,
                 edge_mappings=edge_mappings,
             )
 
             edge_count, sgid_count, tgid_count = _get_node_counts(
                 h5out=h5out,
                 new_edge_pop_name=write_edge_config.dst_edge_name,
+                id_mapping=id_mapping,
                 src_mapping=write_edge_config.src_mapping,
                 dst_mapping=write_edge_config.dst_mapping,
             )
@@ -757,18 +771,22 @@ def _write_subcircuit_biological(
                 dst_node_name=edge.target.name,
                 src_edge_name=edge_pop_name,
                 dst_edge_name=edge_pop_name,
-                src_mapping=id_mapping[edge.source.name],
-                dst_mapping=id_mapping[edge.target.name],
+                src_mapping=edge.source.name,
+                dst_mapping=edge.target.name,
                 edge_type=edge.type,
             )
             write_edge_configs.append(write_edge_config)
 
-    new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
+    new_edges_files = _orchestrate_write_subcircuit_edges(
+        write_edge_configs=write_edge_configs, id_mapping=id_mapping
+    )
 
     return new_node_files, new_edges_files
 
 
-def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig]):
+def _orchestrate_write_subcircuit_edges(
+    write_edge_configs: list[WriteEdgeConfig], id_mapping: dict[str, pd.DataFrame]
+):
     """Write subcircuit edge files in the correct order and propagate edge ID mappings.
 
     Neuron–neuron edges must be processed first because neuro–glial
@@ -790,7 +808,7 @@ def _orchestrate_write_subcircuit_edges(write_edge_configs: list[WriteEdgeConfig
 
     for write_edge_config in write_edge_configs_sorted:
         new_edges_files[write_edge_config.dst_edge_name] = _write_subcircuit_edges(
-            write_edge_config=write_edge_config, edge_mappings=edge_mappings
+            write_edge_config=write_edge_config, id_mapping=id_mapping, edge_mappings=edge_mappings
         )
 
     return new_edges_files
@@ -938,15 +956,17 @@ def _write_subcircuit_external(
                 dst_node_name=edge.target.name,
                 src_edge_name=name,
                 dst_edge_name=new_name,
-                src_mapping=wanted_src_ids,
-                dst_mapping=id_mapping[edge.target.name],
+                src_mapping=new_source_pop_name,
+                dst_mapping=edge.target.name,
                 edge_type=edge.type,
             )
             write_edge_configs.append(write_edge_config)
 
             new_nodes[new_source_pop_name] = edge.source.name
 
-    new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
+    new_edges_files = _orchestrate_write_subcircuit_edges(
+        write_edge_configs=write_edge_configs, id_mapping=id_mapping
+    )
 
     new_node_files = {}
     # write new virtual nodes from originally non-virtual populations
@@ -1030,13 +1050,15 @@ def _write_subcircuit_virtual(
             dst_node_name=edge.target.name,
             src_edge_name=edge_pop_name,
             dst_edge_name=edge_pop_name,
-            src_mapping=id_mapping[edge.source.name],
-            dst_mapping=id_mapping[edge.target.name],
+            src_mapping=edge.source.name,
+            dst_mapping=edge.target.name,
             edge_type=edge.type,
         )
         write_edge_configs.append(write_edge_config)
 
-    new_edges_files = _orchestrate_write_subcircuit_edges(write_edge_configs=write_edge_configs)
+    new_edges_files = _orchestrate_write_subcircuit_edges(
+        write_edge_configs=write_edge_configs, id_mapping=id_mapping
+    )
 
     # write virtual nodes based on virtual populations
     for population_name, ids in pop_used_source_node_ids.items():

@@ -871,6 +871,11 @@ def test_copy_filtered_edges_advanced(tmp_path):
 
     # Run
 
+    id_mapping = {
+        "orig_src_node_pop": mapping,
+        "orig_dst_node_pop": mapping,
+    }
+
     write_edge_config = split_population.WriteEdgeConfig(
         output_path=outfile,
         input_path=infile,
@@ -878,8 +883,8 @@ def test_copy_filtered_edges_advanced(tmp_path):
         dst_node_name="orig_dst_node_pop",
         src_edge_name="orig_src_edge_pop",
         dst_edge_name="new_src_edge_pop",
-        src_mapping=mapping,
-        dst_mapping=mapping,
+        src_mapping="orig_src_node_pop",
+        dst_mapping="orig_dst_node_pop",
         h5_read_chunk_size=3,  # FORCE chunking
         edge_type="synapse_astrocyte"
     )
@@ -888,6 +893,7 @@ def test_copy_filtered_edges_advanced(tmp_path):
             h5in=h5in,
             h5out=h5out,
             write_edge_config=write_edge_config,
+            id_mapping=id_mapping,
             edge_mappings=edge_mappings
         )
 
