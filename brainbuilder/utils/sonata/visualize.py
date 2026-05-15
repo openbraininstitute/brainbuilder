@@ -14,13 +14,21 @@ from brainbuilder.utils import load_json
 _MAX_NODES_DETAILED = 10
 
 
+_TYPE_COLORS = {
+    "external": "lightsalmon",
+    "virtual": "lightblue",
+}
+_DEFAULT_COLOR = "lightyellow"  # biophysical / local / others
+
+
 def _color_for_type(type_label: str) -> str:
-    """Return a stable pastel color for a population type, derived from its name."""
-    h = hash(type_label) & 0xFFFFFF
-    r = 180 + (h & 0xFF) % 60
-    g = 180 + ((h >> 8) & 0xFF) % 60
-    b = 180 + ((h >> 16) & 0xFF) % 60
-    return f"#{r:02x}{g:02x}{b:02x}"
+    """Return a stable color for a population type.
+
+    External and virtual populations have fixed colors so that equivalent
+    circuits always render consistently. All other types (biophysical, local,
+    etc.) share a single default color.
+    """
+    return _TYPE_COLORS.get(type_label, _DEFAULT_COLOR)
 
 
 def _population_type(pop_name: str, pop_type: str | None) -> str:
