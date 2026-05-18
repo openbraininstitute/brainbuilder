@@ -4,7 +4,7 @@
 from pathlib import Path
 
 import bluepysnap
-import h5py
+from bluepysnap.sonata_constants import Edge
 
 from brainbuilder.utils import load_json
 
@@ -66,12 +66,13 @@ def assert_circuits_equal(path_a, path_b, strict_node_order=False, strict_edge_o
         orig_src_b = dict(zip(mapping_b[src_pop]["new_id"], mapping_b[src_pop]["original_id"]))
         orig_tgt_b = dict(zip(mapping_b[tgt_pop]["new_id"], mapping_b[tgt_pop]["original_id"]))
 
-        with h5py.File(edge_a.h5_filepath, "r") as h5:
-            sgids_a = h5[f"edges/{edge_name}/source_node_id"][:]
-            tgids_a = h5[f"edges/{edge_name}/target_node_id"][:]
-        with h5py.File(edge_b.h5_filepath, "r") as h5:
-            sgids_b = h5[f"edges/{edge_name}/source_node_id"][:]
-            tgids_b = h5[f"edges/{edge_name}/target_node_id"][:]
+        edges_df_a = edge_a.get(edge_a.ids(), [Edge.SOURCE_NODE_ID, Edge.TARGET_NODE_ID])
+        sgids_a = edges_df_a[Edge.SOURCE_NODE_ID].to_numpy()
+        tgids_a = edges_df_a[Edge.TARGET_NODE_ID].to_numpy()
+
+        edges_df_b = edge_b.get(edge_b.ids(), [Edge.SOURCE_NODE_ID, Edge.TARGET_NODE_ID])
+        sgids_b = edges_df_b[Edge.SOURCE_NODE_ID].to_numpy()
+        tgids_b = edges_df_b[Edge.TARGET_NODE_ID].to_numpy()
 
         edges_a = [(orig_src_a[int(s)], orig_tgt_a[int(t)]) for s, t in zip(sgids_a, tgids_a)]
         edges_b = [(orig_src_b[int(s)], orig_tgt_b[int(t)]) for s, t in zip(sgids_b, tgids_b)]
