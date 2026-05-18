@@ -201,9 +201,10 @@ def test__update_dtype(tmp_path):
         dset = h5.create_dataset("ints", (100,), dtype="i8")
         dset.attrs["foo"] = "bar"
         dset.attrs["bar"] = "baz"
-        name, dtype = curate._update_dtype(h5, "ints", np.float32)
-        assert name == "/ints"
-        assert dtype == np.float32
+        update = curate._update_dtype(h5, "ints", np.float32)
+        assert update
+        assert update.name == "/ints"
+        assert update.new_dtype == np.float32
         assert h5["ints"].dtype == np.float32
         assert {"foo": "bar", "bar": "baz"} == dict(h5["ints"].attrs)
 
@@ -214,17 +215,38 @@ def test_update_node_dtypes(tmp_path):
         data = h5["/nodes/not-default/0/dynamics_params/holding_current"].astype(int)
         del h5["/nodes/not-default/0/dynamics_params/holding_current"]
         h5.create_dataset("/nodes/not-default/0/dynamics_params/holding_current", data=data)
+
     converted = curate.update_node_dtypes(nodes_copy_file, "not-default", "biophysical")
-    assert converted["/nodes/not-default/0/x"] == np.float32  # was np.float64
-    assert converted["/nodes/not-default/0/rotation_angle_xaxis"] == np.float32  # was np.float64
-    assert converted["/nodes/not-default/0/dynamics_params/holding_current"] == np.float32
+
+    assert converted == [curate.UpdatedDtype('/nodes/not-default/0/rotation_angle_xaxis', np.float64, np.float32),
+                         curate.UpdatedDtype('/nodes/not-default/0/rotation_angle_yaxis', np.float64, np.float32),
+                         curate.UpdatedDtype('/nodes/not-default/0/rotation_angle_zaxis', np.float64, np.float32),
+                         curate.UpdatedDtype('/nodes/not-default/0/x', np.float64, np.float32),
+                         curate.UpdatedDtype('/nodes/not-default/0/y', np.float64, np.float32),
+                         curate.UpdatedDtype('/nodes/not-default/0/z', np.float64, np.float32),
+                         curate.UpdatedDtype('/nodes/not-default/0/dynamics_params/holding_current', np.int64, np.float32)]
 
 
 def test_update_edge_dtypes(tmp_path):
     edges_copy_file = shutil.copy2(EDGES_FILE, tmp_path)
     converted = curate.update_edge_dtypes(edges_copy_file, "not-default", "chemical", virtual=False)
-    assert converted["/edges/not-default/0/efferent_surface_z"] == np.float32
-    assert converted["/edges/not-default/edge_type_id"] == np.int64
+    assert converted == [
+        curate.UpdatedDtype("/edges/not-default/edge_type_id", np.int8, np.int64),
+        curate.UpdatedDtype("/edges/not-default/0/afferent_center_x", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/afferent_center_y", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/afferent_center_z", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/afferent_section_id", np.int64, np.uint8),
+        curate.UpdatedDtype("/edges/not-default/0/afferent_surface_x", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/afferent_surface_y", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/afferent_surface_z", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/efferent_center_x", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/efferent_center_y", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/efferent_center_z", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/efferent_section_id", np.int64, np.uint8),
+        curate.UpdatedDtype("/edges/not-default/0/efferent_surface_x", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/efferent_surface_y", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/efferent_surface_z", np.float64, np.float32),
+    ]
 
 
 def test_resize_datatypes(tmp_path):
@@ -233,11 +255,12 @@ def test_resize_datatypes(tmp_path):
         nodes_copy_file,
         population_name="not-default",
         population_type="biophysical",
-        attributes=["holding_current", "x"],
+        attributes=["holding_current", "x", "node_type_id"],
     )
     assert updates == [
-        ("x", np.dtype("<f8"), np.dtype("float32")),
-        ("dynamics_params/holding_current", np.dtype("<f8"), np.dtype("float32")),
+        curate.UpdatedDtype("/nodes/not-default/0/x", np.float64, np.float32),
+        curate.UpdatedDtype("/nodes/not-default/0/dynamics_params/holding_current", np.float64, np.float32),
+        curate.UpdatedDtype("/nodes/not-default/node_type_id", np.int32, np.int8),
     ]
 
     edges_copy_file = shutil.copy2(EDGES_FILE, tmp_path)
@@ -245,9 +268,14 @@ def test_resize_datatypes(tmp_path):
         edges_copy_file,
         population_name="not-default",
         population_type="chemical",
-        attributes=["efferent_surface_y", "afferent_section_id"],
+        attributes=["efferent_surface_y", "afferent_section_id", "indices", "target_node_id"],
     )
     assert updates == [
-        ("efferent_surface_y", np.dtype("<f8"), np.dtype("float32")),
-        ("afferent_section_id", np.dtype("int64"), np.dtype("uint8")),
+        curate.UpdatedDtype("/edges/not-default/0/efferent_surface_y", np.float64, np.float32),
+        curate.UpdatedDtype("/edges/not-default/0/afferent_section_id", np.int64, np.uint8),
+        curate.UpdatedDtype("/edges/not-default/target_node_id", np.uint64, np.uint8),
+        curate.UpdatedDtype("/edges/not-default/indices/source_to_target/node_id_to_ranges", np.uint64, np.uint8),
+        curate.UpdatedDtype("/edges/not-default/indices/source_to_target/range_to_edge_id", np.uint64, np.uint8),
+        curate.UpdatedDtype("/edges/not-default/indices/target_to_source/node_id_to_ranges", np.uint64, np.uint8),
+        curate.UpdatedDtype("/edges/not-default/indices/target_to_source/range_to_edge_id", np.uint64, np.uint8),
     ]

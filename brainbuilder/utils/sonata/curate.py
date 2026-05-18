@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Collection of functions to curate/edit SONATA circuits."""
 
+from dataclasses import dataclass
+
+import itertools
 import logging
 
 import h5py
@@ -371,15 +374,23 @@ def check_morphology_invariants(h5_morph_dir, morph_names):
     return incorrect_ordering, have_unifurcations
 
 
-def _update_dtype(parent_h5, name, target_dtype):
+@dataclass
+class UpdatedDtype:
+    name: str
+    old_dtype: np.dtype
+    new_dtype: np.dtype
+
+
+def _update_dtype(parent_h5, name, target_dtype) -> UpdatedDtype | None:
     """Update dtype of the `parent_h5[name]` h5py dataset to `target_dtype`.
 
     If a list is passed as `target_dtype`, the tightest fit will be chosen.
+    If no change, None is returned
     """
     h5 = parent_h5[name]
     attrs = dict(h5.attrs)
     old_dtype = h5.dtype
-    L.debug("convert_dtype: %s: %s -> %s", h5.name, h5.dtype, target_dtype)
+    L.debug("convert_dtype: %s: %s -> %s", h5.name, old_dtype, target_dtype)
 
     data = h5[:]
 
@@ -400,16 +411,19 @@ def _update_dtype(parent_h5, name, target_dtype):
 
     new = np.asarray(data, dtype=target_dtype)
 
+    if target_dtype == old_dtype:
+        return None
+
     del parent_h5[name]
     parent_h5[name] = new
 
     for k, v in attrs.items():
         parent_h5[name].attrs[k] = v
 
-    return (parent_h5[name].name, target_dtype)
+    return UpdatedDtype(parent_h5[name].name, old_dtype, target_dtype)
 
 
-def resize_datatypes(h5_path, population_name, population_type, attributes):
+def resize_datatypes(h5_path, population_name, population_type, attributes) -> list[UpdatedDtype]:
     with h5py.File(h5_path, "r") as h5:
         if f"nodes/{population_name}" not in h5 and f"edges/{population_name}" not in h5:
             raise ValueError(f'"{population_name}" dose not exist in `nodes` and `edges`')
@@ -440,30 +454,46 @@ def resize_datatypes(h5_path, population_name, population_type, attributes):
     with h5py.File(h5_path, "r+") as h5:
         parent_h5 = h5[typ_][population_name]["0"]
         for attr, dtypes in to_update.items():
-            old_dtype = parent_h5[attr].dtype
-            if isinstance(dtypes, list):
-                max_ = np.max(parent_h5[attr][:])
-                dtype = np.min_scalar_type(max_)
-                if dtype in dtypes and dtype != old_dtype:
-                    _update_dtype(parent_h5, attr, np.dtype(dtype))
-                    updates.append((attr, old_dtype, np.dtype(dtype)))
-            elif old_dtype != dtypes:
-                _update_dtype(parent_h5, attr, np.dtype(dtypes))
-                updates.append((attr, old_dtype, np.dtype(dtypes)))
+            if updated := _update_dtype(parent_h5, attr, dtypes):
+                updates.append(updated)
+
+        unsigned = [np.uint8, np.uint16, np.uint32, np.uint64]
+        signed = [np.int8, np.int16, np.int32, np.int64]
+
+        if typ_ == "nodes" and "node_type_id" in attributes:
+            parent_h5 = h5[typ_][population_name]
+            if updated := _update_dtype(parent_h5, "node_type_id", signed):
+                updates.append(updated)
+        elif typ_ == "edges":
+            for attr, dtypes in (
+                ("edge_type_id", signed),
+                ("source_node_id", unsigned),
+                ("target_node_id", unsigned),
+            ):
+                if attr in attributes:
+                    parent_h5 = h5[typ_][population_name]
+                    if updated := _update_dtype(parent_h5, attr, dtypes):
+                        updates.append(updated)
+
+            if "indices" in attributes:
+                for base, name in itertools.product(
+                    ("source_to_target", "target_to_source"),
+                    ("node_id_to_ranges", "range_to_edge_id"),
+                ):
+                    parent_h5 = h5[typ_][population_name]["indices"][base]
+                    if updated := _update_dtype(parent_h5, name, dtypes):
+                        updates.append(updated)
 
     return updates
 
 
-def update_node_dtypes(h5_file, population_name, population_type):
+def update_node_dtypes(h5_file, population_name, population_type) -> list[UpdatedDtype]:
     """Update the datatypes of the attributes within a node population to the SONATA spec.
 
     Args:
         h5_file(path): to h5 file containing nodes
         population_name(str): name of the population to modify
         population_type(str): type (ex: biophysical) of the node population
-
-    Returns:
-        dict of names -> dtype of converted attributes
     """
     converted = []
     property_types, dynamics_params = schemas.nodes_schema_types(population_type)
@@ -502,10 +532,10 @@ def update_node_dtypes(h5_file, population_name, population_type):
                 if target_dtype != parent[param].dtype or isinstance(target_dtype, list):
                     converted.append(_update_dtype(parent, param, target_dtype))
 
-    return dict(converted)
+    return converted
 
 
-def update_edge_dtypes(h5_file, population_name, population_type, virtual):
+def update_edge_dtypes(h5_file, population_name, population_type, virtual) -> list[UpdatedDtype]:
     """Update the datatypes of the attributes within an edge population to the SONATA spec.
 
     Args:
@@ -513,9 +543,6 @@ def update_edge_dtypes(h5_file, population_name, population_type, virtual):
         population_name(str): name of the population to modify
         population_type(str): type (ex: biophysical) of the node population
         virtual(bool): Whether the population is virtual
-
-    Returns:
-        dict of names -> dtype of converted attributes
     """
     property_types = schemas.edges_schema_types(population_type, virtual=virtual)
     converted = []
@@ -544,4 +571,4 @@ def update_edge_dtypes(h5_file, population_name, population_type, virtual):
             if target_dtype != group[attribute_name].dtype or isinstance(target_dtype, list):
                 converted.append(_update_dtype(group, attribute_name, target_dtype))
 
-    return dict(converted)
+    return converted
