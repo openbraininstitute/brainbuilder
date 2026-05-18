@@ -208,6 +208,31 @@ def test__update_dtype(tmp_path):
         assert h5["ints"].dtype == np.float32
         assert {"foo": "bar", "bar": "baz"} == dict(h5["ints"].attrs)
 
+        h5.create_dataset("same", data=np.array([1, 2], dtype=np.int32))
+        assert curate._update_dtype(h5, "same", np.dtype(np.int32)) is None
+
+        # list: unsigned -> signed, picks tightest
+        h5.create_dataset("u2s", data=np.array([1, 300], dtype=np.uint64))
+        curate._update_dtype(h5, "u2s", [np.int8, np.int16, np.int32])
+        assert h5["u2s"].dtype == np.int16
+
+        # list: signed -> unsigned
+        h5.create_dataset("s2u", data=np.array([0, 200], dtype=np.int64))
+        curate._update_dtype(h5, "s2u", [np.uint8, np.uint16])
+        assert h5["s2u"].dtype == np.uint8
+
+        # list: signed -> unsigned with negative raises
+        h5.create_dataset("neg", data=np.array([-1, 2], dtype=np.int64))
+        with pytest.raises(RuntimeError, match="values below 0"):
+            curate._update_dtype(h5, "neg", [np.uint8, np.uint16])
+
+        # overflow raises
+        h5.create_dataset("overflow", data=np.array([0, 300], dtype=np.int64))
+        with pytest.raises(RuntimeError, match="does not fit"):
+            curate._update_dtype(h5, "overflow", np.int8)
+
+
+
 
 def test_update_node_dtypes(tmp_path):
     nodes_copy_file = shutil.copy2(NODES_FILE, tmp_path)
@@ -264,15 +289,22 @@ def test_resize_datatypes(tmp_path):
     ]
 
     edges_copy_file = shutil.copy2(EDGES_FILE, tmp_path)
+    with h5py.File(edges_copy_file, "r+") as h5:
+        name = "/edges/not-default/edge_type_id"
+        data = h5[name].astype(np.uint64)
+        del h5[name]
+        h5.create_dataset(name, data=data)
+
     updates = curate.resize_datatypes(
         edges_copy_file,
         population_name="not-default",
         population_type="chemical",
-        attributes=["efferent_surface_y", "afferent_section_id", "indices", "target_node_id"],
+        attributes=["efferent_surface_y", "afferent_section_id", "indices", "target_node_id", "edge_type_id"],
     )
     assert updates == [
         curate.UpdatedDtype("/edges/not-default/0/efferent_surface_y", np.float64, np.float32),
         curate.UpdatedDtype("/edges/not-default/0/afferent_section_id", np.int64, np.uint8),
+        curate.UpdatedDtype("/edges/not-default/edge_type_id", np.uint64, np.int8),
         curate.UpdatedDtype("/edges/not-default/target_node_id", np.uint64, np.uint8),
         curate.UpdatedDtype("/edges/not-default/indices/source_to_target/node_id_to_ranges", np.uint64, np.uint8),
         curate.UpdatedDtype("/edges/not-default/indices/source_to_target/range_to_edge_id", np.uint64, np.uint8),

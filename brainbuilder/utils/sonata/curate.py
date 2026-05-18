@@ -381,7 +381,43 @@ class UpdatedDtype:
     new_dtype: np.dtype
 
 
-def _update_dtype(parent_h5, name, target_dtype) -> UpdatedDtype | None:
+def _pick_dtype(name: str, data, old_dtype: np.dtype, target_dtype: list | np.dtype):
+    if isinstance(target_dtype, list):
+        if all(np.issubdtype(t, np.signedinteger) for t in target_dtype) and np.issubdtype(
+            old_dtype, np.unsignedinteger
+        ):
+            # target signed, currently unsigned
+            for dtype in [np.int8, np.int16, np.int32, np.int64]:
+                if data.max() < np.iinfo(dtype).max:
+                    target_dtype = dtype
+                    break
+        elif all(np.issubdtype(t, np.unsignedinteger) for t in target_dtype) and np.issubdtype(
+            old_dtype, np.signedinteger
+        ):
+            # target unsigned, currently signed
+            if data.min() < 0:
+                msg = f"`{name}` has values below 0, cannot convert to unsigned"
+                raise RuntimeError(msg)
+            target_dtype = np.min_scalar_type(data.max())
+        else:
+            dtype = np.min_scalar_type(data.max())
+            if dtype not in target_dtype:
+                msg = (
+                    f"The minimum dtype `{dtype} for `{name}` is not provided in the "
+                    f"list of acceptable dtypes: `{target_dtype}`. No other heuristics are given."
+                )
+                raise RuntimeError(msg)
+            target_dtype = dtype
+    elif np.issubdtype(target_dtype, np.integer):
+        info = np.iinfo(target_dtype)
+        if data.min() < info.min or data.max() > info.max:
+            msg = f"Data in {name} of dtype {old_dtype} does not fit in {target_dtype}"
+            raise RuntimeError(msg)
+
+    return target_dtype
+
+
+def _update_dtype(parent_h5: h5py.Group, name: str, target_dtype: np.dtype) -> UpdatedDtype | None:
     """Update dtype of the `parent_h5[name]` h5py dataset to `target_dtype`.
 
     If a list is passed as `target_dtype`, the tightest fit will be chosen.
@@ -393,22 +429,7 @@ def _update_dtype(parent_h5, name, target_dtype) -> UpdatedDtype | None:
     L.debug("convert_dtype: %s: %s -> %s", h5.name, old_dtype, target_dtype)
 
     data = h5[:]
-
-    if isinstance(target_dtype, list):
-        dtype = np.min_scalar_type(data.max())
-        if dtype not in target_dtype:
-            msg = (
-                "The minimum dtype is not provided in the list of acceptable dtypes."
-                " No other heuristics are given"
-            )
-            raise RuntimeError(msg)
-        target_dtype = dtype
-    elif np.issubdtype(target_dtype, np.integer):
-        info = np.iinfo(target_dtype)
-        if data.min() < info.min or data.max() > info.max:
-            msg = f"Data in {name} of dtype {old_dtype} does not fit in {target_dtype}"
-            raise RuntimeError(msg)
-
+    target_dtype = _pick_dtype(name, data, old_dtype, target_dtype)
     new = np.asarray(data, dtype=target_dtype)
 
     if target_dtype == old_dtype:
