@@ -62,9 +62,7 @@ def assert_circuits_equal(path_a, path_b, strict_node_order=False, strict_edge_o
         orig_a = np.asarray(mapping_a[pop_name]["original_id"], dtype=np.int64)
         orig_b = np.asarray(mapping_b[pop_name]["original_id"], dtype=np.int64)
         if strict_node_order:
-            assert np.array_equal(orig_a, orig_b), (
-                f"Population '{pop_name}' original_ids differ"
-            )
+            assert np.array_equal(orig_a, orig_b), f"Population '{pop_name}' original_ids differ"
         else:
             assert np.array_equal(np.sort(orig_a), np.sort(orig_b)), (
                 f"Population '{pop_name}' original_ids differ"
@@ -111,6 +109,4 @@ def assert_circuits_equal(path_a, path_b, strict_node_order=False, strict_edge_o
         else:
             pairs_a = _edges_to_sorted_pairs(orig_sgids_a, orig_tgids_a)
             pairs_b = _edges_to_sorted_pairs(orig_sgids_b, orig_tgids_b)
-            assert np.array_equal(pairs_a, pairs_b), (
-                f"Edge population '{edge_name}' differs"
-            )
+            assert np.array_equal(pairs_a, pairs_b), f"Edge population '{edge_name}' differs"
