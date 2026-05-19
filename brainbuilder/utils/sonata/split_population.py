@@ -998,8 +998,6 @@ def _gather_subcircuit_virtual_typed(
             - write_edge_configs: list[WriteEdgeConfig]
             - pop_used_source_node_ids: dict[str, np.ndarray] mapping pop name to node IDs
     """
-    # pylint: disable=too-many-locals
-
     virtual_populations = {
         name: edge
         for name, edge in circuit.edges.items()
@@ -1041,7 +1039,6 @@ def _gather_subcircuit_virtual_typed(
     for name, ids in pop_used_source_node_ids.items():
         id_mapping[name] = pd.DataFrame({NEW_IDS: range(len(ids)), SOURCE: name}, index=ids)
 
-    # build edge configs
     write_edge_configs = []
     for edge_pop_name, edge in virtual_populations.items():
         write_edge_config = WriteEdgeConfig(
@@ -1411,7 +1408,6 @@ def split_subcircuit(
     )
 
     # --- WRITE phase ---
-    # Write biophysical nodes
     new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
 
     # Write biophysical + virtual edges together (they share edge_mappings for neuroglial)
