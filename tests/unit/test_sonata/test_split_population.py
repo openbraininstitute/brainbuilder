@@ -1014,3 +1014,125 @@ def test_external_nodes_file_contains_all_merged_ids(tmp_path):
         assert node_count == 3, (
             f"nodes.h5 has {node_count} nodes but id_mapping has 3"
         )
+
+
+def test_subsubcircuit_virtual_operates_on_virtuals_only(tmp_path):
+    """Test that do_virtual skips external populations in nested extraction.
+
+    Extracts c2_c1 from c1 with do_virtual=True, create_external=True (so c2_c1 has external_A).
+    Then extracts c3_c2_c1 from c2_c1 with do_virtual=True, create_external=False.
+    Verifies that do_virtual does NOT process external_A (only genuine virtuals like V1).
+    Compares c3_c2_c1 against c3_c1 (direct extraction from c1) for equivalence.
+    """
+    from brainbuilder.utils.sonata.compare import assert_circuits_equal
+
+    subset_c2_c1 = {
+        "subset_c2_c1": ["subset_c2_c1_popA", "subset_c2_c1_popB", "subset_c2_c1_popC"],
+        "subset_c2_c1_popA": {"population": "A", "node_id": [1, 5]},
+        "subset_c2_c1_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
+        "subset_c2_c1_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
+    }
+    subset_c3_c2_c1 = {
+        "subset_c3_c2_c1": ["subset_c3_c2_c1_popA", "subset_c3_c2_c1_popB", "subset_c3_c2_c1_popC"],
+        "subset_c3_c2_c1_popA": {"population": "A", "node_id": [0, 1]},
+        "subset_c3_c2_c1_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
+        "subset_c3_c2_c1_popC": {"population": "C", "node_id": [0, 1, 3, 4, 5]},
+    }
+    subset_c3_c1 = {
+        "subset_c3_c1": ["subset_c3_c1_popA", "subset_c3_c1_popB", "subset_c3_c1_popC"],
+        "subset_c3_c1_popA": {"population": "A", "node_id": [1, 5]},
+        "subset_c3_c1_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
+        "subset_c3_c1_popC": {"population": "C", "node_id": [0, 1, 3, 4, 5]},
+    }
+
+    circuit_config = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
+
+    path_c2_c1 = _split_custom_subcircuit(
+        tmp_path / "c2_c1", circuit_config, "subset_c2_c1", subset_c2_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c3_c2_c1 = _split_custom_subcircuit(
+        tmp_path / "c3_c2_c1", str(path_c2_c1 / "circuit_config.json"),
+        "subset_c3_c2_c1", subset_c3_c2_c1,
+        do_virtual=True, create_external=False
+    )
+
+    path_c3_c1 = _split_custom_subcircuit(
+        tmp_path / "c3_c1", circuit_config,
+        "subset_c3_c1", subset_c3_c1,
+        do_virtual=True, create_external=False
+    )
+
+    # --- Assertions for c3_c2_c1 ---
+    circ_c3_c2_c1 = bluepysnap.Circuit(str(path_c3_c2_c1 / "circuit_config.json"))
+    node_pop_names = set(circ_c3_c2_c1.nodes.keys())
+
+    # do_virtual should NOT have processed external_A (it's not a genuine virtual)
+    assert "external_A" not in node_pop_names, (
+        "external_A should not be extracted by do_virtual"
+    )
+
+    # Genuine virtuals should be processed correctly
+    assert "V1" in node_pop_names, "V1 (genuine virtual) should be extracted"
+    assert "V2" not in node_pop_names, "V2 should be dropped (its target is outside c3_c2_c1)"
+
+    # c3_c1 and c3_c2_c1 should be equivalent
+    assert_circuits_equal(path_c3_c1, path_c3_c2_c1, strict_node_order=True, strict_edge_order=True)
+
+
+def test_check_no_reserved_external_populations(tmp_path):
+    """Extracting with do_virtual/create_external should fail if external_ populations exist
+    without an id_mapping (i.e., the circuit was not previously extracted)."""
+    circuit_config = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
+
+    # First, extract a subcircuit with create_external to produce external_ populations
+    output_c2 = tmp_path / "c2"
+    output_c2.mkdir()
+    split_population.split_subcircuit(
+        output_c2,
+        node_set_name="mtype_a",
+        circuit=circuit_config,
+        do_virtual=False,
+        create_external=True,
+    )
+
+    # Remove provenance entirely to simulate a circuit that was never extracted
+    config = load_json(output_c2 / "circuit_config.json")
+    del config["components"]["provenance"]
+    dump_json(output_c2 / "circuit_config.json", config)
+
+    # Now trying to re-extract with create_external should raise
+    output_c3 = tmp_path / "c3"
+    output_c3.mkdir()
+    with pytest.raises(ValueError, match="external_"):
+        split_population.split_subcircuit(
+            output_c3,
+            node_set_name="mtype_a",
+            circuit=str(output_c2 / "circuit_config.json"),
+            do_virtual=False,
+            create_external=True,
+        )
+
+    # Same with do_virtual
+    output_c4 = tmp_path / "c4"
+    output_c4.mkdir()
+    with pytest.raises(ValueError, match="external_"):
+        split_population.split_subcircuit(
+            output_c4,
+            node_set_name="mtype_a",
+            circuit=str(output_c2 / "circuit_config.json"),
+            do_virtual=True,
+            create_external=False,
+        )
+
+    # Without do_virtual or create_external, it should NOT raise
+    output_c5 = tmp_path / "c5"
+    output_c5.mkdir()
+    split_population.split_subcircuit(
+        output_c5,
+        node_set_name="mtype_a",
+        circuit=str(output_c2 / "circuit_config.json"),
+        do_virtual=False,
+        create_external=False,
+    )
