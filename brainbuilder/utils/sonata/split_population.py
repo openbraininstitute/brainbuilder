@@ -993,8 +993,6 @@ def _gather_subcircuit_virtual(
             - write_edge_configs: list[WriteEdgeConfig]
             - pop_used_source_node_ids: dict[str, np.ndarray] mapping virtual pop name to node IDs
     """
-    # pylint: disable=too-many-locals
-
     virtual_populations = {
         name: edge
         for name, edge in circuit.edges.items()
@@ -1038,7 +1036,6 @@ def _gather_subcircuit_virtual(
         # Virtual input sources retain their name unchanged
         node_pop_name_mapping[name] = name
 
-    # build edge configs
     write_edge_configs = []
     for edge_pop_name, edge in virtual_populations.items():
         write_edge_config = WriteEdgeConfig(
@@ -1299,7 +1296,7 @@ def split_subcircuit(
 
     ext_edge_configs = []
     ext_nodes = {}
-    existing_node_pop_names = list(split_populations.keys()) + list(virt_node_ids.keys())
+    existing_node_pop_names = list(split_populations) + list(virt_node_ids)
     existing_edge_pop_names = [cfg.dst_edge_name for cfg in bio_edge_configs + virt_edge_configs]
     if create_external:
         ext_edge_configs, ext_nodes = _gather_subcircuit_external(
@@ -1311,37 +1308,32 @@ def split_subcircuit(
             existing_edge_pop_names,
         )
 
-    # --- (future: MANIPULATE — id_mapping, edge configs, node data) ---
-
     # --- WRITE phase ---
-    # Write biophysical nodes
     new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
 
-    # Write biophysical + virtual edges together (they share edge_mappings for neuroglial)
-    bio_virt_edge_configs = bio_edge_configs + virt_edge_configs
-    new_edge_files = _orchestrate_write_subcircuit_edges(
-        write_edge_configs=bio_virt_edge_configs, id_mapping=id_mapping
-    )
-
-    # Write external edges separately (no neuroglial, independent edge_mappings)
-    if ext_edge_configs:
-        ext_edge_files = _orchestrate_write_subcircuit_edges(
-            write_edge_configs=ext_edge_configs, id_mapping=id_mapping
-        )
-        new_edge_files.update(ext_edge_files)
-
-    # Write virtual nodes
     for population_name, ids in virt_node_ids.items():
         df = circuit.nodes[population_name].get(ids)
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
-    # Write external nodes
     for population_name, orig_population_name in ext_nodes.items():
         ids = id_mapping[population_name].index.to_numpy()
         df = circuit.nodes[orig_population_name].get(ids)
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
+
+    # Biophysical + virtual edges share edge_mappings (needed for neuroglial synapse_id remapping).
+    # External edges use independent edge_mappings and are written separately.
+    bio_virt_edge_configs = bio_edge_configs + virt_edge_configs
+    new_edge_files = _orchestrate_write_subcircuit_edges(
+        write_edge_configs=bio_virt_edge_configs, id_mapping=id_mapping
+    )
+
+    if ext_edge_configs:
+        ext_edge_files = _orchestrate_write_subcircuit_edges(
+            write_edge_configs=ext_edge_configs, id_mapping=id_mapping
+        )
+        new_edge_files.update(ext_edge_files)
 
     mapping_fn = _write_mapping(output, circuit, id_mapping, node_pop_name_mapping)
 
