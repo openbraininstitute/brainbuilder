@@ -1085,3 +1085,60 @@ def test_subsubcircuit_virtual_operates_on_virtuals_only(tmp_path):
 
     # c3_c1 and c3_c2_c1 should be equivalent
     assert_circuits_equal(path_c3_c1, path_c3_c2_c1, strict_node_order=True, strict_edge_order=True)
+
+
+def test_check_no_reserved_external_populations(tmp_path):
+    """Extracting with do_virtual/create_external should fail if external_ populations exist
+    without an id_mapping (i.e., the circuit was not previously extracted)."""
+    circuit_config = str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json")
+
+    # First, extract a subcircuit with create_external to produce external_ populations
+    output_c2 = tmp_path / "c2"
+    output_c2.mkdir()
+    split_population.split_subcircuit(
+        output_c2,
+        node_set_name="mtype_a",
+        circuit=circuit_config,
+        do_virtual=False,
+        create_external=True,
+    )
+
+    # Remove provenance entirely to simulate a circuit that was never extracted
+    config = load_json(output_c2 / "circuit_config.json")
+    del config["components"]["provenance"]
+    dump_json(output_c2 / "circuit_config.json", config)
+
+    # Now trying to re-extract with create_external should raise
+    output_c3 = tmp_path / "c3"
+    output_c3.mkdir()
+    with pytest.raises(ValueError, match="external_"):
+        split_population.split_subcircuit(
+            output_c3,
+            node_set_name="mtype_a",
+            circuit=str(output_c2 / "circuit_config.json"),
+            do_virtual=False,
+            create_external=True,
+        )
+
+    # Same with do_virtual
+    output_c4 = tmp_path / "c4"
+    output_c4.mkdir()
+    with pytest.raises(ValueError, match="external_"):
+        split_population.split_subcircuit(
+            output_c4,
+            node_set_name="mtype_a",
+            circuit=str(output_c2 / "circuit_config.json"),
+            do_virtual=True,
+            create_external=False,
+        )
+
+    # Without do_virtual or create_external, it should NOT raise
+    output_c5 = tmp_path / "c5"
+    output_c5.mkdir()
+    split_population.split_subcircuit(
+        output_c5,
+        node_set_name="mtype_a",
+        circuit=str(output_c2 / "circuit_config.json"),
+        do_virtual=False,
+        create_external=False,
+    )
