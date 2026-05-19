@@ -68,6 +68,27 @@ class WriteEdgeConfig:
         )
 
 
+def _check_no_reserved_external_populations(circuit):
+    """Raise if the circuit has 'external_*' populations without an id_mapping.
+
+    Population names starting with 'external_' are reserved for the extraction
+    process. If such populations exist in a circuit that was not previously
+    extracted (no id_mapping in provenance), it is ambiguous whether they are
+    user-defined or extraction artifacts, so we reject early.
+    """
+    provenance = circuit.config.get("components", {}).get("provenance", {})
+    if "id_mapping" in provenance:
+        return  # previously extracted circuit — external_ populations are expected
+
+    external_pops = [name for name in circuit.nodes if name.startswith("external_")]
+    if external_pops:
+        raise ValueError(
+            f"Population names starting with 'external_' are reserved for subcircuit "
+            f"extraction, but the input circuit contains: {external_pops}. "
+            f"Rename these populations or provide a circuit with an id_mapping in provenance."
+        )
+
+
 def _create_chunked_slices(length, chunk_size):
     """return `slices` each of size `chunk_size`, that cover `length`"""
     return (slice(start, start + chunk_size) for start in range(0, length, chunk_size))
@@ -1254,6 +1275,9 @@ def split_subcircuit(
     node_pop_to_paths, edge_pop_to_paths = _layout.gather_layout_from_networks(
         circuit.config["networks"]
     )
+
+    if do_virtual or create_external:
+        _check_no_reserved_external_populations(circuit)
 
     # TODO: remove backward compatibility with snap 1.0, when the dependency can be updated.
     #  In snap 2.0 it's possible to simplify:
