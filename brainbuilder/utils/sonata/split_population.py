@@ -572,7 +572,7 @@ def _write_nodes(output, split_nodes, population_to_path=None):
 
 
 def _get_node_id_mapping(split_nodes):
-    """return a dict split_nodes.keys() -> DataFrame with index old_ids, and colunm new_id"""
+    """Return a dict mapping population name to DataFrame(index=old_ids, columns=[new_id, source])."""
     return {
         new_population: pd.DataFrame(
             {NEW_IDS: np.arange(len(df), dtype=np.int64), SOURCE: new_population},
