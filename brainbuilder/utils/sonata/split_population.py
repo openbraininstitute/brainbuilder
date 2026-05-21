@@ -21,6 +21,7 @@ from joblib import Parallel, delayed
 from brainbuilder import utils
 from brainbuilder.utils import hdf5
 from brainbuilder.utils.sonata import _layout
+from brainbuilder.utils.sonata.id_mapping import IdMapping
 
 
 L = logging.getLogger(__name__)
@@ -614,26 +615,6 @@ def _get_node_id_mapping(split_nodes):
     }
 
 
-def _get_node_id_mapping2(split_nodes):
-    """Return a nested dict mapping dest pop -> source pop -> DataFrame(index=old_ids, columns=[new_id]).
-
-    Each population is initially self-sourced: id_mapping2[pop_name][pop_name] = DataFrame.
-    No 'source' column — source info is encoded in the inner dict key.
-
-    Returns:
-        dict[str, dict[str, pd.DataFrame]]: Nested mapping of destination -> source -> DataFrame.
-    """
-    return {
-        pop_name: {
-            pop_name: pd.DataFrame(
-                {NEW_IDS: np.arange(len(df), dtype=np.int64)},
-                index=df.index,
-            )
-        }
-        for pop_name, df in split_nodes.items()
-    }
-
-
 def _assert_id_mappings_consistent(id_mapping, id_mapping2):
     """Assert that id_mapping and id_mapping2 are consistent.
 
@@ -641,7 +622,7 @@ def _assert_id_mappings_consistent(id_mapping, id_mapping2):
     order) must produce the same index and new_id values as id_mapping[dest_pop]
     (ignoring the source and original_id columns).
     """
-    for dest_pop, sources in id_mapping2.items():
+    for dest_pop, sources in id_mapping2.data.items():
         assert dest_pop in id_mapping, (
             f"id_mapping2 has dest_pop '{dest_pop}' not found in id_mapping"
         )
@@ -736,7 +717,9 @@ def split_population(output, attribute, nodes_path, edges_path):
     _write_nodes(output, split_populations)
 
     id_mapping = _get_node_id_mapping(split_populations)
-    id_mapping2 = _get_node_id_mapping2(split_populations)
+    id_mapping2 = IdMapping()
+    for pop_name, df in split_populations.items():
+        id_mapping2.add_source(pop_name, pop_name, df.index)
     _assert_id_mappings_consistent(id_mapping, id_mapping2)
     _write_edges(output, edges_path, id_mapping, expect_to_use_all_edges=True)
 
@@ -769,7 +752,9 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
     _write_nodes(output, split_populations)
 
     id_mapping = _get_node_id_mapping(split_populations)
-    id_mapping2 = _get_node_id_mapping2(split_populations)
+    id_mapping2 = IdMapping()
+    for pop_name, df in split_populations.items():
+        id_mapping2.add_source(pop_name, pop_name, df.index)
     _assert_id_mappings_consistent(id_mapping, id_mapping2)
     _write_edges(output, edges_path, id_mapping, expect_to_use_all_edges=False)
 
@@ -1015,34 +1000,30 @@ def _gather_subcircuit_external(
             # Also populate id_mapping2 with the nested structure
             if id_mapping2 is not None:
                 source_pop = edge.source.name
-                if new_source_pop_name not in id_mapping2:
-                    id_mapping2[new_source_pop_name] = {}
-                # Compute shift: sum of lengths of all existing entries for this destination
-                shift = sum(len(df) for df in id_mapping2[new_source_pop_name].values())
-                # Get the old_ids that belong to this source (the ones just added)
-                # From the final id_mapping, extract entries for this source_pop
+                # Get the old_ids that belong to this source
                 final_df = id_mapping[new_source_pop_name]
                 source_mask = final_df[SOURCE] == source_pop
                 source_old_ids = final_df.loc[source_mask].index
-                if source_pop in id_mapping2[new_source_pop_name]:
+
+                if new_source_pop_name not in id_mapping2.data:
+                    id_mapping2.add_source(new_source_pop_name, source_pop, source_old_ids)
+                elif source_pop not in id_mapping2.data[new_source_pop_name]:
+                    id_mapping2.add_source(new_source_pop_name, source_pop, source_old_ids)
+                else:
                     # Already have entries for this source — merge new ones
-                    existing_df2 = id_mapping2[new_source_pop_name][source_pop]
+                    existing_df2 = id_mapping2.data[new_source_pop_name][source_pop]
                     new_old_ids = source_old_ids.difference(existing_df2.index)
                     if len(new_old_ids) > 0:
-                        shift2 = sum(len(df) for df in id_mapping2[new_source_pop_name].values())
+                        shift = sum(
+                            len(df) for df in id_mapping2.data[new_source_pop_name].values()
+                        )
                         new_df2 = pd.DataFrame(
-                            {NEW_IDS: shift2 + np.arange(len(new_old_ids), dtype=np.int64)},
+                            {NEW_IDS: shift + np.arange(len(new_old_ids), dtype=np.int64)},
                             index=new_old_ids,
                         )
-                        id_mapping2[new_source_pop_name][source_pop] = pd.concat(
+                        id_mapping2.data[new_source_pop_name][source_pop] = pd.concat(
                             [existing_df2, new_df2]
                         )
-                else:
-                    new_df2 = pd.DataFrame(
-                        {NEW_IDS: shift + np.arange(len(source_old_ids), dtype=np.int64)},
-                        index=source_old_ids,
-                    )
-                    id_mapping2[new_source_pop_name][source_pop] = new_df2
 
             write_edge_config = WriteEdgeConfig(
                 output_path=str(output_path),
@@ -1129,12 +1110,7 @@ def _gather_subcircuit_virtual_typed(
 
         # Also populate id_mapping2 with the nested structure
         if id_mapping2 is not None:
-            id_mapping2[name] = {
-                name: pd.DataFrame(
-                    {NEW_IDS: np.arange(len(ids), dtype=np.int64)},
-                    index=ids,
-                )
-            }
+            id_mapping2.add_source(name, name, ids)
 
     write_edge_configs = []
     for edge_pop_name, edge in virtual_populations.items():
@@ -1271,61 +1247,6 @@ def _update_node_sets(node_sets, id_mapping):
     return ret
 
 
-def _write_mapping(
-    output: Path, parent_circ: bluepysnap.Circuit, id_mapping2: dict[str, dict[str, pd.DataFrame]]
-) -> str:
-    """Write the id mappings between the old and new populations for future analysis.
-
-    Iterates the nested id_mapping2 structure, resolving original_id on the fly
-    by chaining through the parent circuit's id_mapping.json provenance.
-
-    Returns:
-        The filename of the written mapping (relative to output).
-    """
-    provenance = parent_circ.config.get("components", {}).get("provenance", {})
-    parent_mapping = None
-    if "id_mapping" in provenance:
-        parent_root = Path(parent_circ._circuit_config_path).parent
-        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
-
-    mapping = {}
-    for dest_pop, sources in id_mapping2.items():
-        all_parent_ids = []
-        all_new_ids = []
-        all_orig_ids = []
-
-        for source_pop, df in sources.items():
-            all_parent_ids.extend(df.index.tolist())
-            all_new_ids.extend(df[NEW_IDS].tolist())
-
-            # Resolve original_ids by chaining through parent provenance
-            if parent_mapping is not None and source_pop in parent_mapping:
-                parent_orig_ids = np.array(parent_mapping[source_pop][ORIG_IDS])
-                orig_ids = parent_orig_ids[df.index.astype(int)].tolist()
-            else:
-                orig_ids = df.index.tolist()
-            all_orig_ids.extend(orig_ids)
-
-        # Derive parent_name and orig_name from the first source
-        first_source = next(iter(sources))
-        if parent_mapping is not None and first_source in parent_mapping:
-            orig_name = parent_mapping[first_source][ORIG_NAME]
-        else:
-            orig_name = first_source
-
-        mapping[dest_pop] = {
-            PARENT_IDS: all_parent_ids,
-            NEW_IDS: all_new_ids,
-            PARENT_NAME: first_source,
-            ORIG_IDS: all_orig_ids,
-            ORIG_NAME: orig_name,
-        }
-
-    mapping_fn = "id_mapping.json"
-    utils.dump_json(output / mapping_fn, mapping)
-    return mapping_fn
-
-
 def split_subcircuit(
     output: str | Path,
     node_set_name: str,
@@ -1381,7 +1302,9 @@ def split_subcircuit(
     split_populations = {pop_name: df for pop_name, df in split_populations.items() if not df.empty}
 
     id_mapping = _get_node_id_mapping(split_populations)
-    id_mapping2 = _get_node_id_mapping2(split_populations)
+    id_mapping2 = IdMapping()
+    for pop_name, df in split_populations.items():
+        id_mapping2.add_source(pop_name, pop_name, df.index)
 
     # --- GATHER phase ---
     bio_edge_configs = _gather_subcircuit_biological(output, circuit, edge_pop_to_paths, id_mapping)
@@ -1498,7 +1421,7 @@ def split_subcircuit(
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
-    mapping_fn = _write_mapping(output, circuit, id_mapping2)
+    mapping_fn = id_mapping2.write(output, circuit)
 
     config = copy.deepcopy(circuit.config)
 
