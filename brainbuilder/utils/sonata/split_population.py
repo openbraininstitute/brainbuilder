@@ -1256,40 +1256,13 @@ def _update_node_sets(node_sets, id_mapping):
     return ret
 
 
-def _resolve_original_ids(id_mapping, parent_circ):
-    """Populate the original_id column in each id_mapping DataFrame.
-
-    For first-level extractions (no parent provenance), original_id == parent_id (index).
-    For nested extractions, resolves through the parent's id_mapping.json.
-    """
-    provenance = parent_circ.config.get("components", {}).get("provenance", {})
-
-    if "id_mapping" in provenance:
-        parent_root = Path(parent_circ._circuit_config_path).parent
-        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
-
-        for df in id_mapping.values():
-            for source_pop, group_df in df.groupby(SOURCE):
-                if source_pop not in parent_mapping:
-                    # Population not in parent mapping — original == parent
-                    df.loc[group_df.index, ORIG_IDS] = group_df.index.to_numpy()
-                else:
-                    # new_ids are contiguous 0..N-1 by construction, so positional indexing is safe
-                    parent_orig_ids = np.array(parent_mapping[source_pop][ORIG_IDS])
-                    df.loc[group_df.index, ORIG_IDS] = parent_orig_ids[group_df.index.astype(int)]
-    else:
-        for df in id_mapping.values():
-            df[ORIG_IDS] = df.index.to_numpy()
-
-
 def _write_mapping(
-    output: Path, parent_circ: bluepysnap.Circuit, id_mapping: dict[str, pd.DataFrame]
+    output: Path, parent_circ: bluepysnap.Circuit, id_mapping2: dict[str, dict[str, pd.DataFrame]]
 ) -> str:
     """Write the id mappings between the old and new populations for future analysis.
 
-    Reads parent_id (index), new_id, source, and original_id directly from
-    the DataFrames. Resolves original_name from parent provenance or defaults
-    to source.
+    Iterates the nested id_mapping2 structure, resolving original_id on the fly
+    by chaining through the parent circuit's id_mapping.json provenance.
 
     Returns:
         The filename of the written mapping (relative to output).
@@ -1301,18 +1274,35 @@ def _write_mapping(
         parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
 
     mapping = {}
-    for population, df in id_mapping.items():
-        parent_name = df[SOURCE].iloc[0]
-        if parent_mapping is not None:
-            orig_name = parent_mapping[parent_name][ORIG_NAME]
-        else:
-            orig_name = parent_name
+    for dest_pop, sources in id_mapping2.items():
+        all_parent_ids = []
+        all_new_ids = []
+        all_orig_ids = []
 
-        mapping[population] = {
-            PARENT_IDS: df.index.to_list(),
-            NEW_IDS: df[NEW_IDS].to_list(),
-            PARENT_NAME: parent_name,
-            ORIG_IDS: df[ORIG_IDS].to_list(),
+        for source_pop, df in sources.items():
+            all_parent_ids.extend(df.index.tolist())
+            all_new_ids.extend(df[NEW_IDS].tolist())
+
+            # Resolve original_ids by chaining through parent provenance
+            if parent_mapping is not None and source_pop in parent_mapping:
+                parent_orig_ids = np.array(parent_mapping[source_pop][ORIG_IDS])
+                orig_ids = parent_orig_ids[df.index.astype(int)].tolist()
+            else:
+                orig_ids = df.index.tolist()
+            all_orig_ids.extend(orig_ids)
+
+        # Derive parent_name and orig_name from the first source
+        first_source = next(iter(sources))
+        if parent_mapping is not None and first_source in parent_mapping:
+            orig_name = parent_mapping[first_source][ORIG_NAME]
+        else:
+            orig_name = first_source
+
+        mapping[dest_pop] = {
+            PARENT_IDS: all_parent_ids,
+            NEW_IDS: all_new_ids,
+            PARENT_NAME: first_source,
+            ORIG_IDS: all_orig_ids,
             ORIG_NAME: orig_name,
         }
 
@@ -1426,8 +1416,6 @@ def split_subcircuit(
     # --- Assert id_mapping and id_mapping2 are consistent ---
     _assert_id_mappings_consistent(id_mapping, id_mapping2)
 
-    _resolve_original_ids(id_mapping, circuit)
-
     # --- WRITE phase ---
     new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
 
@@ -1495,7 +1483,7 @@ def split_subcircuit(
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
-    mapping_fn = _write_mapping(output, circuit, id_mapping)
+    mapping_fn = _write_mapping(output, circuit, id_mapping2)
 
     config = copy.deepcopy(circuit.config)
 
