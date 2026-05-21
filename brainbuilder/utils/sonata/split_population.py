@@ -37,14 +37,6 @@ DELETED_EMPTY_EDGES_POPULATION = "DELETED_EMPTY_EDGES_POPULATION"
 
 # name of field with ids that are valid in extracted circuit
 NEW_IDS = "new_id"
-# name of field with ids that are valid in parent circuit
-PARENT_IDS = "parent_id"
-# name of field with ids that are valid in original circuit
-ORIG_IDS = "original_id"
-# name of field with node population name in parent circuit
-PARENT_NAME = "parent_name"
-# name of field with node population name in original circuit
-ORIG_NAME = "original_name"
 
 
 @dataclass
@@ -62,7 +54,7 @@ class WriteEdgeConfig:
 
     def __post_init__(self):
         # Normalize inputs to list of (input_path, src_edge_name, source_filter) tuples.
-        # source_filter=None means use all source nodes (no filtering by source column).
+        # source_filter=None means use all source nodes (no filtering by source key).
         if not isinstance(self.input_path, list):
             # Single input: (path, edge_name, no filter)
             self.inputs = [(Path(self.input_path), self.src_edge_name, None)]
@@ -338,7 +330,7 @@ def _copy_filtered_edges(
                 orig_edges = h5in["edges"][src_edge_name]
                 orig_group = _get_unique_group(orig_edges)
 
-                # Filter source node IDs by source column if specified
+                # Filter source node IDs by source key if specified
                 if source_filter is not None:
                     source_df = id_mapping.data[write_edge_config.src_mapping].get(source_filter)
                     if source_df is not None:
@@ -936,7 +928,7 @@ def _gather_subcircuit_external(
                 output_path,
             )
 
-            # Use IdMapping.add_source which handles shift and deduplication
+            # Add external source nodes to the mapping
             old_ids = wanted_src_ids.index
             id_mapping.add_source(new_source_pop_name, edge.source.name, old_ids)
 
@@ -1310,9 +1302,8 @@ def split_subcircuit(
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
-    # Write newly-externalized nodes (uses merged id_mapping which includes both sources)
+    # Write newly-externalized nodes
     for population_name, orig_population_name in ext_nodes.items():
-        # Fetch each group from its correct source population
         frames = []
         for source_pop, df in id_mapping.data[population_name].items():
             source_ids = df.index.to_numpy()
