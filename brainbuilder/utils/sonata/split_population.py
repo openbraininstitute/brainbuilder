@@ -1150,15 +1150,13 @@ def _resolve_original_ids(id_mapping, parent_circ):
         parent_root = Path(parent_circ._circuit_config_path).parent
         parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
 
-        for pop_name, df in id_mapping.items():
+        for df in id_mapping.values():
             parent_pop = df[SOURCE].iloc[0]
-            backwards_mapped = pd.Series(
-                parent_mapping[parent_pop][ORIG_IDS], index=parent_mapping[parent_pop][NEW_IDS]
-            )
-            id_mapping[pop_name] = df.assign(**{ORIG_IDS: backwards_mapped[df.index].to_numpy()})
+            # new_ids are contiguous 0..N-1 by construction, so positional indexing is safe
+            df[ORIG_IDS] = np.array(parent_mapping[parent_pop][ORIG_IDS])[df.index]
     else:
-        for pop_name, df in id_mapping.items():
-            id_mapping[pop_name] = df.assign(**{ORIG_IDS: df.index.to_numpy()})
+        for df in id_mapping.values():
+            df[ORIG_IDS] = df.index.to_numpy()
 
 
 def _write_mapping(
