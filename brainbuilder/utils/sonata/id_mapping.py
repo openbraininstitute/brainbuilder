@@ -32,16 +32,33 @@ class IdMapping:
         self.data: dict[str, dict[str, pd.DataFrame]] = {}
 
     def add_source(self, dest_pop: str, source_pop: str, old_ids) -> pd.DataFrame:
-        """Add a source entry with shifted new_ids. Returns the created DataFrame."""
+        """Add a source entry with shifted new_ids. Returns the created/updated DataFrame.
+
+        If (dest_pop, source_pop) already exists, only IDs not already present are added.
+        """
         if dest_pop not in self.data:
             self.data[dest_pop] = {}
-        shift = sum(len(df) for df in self.data[dest_pop].values())
-        new_df = pd.DataFrame(
-            {NEW_IDS: shift + np.arange(len(old_ids), dtype=np.int64)},
-            index=old_ids,
-        )
-        self.data[dest_pop][source_pop] = new_df
-        return new_df
+
+        if source_pop in self.data[dest_pop]:
+            existing_df = self.data[dest_pop][source_pop]
+            old_ids = pd.Index(old_ids).difference(existing_df.index)
+            if len(old_ids) == 0:
+                return existing_df
+            shift = sum(len(df) for df in self.data[dest_pop].values())
+            new_df = pd.DataFrame(
+                {NEW_IDS: shift + np.arange(len(old_ids), dtype=np.int64)},
+                index=old_ids,
+            )
+            self.data[dest_pop][source_pop] = pd.concat([existing_df, new_df])
+        else:
+            shift = sum(len(df) for df in self.data[dest_pop].values())
+            new_df = pd.DataFrame(
+                {NEW_IDS: shift + np.arange(len(old_ids), dtype=np.int64)},
+                index=old_ids,
+            )
+            self.data[dest_pop][source_pop] = new_df
+
+        return self.data[dest_pop][source_pop]
 
     def write(self, output: Path, parent_circ) -> str:
         """Write id_mapping.json, resolving original_id on the fly from parent provenance.

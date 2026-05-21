@@ -987,30 +987,9 @@ def _gather_subcircuit_external(
             # Also populate id_mapping2 with the nested structure
             if id_mapping2 is not None:
                 source_pop = edge.source.name
-                # Get the old_ids that belong to this source
                 final_df = id_mapping[new_source_pop_name]
-                source_mask = final_df[SOURCE] == source_pop
-                source_old_ids = final_df.loc[source_mask].index
-
-                if new_source_pop_name not in id_mapping2.data:
-                    id_mapping2.add_source(new_source_pop_name, source_pop, source_old_ids)
-                elif source_pop not in id_mapping2.data[new_source_pop_name]:
-                    id_mapping2.add_source(new_source_pop_name, source_pop, source_old_ids)
-                else:
-                    # Already have entries for this source — merge new ones
-                    existing_df2 = id_mapping2.data[new_source_pop_name][source_pop]
-                    new_old_ids = source_old_ids.difference(existing_df2.index)
-                    if len(new_old_ids) > 0:
-                        shift = sum(
-                            len(df) for df in id_mapping2.data[new_source_pop_name].values()
-                        )
-                        new_df2 = pd.DataFrame(
-                            {NEW_IDS: shift + np.arange(len(new_old_ids), dtype=np.int64)},
-                            index=new_old_ids,
-                        )
-                        id_mapping2.data[new_source_pop_name][source_pop] = pd.concat(
-                            [existing_df2, new_df2]
-                        )
+                source_old_ids = final_df.loc[final_df[SOURCE] == source_pop].index
+                id_mapping2.add_source(new_source_pop_name, source_pop, source_old_ids)
 
             write_edge_config = WriteEdgeConfig(
                 output_path=output_path,
