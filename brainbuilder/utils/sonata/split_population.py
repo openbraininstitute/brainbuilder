@@ -37,14 +37,6 @@ DELETED_EMPTY_EDGES_POPULATION = "DELETED_EMPTY_EDGES_POPULATION"
 
 # name of field with ids that are valid in extracted circuit
 NEW_IDS = "new_id"
-# name of field with ids that are valid in parent circuit
-PARENT_IDS = "parent_id"
-# name of field with ids that are valid in original circuit
-ORIG_IDS = "original_id"
-# name of field with node population name in parent circuit
-PARENT_NAME = "parent_name"
-# name of field with node population name in original circuit
-ORIG_NAME = "original_name"
 
 
 @dataclass
@@ -58,6 +50,27 @@ class WriteEdgeConfig:
     dst_mapping: str
     h5_read_chunk_size: int | None = None
     edge_type: type[bytes] | None = None
+
+    def __post_init__(self):
+        # Normalize inputs to list of (input_path, src_edge_name, source_filter) tuples.
+        # source_filter=None means use all source nodes (no filtering by source key).
+        if not isinstance(self.input_path, list):
+            # Single input: (path, edge_name, no filter)
+            self.inputs = [(Path(self.input_path), self.src_edge_name, None)]
+        elif self.input_path and isinstance(self.input_path[0], tuple):
+            # Already tuples: (path, edge_name, source_filter)
+            self.inputs = [(Path(p), e, f) for p, e, f in self.input_path]
+        else:
+            # Lists of paths and edge names (legacy, no filter)
+            assert isinstance(self.src_edge_name, list)
+            assert len(self.input_path) == len(self.src_edge_name)
+            self.inputs = [
+                (Path(p) if isinstance(p, str) else p, e, None)
+                for p, e in zip(self.input_path, self.src_edge_name)
+            ]
+        self.output_path = (
+            Path(self.output_path) if isinstance(self.output_path, str) else self.output_path
+        )
 
 
 def _check_no_reserved_external_populations(circuit):
@@ -321,6 +334,7 @@ def _copy_filtered_edges(
             with h5py.File(input_path, "r") as h5in:
                 orig_edges = h5in["edges"][src_edge_name]
 
+                # Filter source node IDs by source key if specified
                 if source_filter is not None:
                     source_df = id_mapping.data[write_edge_config.src_mapping].get(source_filter)
                     if source_df is not None:
@@ -923,7 +937,7 @@ def _gather_subcircuit_external(
                 output_path,
             )
 
-            # Use IdMapping.add_source which handles shift and deduplication
+            # Add external source nodes to the mapping
             old_ids = wanted_src_ids.index
             id_mapping.add_source(new_source_pop_name, edge.source.name, old_ids)
 
@@ -1295,9 +1309,8 @@ def split_subcircuit(
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
-    # Write newly-externalized nodes (uses merged id_mapping which includes both sources)
+    # Write newly-externalized nodes
     for population_name, orig_population_name in ext_nodes.items():
-        # Fetch each group from its correct source population
         frames = []
         for source_pop, df in id_mapping.data[population_name].items():
             source_ids = df.index.to_numpy()
