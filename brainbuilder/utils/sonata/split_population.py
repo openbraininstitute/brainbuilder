@@ -614,6 +614,54 @@ def _get_node_id_mapping(split_nodes):
     }
 
 
+def _get_node_id_mapping2(split_nodes):
+    """Return a nested dict mapping dest pop -> source pop -> DataFrame(index=old_ids, columns=[new_id]).
+
+    Each population is initially self-sourced: id_mapping2[pop_name][pop_name] = DataFrame.
+    No 'source' column — source info is encoded in the inner dict key.
+
+    Returns:
+        dict[str, dict[str, pd.DataFrame]]: Nested mapping of destination -> source -> DataFrame.
+    """
+    return {
+        pop_name: {
+            pop_name: pd.DataFrame(
+                {NEW_IDS: np.arange(len(df), dtype=np.int64)},
+                index=df.index,
+            )
+        }
+        for pop_name, df in split_nodes.items()
+    }
+
+
+def _assert_id_mappings_consistent(id_mapping, id_mapping2):
+    """Assert that id_mapping and id_mapping2 are consistent.
+
+    For each dest_pop in id_mapping2, concatenating all inner DataFrames (in insertion
+    order) must produce the same index and new_id values as id_mapping[dest_pop]
+    (ignoring the source and original_id columns).
+    """
+    for dest_pop, sources in id_mapping2.items():
+        assert dest_pop in id_mapping, (
+            f"id_mapping2 has dest_pop '{dest_pop}' not found in id_mapping"
+        )
+        # Concatenate all inner DataFrames from id_mapping2
+        combined = pd.concat(sources.values())
+        # Get the old id_mapping DataFrame, keeping only the new_id column
+        old_df = id_mapping[dest_pop][[NEW_IDS]]
+        # Assert same index and new_id values
+        np.testing.assert_array_equal(
+            combined.index.to_numpy(),
+            old_df.index.to_numpy(),
+            err_msg=f"Index mismatch for dest_pop '{dest_pop}'",
+        )
+        np.testing.assert_array_equal(
+            combined[NEW_IDS].to_numpy(),
+            old_df[NEW_IDS].to_numpy(),
+            err_msg=f"new_id mismatch for dest_pop '{dest_pop}'",
+        )
+
+
 def _split_population_by_attribute(nodes_path, attribute):
     """return a dictionary keyed on attribute values with each of the new populations
 
@@ -688,6 +736,8 @@ def split_population(output, attribute, nodes_path, edges_path):
     _write_nodes(output, split_populations)
 
     id_mapping = _get_node_id_mapping(split_populations)
+    id_mapping2 = _get_node_id_mapping2(split_populations)
+    _assert_id_mappings_consistent(id_mapping, id_mapping2)
     _write_edges(output, edges_path, id_mapping, expect_to_use_all_edges=True)
 
     _write_circuit_config(output, split_populations)
@@ -719,6 +769,8 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
     _write_nodes(output, split_populations)
 
     id_mapping = _get_node_id_mapping(split_populations)
+    id_mapping2 = _get_node_id_mapping2(split_populations)
+    _assert_id_mappings_consistent(id_mapping, id_mapping2)
     _write_edges(output, edges_path, id_mapping, expect_to_use_all_edges=False)
 
 
@@ -864,10 +916,12 @@ def _gather_subcircuit_external(
     id_mapping,
     existing_node_pop_names,
     existing_edge_pop_names,
+    id_mapping2=None,
 ):
     """Gather edge configs and node info for external populations in a subcircuit.
 
     Mutates id_mapping with the external node entries.
+    Also populates id_mapping2 (if provided) with the nested structure.
 
     Returns:
         tuple: (write_edge_configs, new_nodes)
@@ -958,6 +1012,38 @@ def _gather_subcircuit_external(
             else:
                 id_mapping[new_source_pop_name] = wanted_src_ids
 
+            # Also populate id_mapping2 with the nested structure
+            if id_mapping2 is not None:
+                source_pop = edge.source.name
+                if new_source_pop_name not in id_mapping2:
+                    id_mapping2[new_source_pop_name] = {}
+                # Compute shift: sum of lengths of all existing entries for this destination
+                shift = sum(len(df) for df in id_mapping2[new_source_pop_name].values())
+                # Get the old_ids that belong to this source (the ones just added)
+                # From the final id_mapping, extract entries for this source_pop
+                final_df = id_mapping[new_source_pop_name]
+                source_mask = final_df[SOURCE] == source_pop
+                source_old_ids = final_df.loc[source_mask].index
+                if source_pop in id_mapping2[new_source_pop_name]:
+                    # Already have entries for this source — merge new ones
+                    existing_df2 = id_mapping2[new_source_pop_name][source_pop]
+                    new_old_ids = source_old_ids.difference(existing_df2.index)
+                    if len(new_old_ids) > 0:
+                        shift2 = sum(len(df) for df in id_mapping2[new_source_pop_name].values())
+                        new_df2 = pd.DataFrame(
+                            {NEW_IDS: shift2 + np.arange(len(new_old_ids), dtype=np.int64)},
+                            index=new_old_ids,
+                        )
+                        id_mapping2[new_source_pop_name][source_pop] = pd.concat(
+                            [existing_df2, new_df2]
+                        )
+                else:
+                    new_df2 = pd.DataFrame(
+                        {NEW_IDS: shift + np.arange(len(source_old_ids), dtype=np.int64)},
+                        index=source_old_ids,
+                    )
+                    id_mapping2[new_source_pop_name][source_pop] = new_df2
+
             write_edge_config = WriteEdgeConfig(
                 output_path=str(output_path),
                 input_path=_get_storage_path(edge),
@@ -983,6 +1069,7 @@ def _gather_subcircuit_virtual_typed(
     id_mapping,
     do_externals=False,
     list_of_sources_to_ignore=(),
+    id_mapping2=None,
 ):
     """Gather edge configs and node IDs for virtual-typed populations in a subcircuit.
 
@@ -992,6 +1079,7 @@ def _gather_subcircuit_virtual_typed(
       - True: only external_* populations
 
     Mutates id_mapping with the selected source node entries.
+    Also populates id_mapping2 (if provided) with the nested structure.
 
     Returns:
         tuple: (write_edge_configs, pop_used_source_node_ids)
@@ -1038,6 +1126,15 @@ def _gather_subcircuit_virtual_typed(
     # update the mappings with the virtual nodes
     for name, ids in pop_used_source_node_ids.items():
         id_mapping[name] = pd.DataFrame({NEW_IDS: range(len(ids)), SOURCE: name}, index=ids)
+
+        # Also populate id_mapping2 with the nested structure
+        if id_mapping2 is not None:
+            id_mapping2[name] = {
+                name: pd.DataFrame(
+                    {NEW_IDS: np.arange(len(ids), dtype=np.int64)},
+                    index=ids,
+                )
+            }
 
     write_edge_configs = []
     for edge_pop_name, edge in virtual_populations.items():
@@ -1294,6 +1391,7 @@ def split_subcircuit(
     split_populations = {pop_name: df for pop_name, df in split_populations.items() if not df.empty}
 
     id_mapping = _get_node_id_mapping(split_populations)
+    id_mapping2 = _get_node_id_mapping2(split_populations)
 
     # --- GATHER phase ---
     bio_edge_configs = _gather_subcircuit_biological(output, circuit, edge_pop_to_paths, id_mapping)
@@ -1308,6 +1406,7 @@ def split_subcircuit(
             id_mapping,
             do_externals=False,
             list_of_sources_to_ignore=list_of_virtual_sources_to_ignore,
+            id_mapping2=id_mapping2,
         )
 
     # Filter existing external populations (keep only nodes that still project into subcircuit)
@@ -1327,6 +1426,7 @@ def split_subcircuit(
             edge_pop_to_paths,
             id_mapping,
             do_externals=True,
+            id_mapping2=id_mapping2,
         )
 
         ext_edge_configs, ext_nodes = _gather_subcircuit_external(
@@ -1335,7 +1435,11 @@ def split_subcircuit(
             id_mapping,
             existing_node_pop_names,
             existing_edge_pop_names,
+            id_mapping2=id_mapping2,
         )
+
+    # --- Assert id_mapping and id_mapping2 are consistent ---
+    _assert_id_mappings_consistent(id_mapping, id_mapping2)
 
     _resolve_original_ids(id_mapping, circuit)
 
