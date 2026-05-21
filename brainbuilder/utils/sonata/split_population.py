@@ -1152,8 +1152,8 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
     return config
 
 
-def _update_node_sets(node_sets, id_mapping):
-    """using the `id_mapping`, update impacted `node_sets`
+def _update_node_sets(node_sets, id_mapping2):
+    """using the `id_mapping2`, update impacted `node_sets`
 
     Note: impacted means they have a 'population', and they have 'node_ids' that changed
     """
@@ -1166,10 +1166,10 @@ def _update_node_sets(node_sets, id_mapping):
                 L.warning("No population key in nodeset %s, ignoring", name)
                 continue
 
-            if rule["population"] not in id_mapping:
+            if rule["population"] not in id_mapping2.data:
                 continue
 
-            mapping = id_mapping[rule["population"]]
+            mapping = pd.concat(id_mapping2.data[rule["population"]].values())
             ret[name] = rule
             ret[name]["node_id"] = (
                 mapping.loc[mapping.index.intersection(rule["node_id"])][NEW_IDS]
@@ -1372,24 +1372,22 @@ def split_subcircuit(
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
-    # Write newly-externalized nodes (uses merged id_mapping which includes both sources)
+    # Write newly-externalized nodes (uses merged id_mapping2 which includes both sources)
     for population_name, orig_population_name in ext_nodes.items():
-        # id_mapping may contain nodes from multiple sources (existing external + newly externalized)
         # Fetch each group from its correct source population
-        df_mapping = id_mapping[population_name]
         frames = []
-        for source_pop, group_df in df_mapping.groupby(SOURCE):
-            source_ids = group_df.index.to_numpy()
+        for source_pop, df in id_mapping2.data[population_name].items():
+            source_ids = df.index.to_numpy()
             frames.append(circuit.nodes[source_pop].get(source_ids))
-        df = pd.concat(frames)
+        combined_df = pd.concat(frames)
         nodes_path = Path(output) / population_name / "nodes.h5"
-        new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
+        new_node_files[population_name] = _save_sonata_nodes(nodes_path, combined_df, population_name)
 
     mapping_fn = id_mapping2.write(output, circuit)
 
     config = copy.deepcopy(circuit.config)
 
-    node_sets = _update_node_sets(utils.load_json(config["node_sets_file"]), id_mapping)
+    node_sets = _update_node_sets(utils.load_json(config["node_sets_file"]), id_mapping2)
     utils.dump_json(output / "node_sets.json", node_sets)
     config["node_sets_file"] = "$BASE_DIR/node_sets.json"
 
