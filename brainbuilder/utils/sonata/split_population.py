@@ -1194,9 +1194,7 @@ def _resolve_original_ids(id_mapping, parent_circ):
                 else:
                     # new_ids are contiguous 0..N-1 by construction, so positional indexing is safe
                     parent_orig_ids = np.array(parent_mapping[source_pop][ORIG_IDS])
-                    df.loc[group_df.index, ORIG_IDS] = parent_orig_ids[
-                        group_df.index.astype(int)
-                    ]
+                    df.loc[group_df.index, ORIG_IDS] = parent_orig_ids[group_df.index.astype(int)]
     else:
         for df in id_mapping.values():
             df[ORIG_IDS] = df.index.to_numpy()
