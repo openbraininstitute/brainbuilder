@@ -31,6 +31,23 @@ class IdMapping:
     def __init__(self):
         self.data: dict[str, dict[str, pd.DataFrame]] = {}
 
+    @staticmethod
+    def _resolve_original_ids(parent_ids, source_pop, parent_mapping):
+        """Resolve original IDs by chaining through parent provenance.
+
+        Args:
+            parent_ids: Index of parent IDs to resolve.
+            source_pop: The source population name in the parent circuit.
+            parent_mapping: The parent's id_mapping.json (or None for first-level extraction).
+
+        Returns:
+            list: Original IDs corresponding to the parent IDs.
+        """
+        if parent_mapping is not None and source_pop in parent_mapping:
+            parent_orig_ids = np.array(parent_mapping[source_pop][ORIG_IDS])
+            return parent_orig_ids[parent_ids.astype(int)].tolist()
+        return parent_ids.tolist()
+
     def add_source(self, dest_pop: str, source_pop: str, old_ids) -> pd.DataFrame:
         """Add a source entry with shifted new_ids. Returns the created/updated DataFrame.
 
@@ -81,14 +98,9 @@ class IdMapping:
             for source_pop, df in sources.items():
                 all_parent_ids.extend(df.index.tolist())
                 all_new_ids.extend(df[NEW_IDS].tolist())
-
-                # Resolve original_ids by chaining through parent provenance
-                if parent_mapping is not None and source_pop in parent_mapping:
-                    parent_orig_ids = np.array(parent_mapping[source_pop][ORIG_IDS])
-                    orig_ids = parent_orig_ids[df.index.astype(int)].tolist()
-                else:
-                    orig_ids = df.index.tolist()
-                all_orig_ids.extend(orig_ids)
+                all_orig_ids.extend(
+                    self._resolve_original_ids(df.index, source_pop, parent_mapping)
+                )
 
             # Derive parent_name and orig_name from the first source
             first_source = next(iter(sources))
