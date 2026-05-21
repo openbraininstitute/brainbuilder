@@ -13,6 +13,7 @@ from numpy.testing import assert_array_equal
 from brainbuilder.utils import load_json, dump_json
 from brainbuilder.utils.sonata import split_population
 from brainbuilder.utils.sonata import utils as sonata_utils
+from brainbuilder.utils.sonata.id_mapping import IdMapping
 
 DATA_PATH = (Path(__file__).parent / "../data/sonata/split_population/").resolve()
 SPLIT_SUBCIRCUIT_DATA_PATH = (Path(__file__).parent / "../data/sonata/split_subcircuit/").resolve()
@@ -262,7 +263,7 @@ def test_simple_split_subcircuit(tmp_path):
         assert list(group["target_node_id"]) == [0]
 
 def test__update_node_sets():
-    ret = split_population._update_node_sets(node_sets={}, id_mapping={})
+    ret = split_population._update_node_sets(node_sets={}, id_mapping2=IdMapping())
     assert ret == {}
 
     node_sets = {
@@ -283,10 +284,9 @@ def test__update_node_sets():
             "mtype": "foo",
         },
     }
-    id_mapping = {
-        "A": pd.DataFrame({"new_id": np.arange(4)}, index=[0, 5, 4, 3]),
-    }
-    ret = split_population._update_node_sets(node_sets, id_mapping)
+    id_mapping2 = IdMapping()
+    id_mapping2.data["A"] = {"A": pd.DataFrame({"new_id": np.arange(4)}, index=[0, 5, 4, 3])}
+    ret = split_population._update_node_sets(node_sets, id_mapping2)
 
     expected = {
         "CopiedNoNodeIds": ["All"],
@@ -309,10 +309,9 @@ def test__update_node_sets_compound_filtering():
         "simple": {"mtype": "foo"},
     }
     # Only population A is in the mapping, so child_b gets dropped
-    id_mapping = {
-        "A": pd.DataFrame({"new_id": np.arange(2)}, index=[0, 1]),
-    }
-    ret = split_population._update_node_sets(node_sets, id_mapping)
+    id_mapping2 = IdMapping()
+    id_mapping2.data["A"] = {"A": pd.DataFrame({"new_id": np.arange(2)}, index=[0, 1])}
+    ret = split_population._update_node_sets(node_sets, id_mapping2)
 
     assert ret == {
         "compound": ["child_a"],
@@ -323,8 +322,7 @@ def test__update_node_sets_compound_filtering():
     }
 
     # When all children are dropped, the compound set is removed entirely
-    id_mapping_empty = {}
-    ret = split_population._update_node_sets(node_sets, id_mapping_empty)
+    ret = split_population._update_node_sets(node_sets, IdMapping())
     assert "compound" not in ret
     assert "external_ref" in ret
 
@@ -340,10 +338,9 @@ def test__update_node_sets_nested_compound_filtering():
     }
     # Only A survives: mid loses both children and is dropped,
     # then top loses mid but keeps child_a
-    id_mapping = {
-        "A": pd.DataFrame({"new_id": np.arange(2)}, index=[0, 1]),
-    }
-    ret = split_population._update_node_sets(node_sets, id_mapping)
+    id_mapping2 = IdMapping()
+    id_mapping2.data["A"] = {"A": pd.DataFrame({"new_id": np.arange(2)}, index=[0, 1])}
+    ret = split_population._update_node_sets(node_sets, id_mapping2)
 
     assert ret == {
         "top": ["child_a"],
@@ -351,7 +348,7 @@ def test__update_node_sets_nested_compound_filtering():
     }
 
     # When nothing survives, everything is cleaned up
-    ret = split_population._update_node_sets(node_sets, {})
+    ret = split_population._update_node_sets(node_sets, IdMapping())
     assert "top" not in ret
     assert "mid" not in ret
 
