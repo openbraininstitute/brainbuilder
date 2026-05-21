@@ -1186,28 +1186,23 @@ def _resolve_original_ids(id_mapping, parent_circ):
         parent_root = Path(parent_circ._circuit_config_path).parent
         parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
 
-        for pop_name, df in id_mapping.items():
-            orig_ids = pd.Series(index=df.index, dtype=object)
+        for df in id_mapping.values():
             for source_pop, group_df in df.groupby(SOURCE):
                 if source_pop not in parent_mapping:
                     # Population not in parent mapping — original == parent
-                    orig_ids.loc[group_df.index] = group_df.index.to_numpy()
+                    df.loc[group_df.index, ORIG_IDS] = group_df.index.to_numpy()
                 else:
-                    backwards_mapped = pd.Series(
-                        parent_mapping[source_pop][ORIG_IDS],
-                        index=parent_mapping[source_pop][NEW_IDS],
-                    )
-                    resolvable = group_df.index.isin(backwards_mapped.index)
-                    orig_ids.loc[group_df.index[resolvable]] = backwards_mapped[
-                        group_df.index[resolvable]
-                    ].to_numpy()
-                    orig_ids.loc[group_df.index[~resolvable]] = group_df.index[
-                        ~resolvable
-                    ].to_numpy()
-            id_mapping[pop_name] = df.assign(**{ORIG_IDS: orig_ids.to_numpy()})
+                    # new_ids are contiguous 0..N-1 by construction, so positional indexing is safe
+                    parent_orig_ids = np.array(parent_mapping[source_pop][ORIG_IDS])
+                    idx = group_df.index.to_numpy().astype(int)
+                    resolvable_mask = idx < len(parent_orig_ids)
+                    df.loc[group_df.index[resolvable_mask], ORIG_IDS] = parent_orig_ids[
+                        idx[resolvable_mask]
+                    ]
+                    df.loc[group_df.index[~resolvable_mask], ORIG_IDS] = idx[~resolvable_mask]
     else:
-        for pop_name, df in id_mapping.items():
-            id_mapping[pop_name] = df.assign(**{ORIG_IDS: df.index.to_numpy()})
+        for df in id_mapping.values():
+            df[ORIG_IDS] = df.index.to_numpy()
 
 
 def _write_mapping(
