@@ -98,14 +98,13 @@ def test__write_nodes(tmp_path):
 
 
 def test__get_node_id_mapping():
-    split_nodes = {
-        "A": pd.DataFrame(index=np.arange(0, 10)),
-        "B": pd.DataFrame(index=np.arange(10, 15)),
-    }
-    ret = split_population._get_node_id_mapping(split_nodes)
-    assert len(ret) == 2
-    assert ret["A"].new_id.to_list() == list(range(10))
-    assert ret["B"].new_id.to_list() == list(range(5))
+    """Test that IdMapping.add_source produces correct mappings (replaces old _get_node_id_mapping)."""
+    id_mapping = IdMapping()
+    id_mapping.add_source("A", "A", np.arange(0, 10))
+    id_mapping.add_source("B", "B", np.arange(10, 15))
+    assert len(id_mapping.data) == 2
+    assert id_mapping.data["A"]["A"].new_id.to_list() == list(range(10))
+    assert id_mapping.data["B"]["B"].new_id.to_list() == list(range(5))
 
 
 def test__split_population_by_attribute():
@@ -146,7 +145,7 @@ def test__write_circuit_config(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "id_mapping, h5_read_chunk_size, expected_dir",
+    "id_mapping_dict, h5_read_chunk_size, expected_dir",
     [
         (
             {
@@ -195,11 +194,15 @@ def test__write_circuit_config(tmp_path):
         ),
     ],
 )
-def test__write_edges(tmp_path, id_mapping, h5_read_chunk_size, expected_dir):
+def test__write_edges(tmp_path, id_mapping_dict, h5_read_chunk_size, expected_dir):
     # edges.h5 contains the following edges:
     # '/edges/default/source_node_id': [2, 0, 0, 2]
     # '/edges/default/target_node_id': [0, 1, 1, 1]
     edges_path = DATA_PATH / "edges.h5"
+    # Convert plain dict to IdMapping object
+    id_mapping = IdMapping()
+    for pop_name, df in id_mapping_dict.items():
+        id_mapping.data[pop_name] = {pop_name: df}
     # iterate over different id_mappings to split the edges in different ways
     split_population._write_edges(
         tmp_path,
@@ -263,7 +266,7 @@ def test_simple_split_subcircuit(tmp_path):
         assert list(group["target_node_id"]) == [0]
 
 def test__update_node_sets():
-    ret = split_population._update_node_sets(node_sets={}, id_mapping2=IdMapping())
+    ret = split_population._update_node_sets(node_sets={}, id_mapping=IdMapping())
     assert ret == {}
 
     node_sets = {
@@ -284,9 +287,9 @@ def test__update_node_sets():
             "mtype": "foo",
         },
     }
-    id_mapping2 = IdMapping()
-    id_mapping2.data["A"] = {"A": pd.DataFrame({"new_id": np.arange(4)}, index=[0, 5, 4, 3])}
-    ret = split_population._update_node_sets(node_sets, id_mapping2)
+    id_mapping = IdMapping()
+    id_mapping.data["A"] = {"A": pd.DataFrame({"new_id": np.arange(4)}, index=[0, 5, 4, 3])}
+    ret = split_population._update_node_sets(node_sets, id_mapping)
 
     expected = {
         "CopiedNoNodeIds": ["All"],
@@ -868,10 +871,9 @@ def test_copy_filtered_edges_advanced(tmp_path):
 
     # Run
 
-    id_mapping = {
-        "orig_src_node_pop": mapping,
-        "orig_dst_node_pop": mapping,
-    }
+    id_mapping = IdMapping()
+    id_mapping.data["orig_src_node_pop"] = {"orig_src_node_pop": mapping}
+    id_mapping.data["orig_dst_node_pop"] = {"orig_dst_node_pop": mapping}
 
     write_edge_config = split_population.WriteEdgeConfig(
         output_path=outfile,
