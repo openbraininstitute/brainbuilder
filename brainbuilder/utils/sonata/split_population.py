@@ -1314,7 +1314,13 @@ def split_subcircuit(
             nodes_path, combined_df, population_name
         )
 
-    mapping_fn = id_mapping.write(output, circuit)
+    provenance = circuit.config.get("components", {}).get("provenance", {})
+    parent_mapping_path = None
+    if "id_mapping" in provenance:
+        parent_root = Path(circuit._circuit_config_path).parent
+        parent_mapping_path = parent_root / provenance["id_mapping"]
+
+    mapping_fn = id_mapping.write(output, parent_mapping_path)
 
     config = copy.deepcopy(circuit.config)
 

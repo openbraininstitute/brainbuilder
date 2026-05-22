@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for brainbuilder.utils.sonata.id_mapping.IdMapping"""
 
-from unittest.mock import MagicMock
-
 import numpy as np
 import pandas as pd
 
@@ -129,10 +127,7 @@ def test_write_single_source(tmp_path):
     m = IdMapping()
     m.add_source("A", "A", [10, 20, 30])
 
-    parent_circ = MagicMock()
-    parent_circ.config = {}
-
-    fn = m.write(tmp_path, parent_circ)
+    fn = m.write(tmp_path)
     assert fn == "id_mapping.json"
 
     result = load_json(tmp_path / "id_mapping.json")
@@ -153,10 +148,7 @@ def test_write_multi_source(tmp_path):
     m.add_source("ext_A", "A", [10, 20])
     m.add_source("ext_A", "B", [5, 15])
 
-    parent_circ = MagicMock()
-    parent_circ.config = {}
-
-    m.write(tmp_path, parent_circ)
+    m.write(tmp_path)
     result = load_json(tmp_path / "id_mapping.json")
 
     assert result["ext_A"]["parent_id"] == [10, 20]
@@ -185,15 +177,9 @@ def test_write_nested_extraction(tmp_path):
         }
     })
 
-    parent_circ = MagicMock()
-    parent_circ.config = {
-        "components": {"provenance": {"id_mapping": "id_mapping.json"}}
-    }
-    parent_circ._circuit_config_path = str(parent_dir / "circuit_config.json")
-
     output = tmp_path / "output"
     output.mkdir()
-    m.write(output, parent_circ)
+    m.write(output, parent_mapping_path=parent_dir / "id_mapping.json")
     result = load_json(output / "id_mapping.json")
 
     assert result["A"]["parent_id"] == [0, 2]
