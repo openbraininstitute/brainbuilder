@@ -36,7 +36,6 @@ DELETED_EMPTY_EDGES_FILE = "DELETED_EMPTY_EDGES_FILE"
 DELETED_EMPTY_EDGES_POPULATION = "DELETED_EMPTY_EDGES_POPULATION"
 
 
-
 @dataclass
 class WriteEdgeConfig:
     inputs: list[tuple[Path, str, str | None]]
@@ -520,12 +519,8 @@ def _get_node_counts(
 ):
     """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
 
-    source_node_count = (
-        int(max(df[NEW_IDS].max() for df in id_mapping.data[src_mapping].values())) + 1
-    )
-    target_node_count = (
-        int(max(df[NEW_IDS].max() for df in id_mapping.data[dst_mapping].values())) + 1
-    )
+    source_node_count = id_mapping.node_count(src_mapping)
+    target_node_count = id_mapping.node_count(dst_mapping)
 
     new_edges = h5out["edges"][new_edge_pop_name]
     edge_count = len(new_edges["source_node_id"])
