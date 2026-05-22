@@ -81,21 +81,24 @@ class IdMapping:
 
         return self.data[dest_pop][source_pop]
 
-    def write(self, output: Path, parent_circ) -> str:
+    def write(self, output: Path, parent_mapping_path: Path | None = None) -> str:
         """Write id_mapping.json, resolving original_id on the fly from parent provenance.
 
         For single-source populations, the format is unchanged (backward compatible).
         For multi-source populations, additional parentN_name/parentN_id fields are added
         for the 2nd, 3rd, etc. sources.
 
+        Args:
+            output: Directory where id_mapping.json will be written.
+            parent_mapping_path: Path to the parent's id_mapping.json for nested extractions.
+                None for first-level extractions.
+
         Returns:
             The filename of the written mapping (relative to output).
         """
-        provenance = parent_circ.config.get("components", {}).get("provenance", {})
         parent_mapping = None
-        if "id_mapping" in provenance:
-            parent_root = Path(parent_circ._circuit_config_path).parent
-            parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
+        if parent_mapping_path is not None:
+            parent_mapping = utils.load_json(parent_mapping_path)
 
         mapping = {}
         for dest_pop, sources in self.data.items():
