@@ -148,8 +148,8 @@ class TestWrite:
             }
         }
 
-    def test_multi_source_merged_in_output(self, tmp_path):
-        """Multiple sources for same dest are merged in the JSON output."""
+    def test_multi_source_split_in_output(self, tmp_path):
+        """Multiple sources for same dest get separate parentN fields."""
         m = IdMapping()
         m.add_source("ext_A", "A", [10, 20])
         m.add_source("ext_A", "B", [5, 15])
@@ -160,10 +160,12 @@ class TestWrite:
         m.write(tmp_path, parent_circ)
         result = load_json(tmp_path / "id_mapping.json")
 
-        assert result["ext_A"]["parent_id"] == [10, 20, 5, 15]
+        assert result["ext_A"]["parent_id"] == [10, 20]
+        assert result["ext_A"]["parent_name"] == "A"
+        assert result["ext_A"]["parent2_id"] == [5, 15]
+        assert result["ext_A"]["parent2_name"] == "B"
         assert result["ext_A"]["new_id"] == [0, 1, 2, 3]
         assert result["ext_A"]["original_id"] == [10, 20, 5, 15]
-        assert result["ext_A"]["parent_name"] == "A"
         assert result["ext_A"]["original_name"] == "A"
 
     def test_nested_extraction_resolves_original(self, tmp_path):
@@ -202,3 +204,57 @@ class TestWrite:
         assert result["A"]["original_id"] == [1000, 3000]
         assert result["A"]["original_name"] == "OrigA"
         assert result["A"]["parent_name"] == "A"
+
+
+class TestLoad:
+    """Tests for IdMapping.load"""
+
+    def test_single_source(self, tmp_path):
+        """Load a single-source id_mapping.json."""
+        m = IdMapping()
+        m.add_source("A", "A", [10, 20, 30])
+
+        parent_circ = MagicMock()
+        parent_circ.config = {}
+        m.write(tmp_path, parent_circ)
+
+        loaded = IdMapping.load(tmp_path / "id_mapping.json")
+        assert list(loaded.data["A"].keys()) == ["A"]
+        assert list(loaded.data["A"]["A"].index) == [10, 20, 30]
+        assert list(loaded.data["A"]["A"][NEW_IDS]) == [0, 1, 2]
+
+    def test_multi_source(self, tmp_path):
+        """Load a multi-source id_mapping.json."""
+        m = IdMapping()
+        m.add_source("ext_A", "A", [10, 20])
+        m.add_source("ext_A", "B", [5, 15])
+
+        parent_circ = MagicMock()
+        parent_circ.config = {}
+        m.write(tmp_path, parent_circ)
+
+        loaded = IdMapping.load(tmp_path / "id_mapping.json")
+        assert list(loaded.data["ext_A"].keys()) == ["A", "B"]
+        assert list(loaded.data["ext_A"]["A"].index) == [10, 20]
+        assert list(loaded.data["ext_A"]["A"][NEW_IDS]) == [0, 1]
+        assert list(loaded.data["ext_A"]["B"].index) == [5, 15]
+        assert list(loaded.data["ext_A"]["B"][NEW_IDS]) == [2, 3]
+
+    def test_roundtrip(self, tmp_path):
+        """Write then load produces equivalent structure."""
+        m = IdMapping()
+        m.add_source("dest", "s1", [0, 1, 2])
+        m.add_source("dest", "s2", [10, 11])
+        m.add_source("other", "other", [100])
+
+        parent_circ = MagicMock()
+        parent_circ.config = {}
+        m.write(tmp_path, parent_circ)
+
+        loaded = IdMapping.load(tmp_path / "id_mapping.json")
+        for dest_pop in m.data:
+            for source_pop in m.data[dest_pop]:
+                pd.testing.assert_frame_equal(
+                    m.data[dest_pop][source_pop],
+                    loaded.data[dest_pop][source_pop],
+                )
