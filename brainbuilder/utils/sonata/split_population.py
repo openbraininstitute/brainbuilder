@@ -298,11 +298,8 @@ def _copy_filtered_edges(
     )
     is_neuroglial = write_edge_config.edge_type == "synapse_astrocyte"
 
-    src_concat = pd.concat(id_mapping.data[write_edge_config.src_mapping].values())
     dst_concat = pd.concat(id_mapping.data[write_edge_config.dst_mapping].values())
-    sgids_new = src_concat.index.to_numpy()
     tgids_new = dst_concat.index.to_numpy()
-    assert (sgids_new >= 0).all(), "Source population ids must be positive."
     assert (tgids_new >= 0).all(), "Target population ids must be positive."
 
     with h5py.File(output_path, "a") as h5out:
@@ -327,14 +324,23 @@ def _copy_filtered_edges(
                 orig_edges = h5in["edges"][src_edge_name]
                 orig_group = _get_unique_group(orig_edges)
 
-                # Filter source node IDs by source key if specified
-                filtered_sgids = sgids_new
-                filtered_src_mapping = src_concat
+                # Resolve source mapping for this input
                 if source_filter is not None:
                     source_df = id_mapping.data[write_edge_config.src_mapping].get(source_filter)
-                    if source_df is not None:
-                        filtered_sgids = source_df.index.to_numpy()
-                        filtered_src_mapping = source_df
+                    assert source_df is not None, (
+                        f"source_filter '{source_filter}' not found in "
+                        f"id_mapping.data['{write_edge_config.src_mapping}']"
+                    )
+                else:
+                    src_sources = id_mapping.data[write_edge_config.src_mapping]
+                    assert len(src_sources) == 1, (
+                        f"Multi-source population '{write_edge_config.src_mapping}' requires "
+                        f"source_filter but none was provided. Sources: {list(src_sources.keys())}"
+                    )
+                    source_df = next(iter(src_sources.values()))
+
+                filtered_sgids = source_df.index.to_numpy()
+                assert (filtered_sgids >= 0).all(), "Source population ids must be positive."
 
                 # Initialize edge group datasets from the first source (only once)
                 if not is_append:
@@ -387,7 +393,7 @@ def _copy_filtered_edges(
                     sl_and_masks=sl_and_masks,
                     new_edges=new_edges,
                     orig_edges=orig_edges,
-                    src_mapping=filtered_src_mapping,
+                    src_mapping=source_df,
                     dst_mapping=dst_concat,
                     edge_mappings=edge_mappings,
                     is_neuroglial=is_neuroglial,
