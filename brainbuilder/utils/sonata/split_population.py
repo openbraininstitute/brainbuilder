@@ -325,14 +325,10 @@ def _copy_filtered_edges(
                 orig_group = _get_unique_group(orig_edges)
 
                 # Resolve source mapping for this input
+                src_sources = id_mapping.data[write_edge_config.src_mapping]
                 if source_filter is not None:
-                    source_df = id_mapping.data[write_edge_config.src_mapping].get(source_filter)
-                    assert source_df is not None, (
-                        f"source_filter '{source_filter}' not found in "
-                        f"id_mapping.data['{write_edge_config.src_mapping}']"
-                    )
+                    source_df = src_sources[source_filter]
                 else:
-                    src_sources = id_mapping.data[write_edge_config.src_mapping]
                     assert len(src_sources) == 1, (
                         f"Multi-source population '{write_edge_config.src_mapping}' requires "
                         f"source_filter but none was provided. Sources: {list(src_sources.keys())}"
@@ -340,7 +336,6 @@ def _copy_filtered_edges(
                     source_df = next(iter(src_sources.values()))
 
                 filtered_sgids = source_df.index.to_numpy()
-                assert (filtered_sgids >= 0).all(), "Source population ids must be positive."
 
                 # Initialize edge group datasets from the first source (only once)
                 if not is_append:
