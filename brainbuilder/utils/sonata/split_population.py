@@ -44,6 +44,8 @@ ORIG_IDS = "original_id"
 PARENT_NAME = "parent_name"
 # name of field with node population name in original circuit
 ORIG_NAME = "original_name"
+# name of field tracking which parent population each node came from
+SOURCE = "source"
 
 
 @dataclass
@@ -472,8 +474,8 @@ def _get_node_counts(
 ):
     """for `h5out`, return the `new_edge_pop_name`, `source_node_count`, and `target_node_count`"""
 
-    source_node_count = int(np.max(id_mapping[src_mapping])) + 1
-    target_node_count = int(np.max(id_mapping[dst_mapping])) + 1
+    source_node_count = int(id_mapping[src_mapping][NEW_IDS].max()) + 1
+    target_node_count = int(id_mapping[dst_mapping][NEW_IDS].max()) + 1
 
     new_edges = h5out["edges"][new_edge_pop_name]
     edge_count = len(new_edges["source_node_id"])
@@ -575,9 +577,12 @@ def _write_nodes(output, split_nodes, population_to_path=None):
 
 
 def _get_node_id_mapping(split_nodes):
-    """return a dict split_nodes.keys() -> DataFrame with index old_ids, and colunm new_id"""
+    """Return a dict mapping population name to DataFrame(index=old_ids, columns=[new_id, source])."""
     return {
-        new_population: pd.DataFrame({NEW_IDS: np.arange(len(df), dtype=np.int64)}, index=df.index)
+        new_population: pd.DataFrame(
+            {NEW_IDS: np.arange(len(df), dtype=np.int64), SOURCE: new_population},
+            index=df.index,
+        )
         for new_population, df in split_nodes.items()
     }
 
@@ -862,13 +867,12 @@ def _gather_subcircuit_external(
     output,
     circuit,
     id_mapping,
-    node_pop_name_mapping,
     existing_node_pop_names,
     existing_edge_pop_names,
 ):
     """Gather edge configs and node info for external populations in a subcircuit.
 
-    Mutates id_mapping and node_pop_name_mapping with the external node entries.
+    Mutates id_mapping with the external node entries.
 
     Returns:
         tuple: (write_edge_configs, new_nodes)
@@ -916,6 +920,8 @@ def _gather_subcircuit_external(
             if len(wanted_src_ids) == 0:
                 continue
 
+            wanted_src_ids[SOURCE] = edge.source.name
+
             new_name = f"external_{name}"
             while new_name in existing_edge_pop_names:
                 L.debug("%s already exists as an edge population", new_name)
@@ -924,7 +930,6 @@ def _gather_subcircuit_external(
             while new_source_pop_name in existing_node_pop_names:
                 L.debug("%s already exists as an node population", new_source_pop_name)
                 new_source_pop_name = "external_" + new_source_pop_name
-            node_pop_name_mapping[new_source_pop_name] = edge.source.name
 
             output_path = output / (new_name + ".h5")
             L.debug(
@@ -981,12 +986,11 @@ def _gather_subcircuit_virtual(
     circuit,
     edge_populations_to_paths,
     id_mapping,
-    node_pop_name_mapping,
     list_of_sources_to_ignore=(),
 ):
     """Gather edge configs and node IDs for virtual populations in a subcircuit.
 
-    Mutates id_mapping and node_pop_name_mapping with the virtual node entries.
+    Mutates id_mapping with the virtual node entries.
 
     Returns:
         tuple: (write_edge_configs, pop_used_source_node_ids)
@@ -1032,9 +1036,7 @@ def _gather_subcircuit_virtual(
 
     # update the mappings with the virtual nodes
     for name, ids in pop_used_source_node_ids.items():
-        id_mapping[name] = pd.DataFrame({NEW_IDS: range(len(ids))}, index=ids)
-        # Virtual input sources retain their name unchanged
-        node_pop_name_mapping[name] = name
+        id_mapping[name] = pd.DataFrame({NEW_IDS: range(len(ids)), SOURCE: name}, index=ids)
 
     write_edge_configs = []
     for edge_pop_name, edge in virtual_populations.items():
@@ -1171,53 +1173,63 @@ def _update_node_sets(node_sets, id_mapping):
     return ret
 
 
-def _mapping_to_parent_dict(id_mapping, node_pop_name_mapping):
+def _resolve_original_ids(id_mapping, parent_circ):
+    """Populate the original_id column in each id_mapping DataFrame.
+
+    For first-level extractions (no parent provenance), original_id == parent_id (index).
+    For nested extractions, resolves through the parent's id_mapping.json.
+    """
+    provenance = parent_circ.config.get("components", {}).get("provenance", {})
+
+    if "id_mapping" in provenance:
+        parent_root = Path(parent_circ._circuit_config_path).parent
+        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
+
+        for df in id_mapping.values():
+            parent_pop = df[SOURCE].iloc[0]
+            # new_ids are contiguous 0..N-1 by construction, so positional indexing is safe
+            df[ORIG_IDS] = np.array(parent_mapping[parent_pop][ORIG_IDS])[df.index]
+    else:
+        for df in id_mapping.values():
+            df[ORIG_IDS] = df.index.to_numpy()
+
+
+def _write_mapping(
+    output: Path, parent_circ: bluepysnap.Circuit, id_mapping: dict[str, pd.DataFrame]
+) -> str:
+    """Write the id mappings between the old and new populations for future analysis.
+
+    Reads parent_id (index), new_id, source, and original_id directly from
+    the DataFrames. Resolves original_name from parent provenance or defaults
+    to source.
+
+    Returns:
+        The filename of the written mapping (relative to output).
+    """
+    provenance = parent_circ.config.get("components", {}).get("provenance", {})
+    parent_mapping = None
+    if "id_mapping" in provenance:
+        parent_root = Path(parent_circ._circuit_config_path).parent
+        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
+
     mapping = {}
     for population, df in id_mapping.items():
+        parent_name = df[SOURCE].iloc[0]
+        if parent_mapping is not None:
+            orig_name = parent_mapping[parent_name][ORIG_NAME]
+        else:
+            orig_name = parent_name
+
         mapping[population] = {
             PARENT_IDS: df.index.to_list(),
             NEW_IDS: df[NEW_IDS].to_list(),
-            PARENT_NAME: node_pop_name_mapping[population],
+            PARENT_NAME: parent_name,
+            ORIG_IDS: df[ORIG_IDS].to_list(),
+            ORIG_NAME: orig_name,
         }
-    return mapping
-
-
-def _make_parent_the_original_mapping(this_mapping):
-    for this_pop in this_mapping.keys():
-        this_mapping[this_pop][ORIG_IDS] = this_mapping[this_pop][PARENT_IDS]
-        this_mapping[this_pop][ORIG_NAME] = this_mapping[this_pop][PARENT_NAME]
-
-
-def _add_mapping_to_original(this_mapping, parent_mapping):
-    for this_pop in this_mapping.keys():
-        parent_pop = this_mapping[this_pop][PARENT_NAME]
-
-        backwards_mapped = pd.Series(
-            parent_mapping[parent_pop][ORIG_IDS], index=parent_mapping[parent_pop][NEW_IDS]
-        )
-        orig_ids = backwards_mapped[this_mapping[this_pop][PARENT_IDS]]
-        orig_name = parent_mapping[parent_pop][ORIG_NAME]
-
-        this_mapping[this_pop][ORIG_IDS] = orig_ids.to_list()
-        this_mapping[this_pop][ORIG_NAME] = orig_name
-
-
-def _write_mapping(output, parent_circ, id_mapping, node_pop_name_mapping):
-    """write the id mappings between the old and new populations for future analysis"""
-    this_mapping = _mapping_to_parent_dict(id_mapping, node_pop_name_mapping)
-
-    provenance = parent_circ.config.get("components", {}).get("provenance", {})
-    if "id_mapping" in provenance:
-        # Currently, bluepysnap does not seem to resolve $BASE_DIR for entries in "provenance".
-        # Therefore I decided to not prepend it and just assume the file exists near the circuit config.
-        parent_root = Path(parent_circ._circuit_config_path).parent
-        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
-        _add_mapping_to_original(this_mapping, parent_mapping)
-    else:
-        _make_parent_the_original_mapping(this_mapping)
 
     mapping_fn = "id_mapping.json"
-    utils.dump_json(output / mapping_fn, this_mapping)
+    utils.dump_json(output / mapping_fn, mapping)
     return mapping_fn
 
 
@@ -1276,8 +1288,6 @@ def split_subcircuit(
     split_populations = {pop_name: df for pop_name, df in split_populations.items() if not df.empty}
 
     id_mapping = _get_node_id_mapping(split_populations)
-    # Intrinsic input sources retain their name unchanged
-    node_pop_name_mapping = {pop_name: pop_name for pop_name in split_populations.keys()}
 
     # --- GATHER phase ---
     bio_edge_configs = _gather_subcircuit_biological(output, circuit, edge_pop_to_paths, id_mapping)
@@ -1290,7 +1300,6 @@ def split_subcircuit(
             circuit,
             edge_pop_to_paths,
             id_mapping,
-            node_pop_name_mapping,
             list_of_virtual_sources_to_ignore,
         )
 
@@ -1303,10 +1312,11 @@ def split_subcircuit(
             output,
             circuit,
             id_mapping,
-            node_pop_name_mapping,
             existing_node_pop_names,
             existing_edge_pop_names,
         )
+
+    _resolve_original_ids(id_mapping, circuit)
 
     # --- WRITE phase ---
     new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
@@ -1335,7 +1345,7 @@ def split_subcircuit(
         )
         new_edge_files.update(ext_edge_files)
 
-    mapping_fn = _write_mapping(output, circuit, id_mapping, node_pop_name_mapping)
+    mapping_fn = _write_mapping(output, circuit, id_mapping)
 
     config = copy.deepcopy(circuit.config)
 
