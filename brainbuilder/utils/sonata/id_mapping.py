@@ -31,35 +31,6 @@ class IdMapping:
     def __init__(self):
         self.data: dict[str, dict[str, pd.DataFrame]] = {}
 
-    @classmethod
-    def load(cls, path: Path) -> "IdMapping":
-        """Reconstruct an IdMapping from an id_mapping.json file.
-
-        Handles both single-source (parent_id/parent_name) and multi-source
-        (parent2_id/parent2_name, etc.) entries.
-        """
-        raw = utils.load_json(path)
-        obj = cls()
-        for dest_pop, entry in raw.items():
-            obj.data[dest_pop] = {}
-            i = 1
-            offset = 0
-            while True:
-                id_key = PARENT_IDS if i == 1 else f"parent{i}_id"
-                name_key = PARENT_NAME if i == 1 else f"parent{i}_name"
-                if id_key not in entry:
-                    break
-                p_ids = entry[id_key]
-                p_name = entry[name_key]
-                n = len(p_ids)
-                obj.data[dest_pop][p_name] = pd.DataFrame(
-                    {NEW_IDS: entry[NEW_IDS][offset:offset + n]},
-                    index=p_ids,
-                )
-                offset += n
-                i += 1
-        return obj
-
     @staticmethod
     def _resolve_original_ids(parent_ids, source_pop, parent_mapping):
         """Resolve original IDs by chaining through parent provenance.
@@ -76,6 +47,10 @@ class IdMapping:
             parent_orig_ids = np.array(parent_mapping[source_pop][ORIG_IDS])
             return parent_orig_ids[parent_ids.astype(int)].tolist()
         return parent_ids.tolist()
+
+    def node_count(self, dest_pop: str) -> int:
+        """Return the total number of nodes for a destination population (max new_id + 1)."""
+        return int(max(df[NEW_IDS].max() for df in self.data[dest_pop].values())) + 1
 
     def add_source(self, dest_pop: str, source_pop: str, old_ids) -> pd.DataFrame:
         """Add a source entry with shifted new_ids. Returns the created/updated DataFrame.
