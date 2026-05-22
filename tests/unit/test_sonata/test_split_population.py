@@ -1258,6 +1258,66 @@ def test_subsubcircuit_externals_merge(tmp_path):
     assert_circuits_equal(path_c4_c1, path_c4_c3_c1)
     assert_circuits_equal(path_c4_c1, path_c4_c3_c2_c1)
 
+    # --- c5: from c4, remove A:local{0} (orig 1) and entire C population ---
+    # c5 keeps: A:{2}, B:{1,3,4} (original IDs), C: nothing
+
+    # c5_c1: directly from original
+    subset_c5_c1 = {
+        "subset_c5_c1": ["subset_c5_c1_popA", "subset_c5_c1_popB"],
+        "subset_c5_c1_popA": {"population": "A", "node_id": [2]},
+        "subset_c5_c1_popB": {"population": "B", "node_id": [1, 3, 4]},
+    }
+    # c5_c2_c1: from c2_c1 (A:local{0,1,2,3}=orig{1,2,3,5}, B:all, C:all)
+    # A:orig{2} -> local{1}; B:orig{1,3,4} -> local{1,3,4}
+    subset_c5_c2_c1 = {
+        "subset_c5_c2_c1": ["subset_c5_c2_c1_popA", "subset_c5_c2_c1_popB"],
+        "subset_c5_c2_c1_popA": {"population": "A", "node_id": [1]},
+        "subset_c5_c2_c1_popB": {"population": "B", "node_id": [1, 3, 4]},
+    }
+    # c5_c3_c2_c1: from c3_c2_c1 (equiv c3_c1: A:local{0,1,2}=orig{1,2,3}, B:local{0,1,2,3,4}=orig{1,2,3,4,5}, C:local{0,1,2,3}=orig{0,1,2,5})
+    # A:orig{2} -> local{1}; B:orig{1,3,4} -> local{0,2,3}
+    subset_c5_c3_c2_c1 = {
+        "subset_c5_c3_c2_c1": ["subset_c5_c3_c2_c1_popA", "subset_c5_c3_c2_c1_popB"],
+        "subset_c5_c3_c2_c1_popA": {"population": "A", "node_id": [1]},
+        "subset_c5_c3_c2_c1_popB": {"population": "B", "node_id": [0, 2, 3]},
+    }
+    # c5_c4_c3_c2_c1: from c4_c3_c2_c1 (equiv c4_c1: A:local{0,1}=orig{1,2}, B:local{0,1,2}=orig{1,3,4}, C:local{0,1,2,3}=orig{0,1,2,5})
+    # A:orig{2} -> local{1}; B:orig{1,3,4} -> local{0,1,2} (all)
+    subset_c5_c4_c3_c2_c1 = {
+        "subset_c5_c4_c3_c2_c1": ["subset_c5_c4_c3_c2_c1_popA", "subset_c5_c4_c3_c2_c1_popB"],
+        "subset_c5_c4_c3_c2_c1_popA": {"population": "A", "node_id": [1]},
+        "subset_c5_c4_c3_c2_c1_popB": {"population": "B", "node_id": [0, 1, 2]},
+    }
+
+    path_c5_c1 = _split_custom_subcircuit(
+        tmp_path / "c5_c1", circuit_config,
+        "subset_c5_c1", subset_c5_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c5_c2_c1 = _split_custom_subcircuit(
+        tmp_path / "c5_c2_c1", str(path_c2_c1 / "circuit_config.json"),
+        "subset_c5_c2_c1", subset_c5_c2_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c5_c3_c2_c1 = _split_custom_subcircuit(
+        tmp_path / "c5_c3_c2_c1", str(path_c3_c2_c1 / "circuit_config.json"),
+        "subset_c5_c3_c2_c1", subset_c5_c3_c2_c1,
+        do_virtual=True, create_external=True
+    )
+
+    path_c5_c4_c3_c2_c1 = _split_custom_subcircuit(
+        tmp_path / "c5_c4_c3_c2_c1", str(path_c4_c3_c2_c1 / "circuit_config.json"),
+        "subset_c5_c4_c3_c2_c1", subset_c5_c4_c3_c2_c1,
+        do_virtual=True, create_external=True
+    )
+
+    # All E (c5) circuits should be equal
+    assert_circuits_equal(path_c5_c1, path_c5_c2_c1)
+    assert_circuits_equal(path_c5_c1, path_c5_c3_c2_c1)
+    assert_circuits_equal(path_c5_c1, path_c5_c4_c3_c2_c1)
+
 
 def test_check_no_reserved_external_populations(tmp_path):
     """Extracting with do_virtual/create_external should fail if external_ populations exist
