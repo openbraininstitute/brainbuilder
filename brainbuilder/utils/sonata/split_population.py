@@ -273,17 +273,25 @@ def _copy_filtered_edges(
     id_mapping: IdMapping,
     edge_mappings: dict[str, tuple[pd.DataFrame, str]] = None,
 ) -> int:
-    """Copy and filter edge datasets from one or more input HDF5 files to a single output.
+    """Copy and filter edge datasets from one or more input HDF5 files into a new output file.
 
-    Owns the output file lifecycle: creates the parent directory, opens the output
-    HDF5 file, writes filtered edges from all input sources, computes node counts,
-    writes libsonata indices, and removes the file if empty.
+    This function:
+        - Owns the output file lifecycle (creates, writes, deletes).
+        - Reads the source edge population(s) in chunks.
+        - Filters edges based on source and target node mappings.
+        - Copies source/target node IDs and all associated datasets.
+        - Initializes and populates new edge groups, preserving attributes.
+        - Writes libsonata indices after a successful write.
+        - Removes the edge population group if no edges were written,
+          and deletes the file entirely if it becomes empty.
 
     Args:
         write_edge_config: Configuration specifying source/target populations,
             edge names (may be lists for multi-input), mappings, and read chunk size.
         id_mapping: IdMapping object with nested dict structure.
         edge_mappings: Optional dict updated with old→new edge ID mappings.
+            Key is the source edge population name; value is a tuple of
+            (DataFrame mapping old→new edge IDs, new edge population name).
 
     Returns:
         Number of edges written (total across all inputs).
@@ -715,7 +723,8 @@ def _write_subcircuit_edges(
 ):
     """Write a single edge population to an edge file.
 
-    Returns the output path, or a sentinel if the file/population was empty.
+    Returns the output path, or a sentinel if the file/population was empty:
+    ``DELETED_EMPTY_EDGES_FILE`` or ``DELETED_EMPTY_EDGES_POPULATION``.
     """
     output_path = write_edge_config.output_path
 
@@ -737,8 +746,10 @@ def _write_subcircuit_edges(
         L.debug("Wrote %s edges to %s", edge_count, output_path)
         return output_path
     elif not Path(output_path).exists():
+        # _copy_filtered_edges deletes the file when all populations are empty
         return DELETED_EMPTY_EDGES_FILE
     else:
+        # file still exists (other populations remain), but this one was empty
         return DELETED_EMPTY_EDGES_POPULATION
 
 
