@@ -42,23 +42,18 @@ class IdMapping:
         obj = cls()
         for dest_pop, entry in raw.items():
             obj.data[dest_pop] = {}
-            # First source
-            parent_ids = entry[PARENT_IDS]
-            source_name = entry[PARENT_NAME]
-            n_first = len(parent_ids)
-            obj.data[dest_pop][source_name] = pd.DataFrame(
-                {NEW_IDS: entry[NEW_IDS][:n_first]},
-                index=parent_ids,
-            )
-            # Additional sources (parent2_id, parent3_id, ...)
-            i = 2
-            offset = n_first
-            while f"parent{i}_id" in entry:
-                p_ids = entry[f"parent{i}_id"]
-                p_name = entry[f"parent{i}_name"]
+            i = 1
+            offset = 0
+            while True:
+                id_key = PARENT_IDS if i == 1 else f"parent{i}_id"
+                name_key = PARENT_NAME if i == 1 else f"parent{i}_name"
+                if id_key not in entry:
+                    break
+                p_ids = entry[id_key]
+                p_name = entry[name_key]
                 n = len(p_ids)
                 obj.data[dest_pop][p_name] = pd.DataFrame(
-                    {NEW_IDS: entry[NEW_IDS][offset : offset + n]},
+                    {NEW_IDS: entry[NEW_IDS][offset:offset + n]},
                     index=p_ids,
                 )
                 offset += n
@@ -131,25 +126,13 @@ class IdMapping:
         for dest_pop, sources in self.data.items():
             all_new_ids = []
             all_orig_ids = []
+            entry = {}
 
-            source_items = list(sources.items())
-            first_source = source_items[0][0]
-
-            # First source goes into parent_id / parent_name
-            first_df = source_items[0][1]
-            entry = {
-                PARENT_IDS: first_df.index.tolist(),
-                PARENT_NAME: first_source,
-            }
-            all_new_ids.extend(first_df[NEW_IDS].tolist())
-            all_orig_ids.extend(
-                self._resolve_original_ids(first_df.index, first_source, parent_mapping)
-            )
-
-            # Additional sources get parentN_id / parentN_name (N=2,3,...)
-            for i, (source_pop, df) in enumerate(source_items[1:], start=2):
-                entry[f"parent{i}_id"] = df.index.tolist()
-                entry[f"parent{i}_name"] = source_pop
+            for i, (source_pop, df) in enumerate(sources.items(), start=1):
+                id_key = PARENT_IDS if i == 1 else f"parent{i}_id"
+                name_key = PARENT_NAME if i == 1 else f"parent{i}_name"
+                entry[id_key] = df.index.tolist()
+                entry[name_key] = source_pop
                 all_new_ids.extend(df[NEW_IDS].tolist())
                 all_orig_ids.extend(
                     self._resolve_original_ids(df.index, source_pop, parent_mapping)
@@ -158,6 +141,7 @@ class IdMapping:
             entry[NEW_IDS] = all_new_ids
             entry[ORIG_IDS] = all_orig_ids
 
+            first_source = entry[PARENT_NAME]
             if parent_mapping is not None and first_source in parent_mapping:
                 entry[ORIG_NAME] = parent_mapping[first_source][ORIG_NAME]
             else:
