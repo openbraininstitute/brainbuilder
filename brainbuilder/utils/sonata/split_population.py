@@ -21,7 +21,7 @@ from joblib import Parallel, delayed
 from brainbuilder import utils
 from brainbuilder.utils import hdf5
 from brainbuilder.utils.sonata import _layout
-from brainbuilder.utils.sonata.id_mapping import IdMapping
+from brainbuilder.utils.sonata.id_mapping import IdMapping, NEW_IDS
 
 
 L = logging.getLogger(__name__)
@@ -35,8 +35,6 @@ DELETED_EMPTY_EDGES_FILE = "DELETED_EMPTY_EDGES_FILE"
 # Sentinel to mark an edge population being empty
 DELETED_EMPTY_EDGES_POPULATION = "DELETED_EMPTY_EDGES_POPULATION"
 
-# name of field with ids that are valid in extracted circuit
-NEW_IDS = "new_id"
 
 
 @dataclass
