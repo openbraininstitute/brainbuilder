@@ -268,10 +268,17 @@ def _copy_filtered_edges(
     id_mapping: dict[str, pd.DataFrame],
     edge_mappings: dict[str, tuple[pd.DataFrame, str]] = None,
 ) -> int:
-    """Copy and filter edge datasets from an input HDF5 file to an output file.
+    """Copy and filter edge datasets from an input HDF5 file into a new output file.
 
-    Owns the output file lifecycle: creates the file, writes filtered edges,
-    writes libsonata indices, and removes the file if no edges were written.
+    This function:
+        - Owns the output file lifecycle (creates, writes, deletes).
+        - Reads the source edge population in chunks.
+        - Filters edges based on source and target node mappings.
+        - Copies source/target node IDs and all associated datasets.
+        - Initializes and populates new edge groups, preserving attributes.
+        - Writes libsonata indices after a successful write.
+        - Removes the edge population group if no edges were written,
+          and deletes the file entirely if it becomes empty.
 
     Args:
         h5in: Input HDF5 file (open, read-only).
@@ -279,6 +286,8 @@ def _copy_filtered_edges(
             edge names, mappings, and read chunk size.
         id_mapping: Population name → DataFrame with index=old_ids, column new_id.
         edge_mappings: Optional dict updated with old→new edge ID mappings.
+            Key is the source edge population name; value is a tuple of
+            (DataFrame mapping old→new edge IDs, new edge population name).
 
     Returns:
         Number of edges written.
@@ -697,7 +706,8 @@ def _write_subcircuit_edges(
 ):
     """Write a single edge population to an edge file.
 
-    Returns the output path, or a sentinel if the file/population was empty.
+    Returns the output path, or a sentinel if the file/population was empty:
+    ``DELETED_EMPTY_EDGES_FILE`` or ``DELETED_EMPTY_EDGES_POPULATION``.
     """
     output_path = write_edge_config.output_path
 
@@ -721,8 +731,10 @@ def _write_subcircuit_edges(
         L.debug("Wrote %s edges to %s", edge_count, output_path)
         return output_path
     elif not Path(output_path).exists():
+        # _copy_filtered_edges deletes the file when all populations are empty
         return DELETED_EMPTY_EDGES_FILE
     else:
+        # file still exists (other populations remain), but this one was empty
         return DELETED_EMPTY_EDGES_POPULATION
 
 
