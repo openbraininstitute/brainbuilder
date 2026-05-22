@@ -31,6 +31,40 @@ class IdMapping:
     def __init__(self):
         self.data: dict[str, dict[str, pd.DataFrame]] = {}
 
+    @classmethod
+    def load(cls, path: Path) -> "IdMapping":
+        """Reconstruct an IdMapping from an id_mapping.json file.
+
+        Handles both single-source (parent_id/parent_name) and multi-source
+        (parent2_id/parent2_name, etc.) entries.
+        """
+        raw = utils.load_json(path)
+        obj = cls()
+        for dest_pop, entry in raw.items():
+            obj.data[dest_pop] = {}
+            # First source
+            parent_ids = entry[PARENT_IDS]
+            source_name = entry[PARENT_NAME]
+            n_first = len(parent_ids)
+            obj.data[dest_pop][source_name] = pd.DataFrame(
+                {NEW_IDS: entry[NEW_IDS][:n_first]},
+                index=parent_ids,
+            )
+            # Additional sources (parent2_id, parent3_id, ...)
+            i = 2
+            offset = n_first
+            while f"parent{i}_id" in entry:
+                p_ids = entry[f"parent{i}_id"]
+                p_name = entry[f"parent{i}_name"]
+                n = len(p_ids)
+                obj.data[dest_pop][p_name] = pd.DataFrame(
+                    {NEW_IDS: entry[NEW_IDS][offset : offset + n]},
+                    index=p_ids,
+                )
+                offset += n
+                i += 1
+        return obj
+
     @staticmethod
     def _resolve_original_ids(parent_ids, source_pop, parent_mapping):
         """Resolve original IDs by chaining through parent provenance.
@@ -80,6 +114,10 @@ class IdMapping:
     def write(self, output: Path, parent_circ) -> str:
         """Write id_mapping.json, resolving original_id on the fly from parent provenance.
 
+        For single-source populations, the format is unchanged (backward compatible).
+        For multi-source populations, additional parentN_name/parentN_id fields are added
+        for the 2nd, 3rd, etc. sources.
+
         Returns:
             The filename of the written mapping (relative to output).
         """
@@ -91,31 +129,41 @@ class IdMapping:
 
         mapping = {}
         for dest_pop, sources in self.data.items():
-            all_parent_ids = []
             all_new_ids = []
             all_orig_ids = []
 
-            for source_pop, df in sources.items():
-                all_parent_ids.extend(df.index.tolist())
+            source_items = list(sources.items())
+            first_source = source_items[0][0]
+
+            # First source goes into parent_id / parent_name
+            first_df = source_items[0][1]
+            entry = {
+                PARENT_IDS: first_df.index.tolist(),
+                PARENT_NAME: first_source,
+            }
+            all_new_ids.extend(first_df[NEW_IDS].tolist())
+            all_orig_ids.extend(
+                self._resolve_original_ids(first_df.index, first_source, parent_mapping)
+            )
+
+            # Additional sources get parentN_id / parentN_name (N=2,3,...)
+            for i, (source_pop, df) in enumerate(source_items[1:], start=2):
+                entry[f"parent{i}_id"] = df.index.tolist()
+                entry[f"parent{i}_name"] = source_pop
                 all_new_ids.extend(df[NEW_IDS].tolist())
                 all_orig_ids.extend(
                     self._resolve_original_ids(df.index, source_pop, parent_mapping)
                 )
 
-            # Derive parent_name and orig_name from the first source
-            first_source = next(iter(sources))
-            if parent_mapping is not None and first_source in parent_mapping:
-                orig_name = parent_mapping[first_source][ORIG_NAME]
-            else:
-                orig_name = first_source
+            entry[NEW_IDS] = all_new_ids
+            entry[ORIG_IDS] = all_orig_ids
 
-            mapping[dest_pop] = {
-                PARENT_IDS: all_parent_ids,
-                NEW_IDS: all_new_ids,
-                PARENT_NAME: first_source,
-                ORIG_IDS: all_orig_ids,
-                ORIG_NAME: orig_name,
-            }
+            if parent_mapping is not None and first_source in parent_mapping:
+                entry[ORIG_NAME] = parent_mapping[first_source][ORIG_NAME]
+            else:
+                entry[ORIG_NAME] = first_source
+
+            mapping[dest_pop] = entry
 
         mapping_fn = "id_mapping.json"
         utils.dump_json(output / mapping_fn, mapping)
