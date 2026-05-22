@@ -328,14 +328,13 @@ def _copy_filtered_edges(
                 orig_group = _get_unique_group(orig_edges)
 
                 # Filter source node IDs by source key if specified
+                filtered_sgids = sgids_new
+                filtered_src_mapping = src_concat
                 if source_filter is not None:
                     source_df = id_mapping.data[write_edge_config.src_mapping].get(source_filter)
                     if source_df is not None:
                         filtered_sgids = source_df.index.to_numpy()
-                    else:
-                        filtered_sgids = sgids_new
-                else:
-                    filtered_sgids = sgids_new
+                        filtered_src_mapping = source_df
 
                 # Initialize edge group datasets from the first source (only once)
                 if not is_append:
@@ -388,7 +387,7 @@ def _copy_filtered_edges(
                     sl_and_masks=sl_and_masks,
                     new_edges=new_edges,
                     orig_edges=orig_edges,
-                    src_mapping=src_concat,
+                    src_mapping=filtered_src_mapping,
                     dst_mapping=dst_concat,
                     edge_mappings=edge_mappings,
                     is_neuroglial=is_neuroglial,

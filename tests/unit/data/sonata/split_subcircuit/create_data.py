@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""
+r"""
 `lhs > rhs` is an edge from lhs to rhs
 
 Have 3 populations, to test that a nodeset that address multiple one
@@ -140,6 +140,10 @@ edges = (
     Edge("A", "B", [0], [0]),
     Edge("B", "A", [1], [1]),
     Edge("A", "B", [0], [2]),
+    # Intra-population edges
+    Edge("A", "A", [3, 4, 1, 0, 5], [4, 3, 2, 4, 1]),
+    Edge("A", "A", [0], [4]),  # duplicate A0->A4
+    Edge("B", "B", [0, 3], [2, 4]),
 )
 
 make_edges("edges.h5", edges)
