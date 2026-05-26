@@ -1,12 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """IdMapping: nested dict structure for node ID remapping during subcircuit extraction."""
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
-
-from brainbuilder import utils
 
 # name of field with ids that are valid in extracted circuit
 NEW_IDS = "new_id"
@@ -24,8 +20,9 @@ class IdMapping:
     """Nested dict mapping destination_pop -> source_pop -> DataFrame(index=old_ids, columns=[new_id]).
 
     Encapsulates the id remapping logic for subcircuit extraction:
-    - Adding sources with automatic shift computation
-    - Serialization to id_mapping.json with lazy original_id resolution
+    - Adding sources with contiguous new_id assignment (each new source's IDs
+      are offset by the count of already-assigned IDs so the full range is 0..N-1)
+    - Serialization to id_mapping.json
     """
 
     def __init__(self):
@@ -81,30 +78,25 @@ class IdMapping:
 
         return self.data[dest_pop][source_pop]
 
-    def write(self, output: Path, parent_mapping_path: Path | None = None) -> str:
-        """Write id_mapping.json, resolving original_id on the fly from parent provenance.
+    def to_dict(self, parent_mapping: dict | None = None) -> dict:
+        """Build the id_mapping.json content as a dict.
 
         For single-source populations, the format is unchanged (backward compatible).
         For multi-source populations, additional parentN_name/parentN_id fields are added
         for the 2nd, 3rd, etc. sources.
 
         Args:
-            output: Directory where id_mapping.json will be written.
-            parent_mapping_path: Path to the parent's id_mapping.json for nested extractions.
-                None for first-level extractions.
+            parent_mapping: The parent's id_mapping.json content (or None for first-level
+                extractions).
 
         Returns:
-            The filename of the written mapping (relative to output).
+            Dict ready to be serialized to id_mapping.json.
         """
-        parent_mapping = None
-        if parent_mapping_path is not None:
-            parent_mapping = utils.load_json(parent_mapping_path)
-
         mapping = {}
         for dest_pop, sources in self.data.items():
-            all_new_ids = []
-            all_orig_ids = []
             entry = {}
+            entry[NEW_IDS] = all_new_ids = []
+            entry[ORIG_IDS] = all_orig_ids = []
 
             for i, (source_pop, df) in enumerate(sources.items(), start=1):
                 id_key = PARENT_IDS if i == 1 else f"parent{i}_id"
@@ -116,9 +108,6 @@ class IdMapping:
                     self._resolve_original_ids(df.index, source_pop, parent_mapping)
                 )
 
-            entry[NEW_IDS] = all_new_ids
-            entry[ORIG_IDS] = all_orig_ids
-
             first_source = entry[PARENT_NAME]
             if parent_mapping is not None and first_source in parent_mapping:
                 entry[ORIG_NAME] = parent_mapping[first_source][ORIG_NAME]
@@ -127,6 +116,4 @@ class IdMapping:
 
             mapping[dest_pop] = entry
 
-        mapping_fn = "id_mapping.json"
-        utils.dump_json(output / mapping_fn, mapping)
-        return mapping_fn
+        return mapping
