@@ -38,11 +38,11 @@ DELETED_EMPTY_EDGES_POPULATION = "DELETED_EMPTY_EDGES_POPULATION"
 
 @dataclass
 class WriteEdgeConfig:
-    input_path: str | Path | list[str | Path] | list[tuple]
-    output_path: str | Path
+    input_path: Path | list[tuple[Path, str, str | None]]
+    output_path: Path
     src_node_name: str
     dst_node_name: str
-    src_edge_name: str | list[str]
+    src_edge_name: str
     dst_edge_name: str
     src_mapping: str
     dst_mapping: str
@@ -54,21 +54,10 @@ class WriteEdgeConfig:
         # source_filter=None means use all source nodes (no filtering by source key).
         if not isinstance(self.input_path, list):
             # Single input: (path, edge_name, no filter)
-            self.inputs = [(Path(self.input_path), self.src_edge_name, None)]
-        elif self.input_path and isinstance(self.input_path[0], tuple):
-            # Already tuples: (path, edge_name, source_filter)
-            self.inputs = [(Path(p), e, f) for p, e, f in self.input_path]
+            self.inputs = [(self.input_path, self.src_edge_name, None)]
         else:
-            # Lists of paths and edge names (legacy, no filter)
-            assert isinstance(self.src_edge_name, list)
-            assert len(self.input_path) == len(self.src_edge_name)
-            self.inputs = [
-                (Path(p) if isinstance(p, str) else p, e, None)
-                for p, e in zip(self.input_path, self.src_edge_name)
-            ]
-        self.output_path = (
-            Path(self.output_path) if isinstance(self.output_path, str) else self.output_path
-        )
+            # Already tuples: (path, edge_name, source_filter)
+            self.inputs = self.input_path
 
 
 def _check_no_reserved_external_populations(circuit):
@@ -315,8 +304,7 @@ def _copy_filtered_edges(
 
     with h5py.File(output_path, "a") as h5out:
         edge_path = "edges/" + write_edge_config.dst_edge_name
-        is_append = edge_path in h5out
-        if is_append:
+        if edge_path in h5out:
             new_edges = h5out[edge_path]
             new_group = new_edges[GROUP_NAME]
         else:
@@ -329,13 +317,10 @@ def _copy_filtered_edges(
             new_edges["source_node_id"].attrs["node_population"] = write_edge_config.src_node_name
             new_edges["target_node_id"].attrs["node_population"] = write_edge_config.dst_node_name
 
-        # Process each input source
         for input_path, src_edge_name, source_filter in write_edge_config.inputs:
             with h5py.File(input_path, "r") as h5in:
                 orig_edges = h5in["edges"][src_edge_name]
-                orig_group = _get_unique_group(orig_edges)
 
-                # Filter source node IDs by source key if specified
                 if source_filter is not None:
                     source_df = id_mapping.data[write_edge_config.src_mapping].get(source_filter)
                     if source_df is not None:
@@ -345,8 +330,7 @@ def _copy_filtered_edges(
                 else:
                     filtered_sgids = sgids_new
 
-                # Initialize edge group datasets from the first source (only once)
-                if not is_append:
+                if len(new_group) == 0:
                     additional_attrs = {}
                     if is_neuroglial:
                         src_syn_edge_pop = orig_edges[GROUP_NAME]["synapse_id"].attrs[
@@ -355,8 +339,7 @@ def _copy_filtered_edges(
                         _, dst_syn_edge_pop = edge_mappings[src_syn_edge_pop]
                         additional_attrs["synapse_id"] = {"edge_population": dst_syn_edge_pop}
 
-                    _init_edge_group(orig_group, new_group, additional_attrs)
-                    is_append = True  # subsequent sources append
+                    _init_edge_group(_get_unique_group(orig_edges), new_group, additional_attrs)
 
                 total_chunks = math.ceil(len(orig_edges["source_node_id"]) / h5_read_chunk_size)
                 L.debug(
@@ -558,7 +541,7 @@ def _write_edges(
 
         write_edge_config = WriteEdgeConfig(
             output_path=Path(output) / _get_edge_file_name(edge_pop_name),
-            input_path=edges_path,
+            input_path=Path(edges_path),
             src_node_name=src_node_pop,
             dst_node_name=dst_node_pop,
             src_edge_name=src_edge_pop,
@@ -755,7 +738,7 @@ def _write_subcircuit_edges(
 
 def _get_storage_path(edge):
     """Return the storage path."""
-    return edge.h5_filepath
+    return Path(edge.h5_filepath)
 
 
 def _gather_subcircuit_biological(output, circuit, edge_pop_to_paths, id_mapping: IdMapping):
@@ -937,7 +920,7 @@ def _gather_subcircuit_external(
             id_mapping.add_source(new_source_pop_name, edge.source.name, old_ids)
 
             write_edge_config = WriteEdgeConfig(
-                output_path=str(output_path),
+                output_path=output_path,
                 input_path=_get_storage_path(edge),
                 src_node_name=new_source_pop_name,
                 dst_node_name=edge.target.name,
@@ -1277,7 +1260,7 @@ def split_subcircuit(
         src_pop = ext_nodes[cfg.src_mapping]
         cfg.inputs = [(p, e, src_pop) for p, e, _ in cfg.inputs]
         if cfg.dst_edge_name in existing_ext_by_dst:
-            # Merge: prepend existing external's inputs
+            # Merge into a single multi-input config so both sources write to one file
             existing_cfg = existing_ext_by_dst.pop(cfg.dst_edge_name)
             cfg.inputs = existing_cfg.inputs + cfg.inputs
         merged_ext_edge_configs.append(cfg)
