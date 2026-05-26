@@ -4,7 +4,6 @@
 import numpy as np
 import pandas as pd
 
-from brainbuilder.utils import load_json, dump_json
 from brainbuilder.utils.sonata.id_mapping import IdMapping, NEW_IDS
 
 
@@ -122,15 +121,12 @@ def test_resolve_original_ids_chains_through_parent():
     assert result == [1000, 1002, 1004]
 
 
-def test_write_single_source(tmp_path):
+def test_to_dict_single_source():
     """First-level extraction: original_id == parent_id."""
     m = IdMapping()
     m.add_source("A", "A", [10, 20, 30])
 
-    fn = m.write(tmp_path)
-    assert fn == "id_mapping.json"
-
-    result = load_json(tmp_path / "id_mapping.json")
+    result = m.to_dict()
     assert result == {
         "A": {
             "parent_id": [10, 20, 30],
@@ -142,14 +138,13 @@ def test_write_single_source(tmp_path):
     }
 
 
-def test_write_multi_source(tmp_path):
+def test_to_dict_multi_source():
     """Multiple sources for same dest get separate parentN fields."""
     m = IdMapping()
     m.add_source("ext_A", "A", [10, 20])
     m.add_source("ext_A", "B", [5, 15])
 
-    m.write(tmp_path)
-    result = load_json(tmp_path / "id_mapping.json")
+    result = m.to_dict()
 
     assert result["ext_A"]["parent_id"] == [10, 20]
     assert result["ext_A"]["parent_name"] == "A"
@@ -160,14 +155,12 @@ def test_write_multi_source(tmp_path):
     assert result["ext_A"]["original_name"] == "A"
 
 
-def test_write_nested_extraction(tmp_path):
+def test_to_dict_nested_extraction():
     """Nested extraction chains through parent provenance."""
     m = IdMapping()
     m.add_source("A", "A", [0, 2])
 
-    parent_dir = tmp_path / "parent"
-    parent_dir.mkdir()
-    dump_json(parent_dir / "id_mapping.json", {
+    parent_mapping = {
         "A": {
             "parent_id": [10, 20, 30],
             "new_id": [0, 1, 2],
@@ -175,12 +168,9 @@ def test_write_nested_extraction(tmp_path):
             "original_id": [1000, 2000, 3000],
             "original_name": "OrigA",
         }
-    })
+    }
 
-    output = tmp_path / "output"
-    output.mkdir()
-    m.write(output, parent_mapping_path=parent_dir / "id_mapping.json")
-    result = load_json(output / "id_mapping.json")
+    result = m.to_dict(parent_mapping)
 
     assert result["A"]["parent_id"] == [0, 2]
     assert result["A"]["new_id"] == [0, 1]

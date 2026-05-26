@@ -306,8 +306,8 @@ def _copy_filtered_edges(
     )
     is_neuroglial = write_edge_config.edge_type == "synapse_astrocyte"
 
-    dst_concat = pd.concat(id_mapping.data[write_edge_config.dst_mapping].values())
-    tgids_new = dst_concat.index.to_numpy()
+    dst_stacked = pd.concat(id_mapping.data[write_edge_config.dst_mapping].values())
+    tgids_new = dst_stacked.index.to_numpy()
     assert (tgids_new >= 0).all(), "Target population ids must be positive."
 
     with h5py.File(output_path, "a") as h5out:
@@ -397,7 +397,7 @@ def _copy_filtered_edges(
                     new_edges=new_edges,
                     orig_edges=orig_edges,
                     src_mapping=source_df,
-                    dst_mapping=dst_concat,
+                    dst_mapping=dst_stacked,
                     edge_mappings=edge_mappings,
                     is_neuroglial=is_neuroglial,
                 )
@@ -1273,8 +1273,8 @@ def split_subcircuit(
         existing_ext_by_dst[cfg.dst_edge_name] = cfg
 
     for cfg in ext_edge_configs:
-        # Add source_filter to newly-externalized inputs (source = the biophysical pop name)
-        src_pop = list(id_mapping.data[cfg.src_mapping].keys())[-1]
+        # Pick the biophysical population that was externalized into this ext pop
+        src_pop = ext_nodes[cfg.src_mapping]
         cfg.inputs = [(p, e, src_pop) for p, e, _ in cfg.inputs]
         if cfg.dst_edge_name in existing_ext_by_dst:
             # Merge: prepend existing external's inputs
@@ -1319,12 +1319,13 @@ def split_subcircuit(
         )
 
     provenance = circuit.config.get("components", {}).get("provenance", {})
-    parent_mapping_path = None
+    parent_mapping = None
     if "id_mapping" in provenance:
         parent_root = Path(circuit._circuit_config_path).parent
-        parent_mapping_path = parent_root / provenance["id_mapping"]
+        parent_mapping = utils.load_json(parent_root / provenance["id_mapping"])
 
-    mapping_fn = id_mapping.write(output, parent_mapping_path)
+    mapping_fn = "id_mapping.json"
+    utils.dump_json(output / mapping_fn, id_mapping.to_dict(parent_mapping))
 
     config = copy.deepcopy(circuit.config)
 
