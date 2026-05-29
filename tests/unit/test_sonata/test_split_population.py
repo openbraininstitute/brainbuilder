@@ -878,10 +878,9 @@ def test_copy_filtered_edges_advanced(tmp_path):
 
     write_edge_config = split_population.WriteEdgeConfig(
         output_path=outfile,
-        input_path=infile,
+        inputs=[(infile, "orig_src_edge_pop", None)],
         src_node_name="orig_src_node_pop",
         dst_node_name="orig_dst_node_pop",
-        src_edge_name="orig_src_edge_pop",
         dst_edge_name="new_src_edge_pop",
         src_mapping="orig_src_node_pop",
         dst_mapping="orig_dst_node_pop",
