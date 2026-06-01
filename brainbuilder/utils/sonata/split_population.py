@@ -48,27 +48,6 @@ class WriteEdgeConfig:
     h5_read_chunk_size: int | None = None
     edge_type: type[bytes] | None = None
 
-    def __post_init__(self):
-        # Normalize inputs to list of (input_path, src_edge_name, source_filter) tuples.
-        # source_filter=None means use all source nodes (no filtering by source key).
-        if not isinstance(self.input_path, list):
-            # Single input: (path, edge_name, no filter)
-            self.inputs = [(Path(self.input_path), self.src_edge_name, None)]
-        elif self.input_path and isinstance(self.input_path[0], tuple):
-            # Already tuples: (path, edge_name, source_filter)
-            self.inputs = [(Path(p), e, f) for p, e, f in self.input_path]
-        else:
-            # Lists of paths and edge names (legacy, no filter)
-            assert isinstance(self.src_edge_name, list)
-            assert len(self.input_path) == len(self.src_edge_name)
-            self.inputs = [
-                (Path(p) if isinstance(p, str) else p, e, None)
-                for p, e in zip(self.input_path, self.src_edge_name)
-            ]
-        self.output_path = (
-            Path(self.output_path) if isinstance(self.output_path, str) else self.output_path
-        )
-
 
 def _check_no_reserved_external_populations(circuit):
     """Raise if the circuit has 'external_*' populations without an id_mapping.
