@@ -329,6 +329,9 @@ def _copy_filtered_edges(
                 if len(new_group) == 0:
                     additional_attrs = {}
                     if is_neuroglial:
+                        # Neuroglial edges reference neuron–neuron edges via synapse_id.
+                        # The destination edge population name was already recorded in
+                        # edge_mappings when the neuron–neuron edges were processed first.
                         src_syn_edge_pop = orig_edges[GROUP_NAME]["synapse_id"].attrs[
                             "edge_population"
                         ]
@@ -356,6 +359,10 @@ def _copy_filtered_edges(
                 )
 
                 if edge_mappings is not None and is_neuroglial:
+                    # Record old→new edge ID mapping so that downstream neuroglial
+                    # edges can remap their synapse_id references. Only done when the
+                    # caller passes edge_mappings (split_subcircuit); the simpler
+                    # split_population codepath passes None and skips this.
                     offset = new_edges["source_node_id"].shape[0]
                     if offset != 0:
                         raise RuntimeError(
