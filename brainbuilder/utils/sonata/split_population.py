@@ -38,26 +38,15 @@ DELETED_EMPTY_EDGES_POPULATION = "DELETED_EMPTY_EDGES_POPULATION"
 
 @dataclass
 class WriteEdgeConfig:
-    input_path: Path | list[tuple[Path, str, str | None]]
+    inputs: list[tuple[Path, str, str | None]]
     output_path: Path
     src_node_name: str
     dst_node_name: str
-    src_edge_name: str
     dst_edge_name: str
     src_mapping: str
     dst_mapping: str
     h5_read_chunk_size: int | None = None
     edge_type: type[bytes] | None = None
-
-    def __post_init__(self):
-        # Normalize inputs to list of (input_path, src_edge_name, source_filter) tuples.
-        # source_filter=None means use all source nodes (no filtering by source key).
-        if not isinstance(self.input_path, list):
-            # Single input: (path, edge_name, no filter)
-            self.inputs = [(self.input_path, self.src_edge_name, None)]
-        else:
-            # Already tuples: (path, edge_name, source_filter)
-            self.inputs = self.input_path
 
 
 def _check_no_reserved_external_populations(circuit):
@@ -275,8 +264,8 @@ def _copy_filtered_edges(
           and deletes the file entirely if it becomes empty.
 
     Args:
-        write_edge_config: Configuration specifying source/target populations,
-            edge names (may be lists for multi-input), mappings, and read chunk size.
+        write_edge_config: Configuration specifying inputs, output path,
+            source/target populations, mappings, and read chunk size.
         id_mapping: IdMapping object with nested dict structure.
         edge_mappings: Optional dict updated with old→new edge ID mappings.
             Key is the source edge population name; value is a tuple of
@@ -333,6 +322,9 @@ def _copy_filtered_edges(
                 if len(new_group) == 0:
                     additional_attrs = {}
                     if is_neuroglial:
+                        # Neuroglial edges reference neuron–neuron edges via synapse_id.
+                        # The destination edge population name was already recorded in
+                        # edge_mappings when the neuron–neuron edges were processed first.
                         src_syn_edge_pop = orig_edges[GROUP_NAME]["synapse_id"].attrs[
                             "edge_population"
                         ]
@@ -360,6 +352,10 @@ def _copy_filtered_edges(
                 )
 
                 if edge_mappings is not None and is_neuroglial:
+                    # Record old→new edge ID mapping so that downstream neuroglial
+                    # edges can remap their synapse_id references. Only done when the
+                    # caller passes edge_mappings (split_subcircuit); the simpler
+                    # split_population codepath passes None and skips this.
                     offset = new_edges["source_node_id"].shape[0]
                     if offset != 0:
                         raise RuntimeError(
@@ -541,10 +537,9 @@ def _write_edges(
 
         write_edge_config = WriteEdgeConfig(
             output_path=Path(output) / _get_edge_file_name(edge_pop_name),
-            input_path=Path(edges_path),
+            inputs=[(Path(edges_path), src_edge_pop, None)],
             src_node_name=src_node_pop,
             dst_node_name=dst_node_pop,
-            src_edge_name=src_edge_pop,
             dst_edge_name=edge_pop_name,
             src_mapping=src_node_pop,
             dst_mapping=dst_node_pop,
@@ -712,9 +707,8 @@ def _write_subcircuit_edges(
     output_path = write_edge_config.output_path
 
     L.debug(
-        "Writing edges %s for %s -> %s [%s]",
-        write_edge_config.src_edge_name,
-        write_edge_config.src_edge_name,
+        "Writing edges %s -> %s [%s]",
+        write_edge_config.src_node_name,
         write_edge_config.dst_edge_name,
         str(output_path),
     )
@@ -758,10 +752,9 @@ def _gather_subcircuit_biological(output, circuit, edge_pop_to_paths, id_mapping
         if edge.source.name in id_mapping.data and edge.target.name in id_mapping.data:
             write_edge_config = WriteEdgeConfig(
                 output_path=output / edge_pop_to_paths[edge_pop_name],
-                input_path=_get_storage_path(edge),
+                inputs=[(_get_storage_path(edge), edge_pop_name, None)],
                 src_node_name=edge.source.name,
                 dst_node_name=edge.target.name,
-                src_edge_name=edge_pop_name,
                 dst_edge_name=edge_pop_name,
                 src_mapping=edge.source.name,
                 dst_mapping=edge.target.name,
@@ -921,10 +914,9 @@ def _gather_subcircuit_external(
 
             write_edge_config = WriteEdgeConfig(
                 output_path=output_path,
-                input_path=_get_storage_path(edge),
+                inputs=[(_get_storage_path(edge), name, None)],
                 src_node_name=new_source_pop_name,
                 dst_node_name=edge.target.name,
-                src_edge_name=name,
                 dst_edge_name=new_name,
                 src_mapping=new_source_pop_name,
                 dst_mapping=edge.target.name,
@@ -1004,10 +996,9 @@ def _gather_subcircuit_virtual_typed(
     for edge_pop_name, edge in virtual_populations.items():
         write_edge_config = WriteEdgeConfig(
             output_path=Path(output) / edge_populations_to_paths[edge_pop_name],
-            input_path=_get_storage_path(edge),
+            inputs=[(_get_storage_path(edge), edge_pop_name, None)],
             src_node_name=edge.source.name,
             dst_node_name=edge.target.name,
-            src_edge_name=edge_pop_name,
             dst_edge_name=edge_pop_name,
             src_mapping=edge.source.name,
             dst_mapping=edge.target.name,
