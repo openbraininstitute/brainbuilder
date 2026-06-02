@@ -310,6 +310,7 @@ def _copy_filtered_edges(
             with h5py.File(input_path, "r") as h5in:
                 orig_edges = h5in["edges"][src_edge_name]
 
+                # Filter source node IDs by source key if specified
                 if source_filter is not None:
                     source_df = id_mapping.data[write_edge_config.src_mapping].get(source_filter)
                     if source_df is not None:
