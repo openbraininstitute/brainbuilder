@@ -38,6 +38,16 @@ DELETED_EMPTY_EDGES_POPULATION = "DELETED_EMPTY_EDGES_POPULATION"
 
 @dataclass
 class WriteEdgeConfig:
+    """Configuration for writing a single edge population.
+
+    Each entry in `inputs` is a tuple of (input_path, src_edge_name, src_population):
+    - input_path: Path to the HDF5 file containing the source edges.
+    - src_edge_name: Name of the edge population inside the source file.
+    - src_population: Source population name used as a key into
+      id_mapping.data[src_mapping] to select which node IDs belong to this
+      input.  None means there is only one source (inferred automatically).
+    """
+
     inputs: list[tuple[Path, str, str | None]]
     output_path: Path
     src_node_name: str
@@ -303,19 +313,18 @@ def _copy_filtered_edges(
             new_edges["source_node_id"].attrs["node_population"] = write_edge_config.src_node_name
             new_edges["target_node_id"].attrs["node_population"] = write_edge_config.dst_node_name
 
-        for input_path, src_edge_name, source_filter in write_edge_config.inputs:
+        for input_path, src_edge_name, src_population in write_edge_config.inputs:
             with h5py.File(input_path, "r") as h5in:
                 orig_edges = h5in["edges"][src_edge_name]
 
-                # Resolve source mapping for this input
                 src_sources = id_mapping.data[write_edge_config.src_mapping]
 
-                if source_filter is not None:
-                    source_df = src_sources[source_filter]
+                if src_population is not None:
+                    source_df = src_sources[src_population]
                 else:
                     assert len(src_sources) == 1, (
                         f"Multi-source population '{write_edge_config.src_mapping}' requires "
-                        f"source_filter but none was provided. Sources: {list(src_sources.keys())}"
+                        f"src_population but none was provided. Sources: {list(src_sources.keys())}"
                     )
                     source_df = next(iter(src_sources.values()))
 
@@ -1244,7 +1253,7 @@ def split_subcircuit(
     existing_ext_by_dst = {}
     for cfg in existing_ext_edge_configs:
         cfg.output_path = Path(output) / (cfg.dst_edge_name + ".h5")
-        # Add source_filter to existing external inputs
+        # Add src_population to existing external inputs
         cfg.inputs = [(p, e, cfg.src_node_name) for p, e, _ in cfg.inputs]
         existing_ext_by_dst[cfg.dst_edge_name] = cfg
 
