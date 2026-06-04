@@ -36,9 +36,11 @@
         "edges": [{
                 "edges_file": "$NETWORK_EDGES_DIR/edges.h5",
                 "populations": {
+                    "A__A": { "type": "chemical" },
                     "A__B": { "type": "chemical" },
                     "A__C": { "type": "chemical" },
                     "B__A": { "type": "chemical" },
+                    "B__B": { "type": "chemical" },
                     "B__C": { "type": "chemical" },
                     "C__A": { "type": "chemical" },
                     "C__B": { "type": "chemical" }

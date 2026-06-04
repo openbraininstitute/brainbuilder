@@ -427,11 +427,19 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
     with h5py.File(path / "edges" / "edges.h5", "r") as h5:
         edges = h5["edges"]
 
+        assert "A__A" in edges
+        assert list(edges["A__A"]["source_node_id"]) == [0]
+        assert list(edges["A__A"]["target_node_id"]) == [2]
+
         assert "A__B" in edges
         assert list(edges["A__B"]["source_node_id"]) == [0, 0, 0]
         assert list(edges["A__B"]["target_node_id"]) == [0, 0, 1]  # 2nd is duplicate edge
 
         assert "B__A" not in edges
+
+        assert "B__B" in edges
+        assert list(edges["B__B"]["source_node_id"]) == [0]
+        assert list(edges["B__B"]["target_node_id"]) == [1]
 
         assert "A__C" in edges
         assert list(edges["A__C"]["source_node_id"]) == [2]
@@ -466,8 +474,10 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             config["networks"], "edges", "$BASE_DIR/edges/edges.h5"
         )
         assert edge_pops == {
+            "A__A": {"type": "chemical"},
             "A__B": {"type": "chemical"},
             "A__C": {"type": "chemical"},
+            "B__B": {"type": "chemical"},
             "B__C": {"type": "chemical"},
             "C__A": {"type": "chemical"},
         }   
@@ -482,7 +492,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
         else:
             assert virtual_node_count == 0
             assert len(node_pops) == 3
-            assert len(edge_pops) == 4
+            assert len(edge_pops) == 6
 
         node_sets = load_json(path / "node_sets.json")
         expected_node_sets = {
@@ -512,7 +522,8 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             expected_mapping["V2"] = {"new_id": [0], "parent_id": [0], "parent_name": "V2", "original_id": _orig_id_map([0], "V2"), "original_name": _orig_name_map("V2")}
 
         if has_external:
-            expected_mapping["external_A"] = {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": _orig_id_map([5, 3], "A"), "original_name": _orig_name_map("A")}
+            expected_mapping["external_A"] = {"new_id": [0, 1, 2], "parent_id": [1, 3, 5], "parent_name": "A", "original_id": _orig_id_map([1, 3, 5], "A"), "original_name": _orig_name_map("A")}
+            expected_mapping["external_B"] = {"new_id": [0], "parent_id": [3], "parent_name": "B", "original_id": _orig_id_map([3], "B"), "original_name": _orig_name_map("B")}
 
         mapping = load_json(path / "id_mapping.json")
         assert mapping == expected_mapping
@@ -557,21 +568,28 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
 
     mapping = load_json(tmp_path / "id_mapping.json")
     if from_subcircuit:
-        assert mapping["external_A"] == {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": [1005, 1003], "original_name": "AllA"}
+        assert mapping["external_A"] == {"new_id": [0, 1, 2], "parent_id": [1, 3, 5], "parent_name": "A", "original_id": [1001, 1003, 1005], "original_name": "AllA"}
+        assert mapping["external_B"] == {"new_id": [0], "parent_id": [3], "parent_name": "B", "original_id": [2003], "original_name": "AllB"}
     else:
-        assert mapping["external_A"] == {"new_id": [0, 1], "parent_id": [5, 3], "parent_name": "A", "original_id": [5, 3], "original_name": "A"}
-    assert "external_B" not in mapping
+        assert mapping["external_A"] == {"new_id": [0, 1, 2], "parent_id": [1, 3, 5], "parent_name": "A", "original_id": [1, 3, 5], "original_name": "A"}
+        assert mapping["external_B"] == {"new_id": [0], "parent_id": [3], "parent_name": "B", "original_id": [3], "original_name": "B"}
     assert "external_C" not in mapping
 
     with h5py.File(tmp_path / "external_A/nodes.h5", "r") as h5:
-        assert len(h5["nodes/external_A/0/model_type"]) == 2
+        assert len(h5["nodes/external_A/0/model_type"]) == 3
+
+    with h5py.File(tmp_path / "external_A__A.h5", "r") as h5:
+        assert h5["edges/external_A__A/source_node_id"].attrs["node_population"] == "external_A"
+        assert h5["edges/external_A__A/target_node_id"].attrs["node_population"] == "A"
+        assert list(h5["edges/external_A__A/source_node_id"]) == [1, 0]
+        assert list(h5["edges/external_A__A/target_node_id"]) == [2, 1]
 
     with h5py.File(tmp_path / "external_A__B.h5", "r") as h5:
         assert h5["edges/external_A__B/source_node_id"].attrs["node_population"] == "external_A"
         assert h5["edges/external_A__B/target_node_id"].attrs["node_population"] == "B"
         assert len(h5["edges/external_A__B/0/delay"]) == 1
         assert h5["edges/external_A__B/0/delay"][0] == 0.5
-        assert list(h5["edges/external_A__B/source_node_id"]) == [0]
+        assert list(h5["edges/external_A__B/source_node_id"]) == [2]
         assert list(h5["edges/external_A__B/target_node_id"]) == [3]
 
     with h5py.File(tmp_path / "external_A__C.h5", "r") as h5:
@@ -580,12 +598,21 @@ def test_split_subcircuit_with_externals(tmp_path, circuit, from_subcircuit):
         assert len(h5["edges/external_A__C/0/delay"]) == 2
         assert h5["edges/external_A__C/0/delay"][0] == 0.5
         assert h5["edges/external_A__C/0/delay"][1] == 0.5
-        assert list(h5["edges/external_A__C/source_node_id"]) == [0, 1]
+        assert list(h5["edges/external_A__C/source_node_id"]) == [2, 1]
         assert list(h5["edges/external_A__C/target_node_id"]) == [3, 1]
 
+    with h5py.File(tmp_path / "external_B/nodes.h5", "r") as h5:
+        assert len(h5["nodes/external_B/0/model_type"]) == 1
+
+    with h5py.File(tmp_path / "external_B__B.h5", "r") as h5:
+        assert h5["edges/external_B__B/source_node_id"].attrs["node_population"] == "external_B"
+        assert h5["edges/external_B__B/target_node_id"].attrs["node_population"] == "B"
+        assert list(h5["edges/external_B__B/source_node_id"]) == [0]
+        assert list(h5["edges/external_B__B/target_node_id"]) == [2]
+
     networks = load_json(tmp_path / "circuit_config.json")["networks"]
-    assert len(networks["nodes"]) == 4
-    assert len(networks["edges"]) == 6
+    assert len(networks["nodes"]) == 5
+    assert len(networks["edges"]) == 10
 
 
 @pytest.mark.parametrize(
@@ -705,11 +732,17 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
     with h5py.File(tmp_path / "edges" / "edges.h5", "r") as h5:
         edges = h5["edges"]
 
+        assert "A__A" in edges
+        assert list(edges["A__A"]["source_node_id"]) == [2]
+        assert list(edges["A__A"]["target_node_id"]) == [0]
+
         assert "A__B" not in edges
 
         assert "B__A" in edges
         assert list(edges["B__A"]["source_node_id"]) == [0, 0]
         assert list(edges["B__A"]["target_node_id"]) == [0, 0]  # 2nd is duplicate edge
+
+        assert "B__B" not in edges
 
         assert "A__C" not in edges
 
@@ -748,6 +781,7 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
         config["networks"], "edges", "$BASE_DIR/edges/edges.h5"
     )
     assert edge_pops == {
+        "A__A": {"type": "chemical"},
         "B__A": {"type": "chemical"},
         "C__B": {"type": "chemical"},
     }
