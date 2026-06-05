@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Collection of functions to curate/edit SONATA circuits."""
 
-from dataclasses import dataclass
-from collections.abc import Iterable
-
 import itertools
 import logging
+from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
 
 import h5py
 import morphio
@@ -382,36 +382,36 @@ class UpdatedDtype:
     new_dtype: np.dtype
 
 
-SIGNED_DTYPES = [np.int8, np.int16, np.int32, np.int64]
+def _pick_dtype_from_list(
+    name: str, target_dtypes: list[np.dtype], data_min: int, data_max: int
+) -> np.dtype:
+    """Return the dtype that fits the min/max value, raise RuntimeError otherwise"""
+    for dtype in target_dtypes:
+        info = np.iinfo(dtype)
+        if info.min <= data_min and data_max <= info.max:
+            target_dtype = dtype
+            break
+    else:
+        msg = f"`{name}` does not fit of the bounds of any in `{target_dtypes}`"
+        raise RuntimeError(msg)
+    return target_dtype
 
 
-def _pick_dtype(name: str, data, old_dtype: np.dtype, target_dtype: Iterable[np.dtype] | np.dtype):
+def _pick_dtype(name: str, data, target_dtype: Iterable[np.dtype] | np.dtype):
     """Pick a suitable datatype, depending on the data"""
-    data_max = data.max()
     if isinstance(target_dtype, Iterable) and not isinstance(target_dtype, str):
+        target_dtype = list(target_dtype)
         assert not all(np.issubdtype(t, np.floating) for t in target_dtype), (
             "Floating point lists not supported"
         )
-        if all(np.issubdtype(t, np.signedinteger) for t in target_dtype):
-            # target signed
-            data_min = data.min()
-            for dtype in SIGNED_DTYPES:
-                info = np.iinfo(dtype)
-                if info.min <= data_min and data_max <= info.max:
-                    target_dtype = dtype
-                    break
-        else:
-            # target unsigned
-            assert all(np.issubdtype(t, np.unsignedinteger) for t in target_dtype)
-            if data.min() < 0:
-                msg = f"`{name}` has values below 0, cannot convert to unsigned"
-                raise RuntimeError(msg)
-            target_dtype = np.min_scalar_type(data_max)
-    elif np.issubdtype(target_dtype, np.integer):
-        info = np.iinfo(target_dtype)
-        if data.min() < info.min or data_max > info.max:
-            msg = f"Data in {name} of dtype {old_dtype} does not fit in {target_dtype}"
+        data_min = data.min()
+        if data_min < 0 and all(np.issubdtype(t, np.unsignedinteger) for t in target_dtype):
+            msg = f"`{name}` has values below 0, cannot convert to unsigned"
             raise RuntimeError(msg)
+
+        target_dtype = _pick_dtype_from_list(name, list(target_dtype), data_min, data.max())
+    elif np.issubdtype(target_dtype, np.integer):
+        target_dtype = _pick_dtype_from_list(name, [target_dtype], data.min(), data.max())
 
     return target_dtype
 
@@ -429,7 +429,7 @@ def _update_dtype(
     old_dtype = h5.dtype
 
     data = h5[:]
-    target_dtype = _pick_dtype(name, data, old_dtype, target_dtype)
+    target_dtype = _pick_dtype(name, data, target_dtype)
     L.debug("convert_dtype: %s: %s -> %s", h5.name, old_dtype, target_dtype)
     new = np.asarray(data, dtype=target_dtype)
 
@@ -480,14 +480,15 @@ def resize_datatypes(h5_path, population_name, population_type, attributes) -> l
                 updates.append(updated)
 
         unsigned = (np.uint8, np.uint16, np.uint32, np.uint64)
+        signed_dtypes = (np.int8, np.int16, np.int32, np.int64)
 
         if typ_ == "nodes" and "node_type_id" in attributes:
             parent_h5 = h5[typ_][population_name]
-            if updated := _update_dtype(parent_h5, "node_type_id", SIGNED_DTYPES):
+            if updated := _update_dtype(parent_h5, "node_type_id", signed_dtypes):
                 updates.append(updated)
         elif typ_ == "edges":
             for attr, dtypes in (
-                ("edge_type_id", SIGNED_DTYPES),
+                ("edge_type_id", signed_dtypes),
                 ("source_node_id", unsigned),
                 ("target_node_id", unsigned),
             ):
@@ -558,14 +559,16 @@ def update_node_dtypes(h5_file, population_name, population_type) -> list[Update
     return converted
 
 
-def update_edge_dtypes(h5_file, population_name, population_type, virtual) -> list[UpdatedDtype]:
+def update_edge_dtypes(
+    h5_file: str | Path, population_name: str, population_type: str, virtual: bool
+) -> list[UpdatedDtype]:
     """Update the datatypes of the attributes within an edge population to the SONATA spec.
 
     Args:
-        h5_file(path): to h5 file containing nodes
-        population_name(str): name of the population to modify
-        population_type(str): type (ex: biophysical) of the node population
-        virtual(bool): Whether the population is virtual
+        h5_file: to h5 file containing nodes
+        population_name: name of the population to modify
+        population_type: type (ex: biophysical) of the node population
+        virtual: Whether the population is virtual
     """
     property_types = schemas.edges_schema_types(population_type, virtual=virtual)
     converted = []

@@ -209,7 +209,7 @@ SIGNED = [np.int8, np.int16, np.int32, np.int64]
         ("f64tof32", [1.0, 2.0], np.float64, np.float32, np.float32),
     ])
 def test_pick_dtype_success(name, data, old_dtype, target, expected):
-    res = curate._pick_dtype(name, np.array(data, dtype=old_dtype), np.dtype(old_dtype), target)
+    res = curate._pick_dtype(name, np.array(data, dtype=old_dtype), target)
     assert res == expected
 
 
@@ -219,7 +219,7 @@ def test_pick_dtype_success(name, data, old_dtype, target, expected):
     ])
 def test_pick_dtype_error(name, data, old_dtype, target, match):
     with pytest.raises(RuntimeError, match=match):
-        curate._pick_dtype(name, np.array(data, dtype=old_dtype), np.dtype(old_dtype), target)
+        curate._pick_dtype(name, np.array(data, dtype=old_dtype), target)
 
 
 def test__update_dtype(tmp_path):
