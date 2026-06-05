@@ -2,6 +2,7 @@
 """Collection of functions to curate/edit SONATA circuits."""
 
 from dataclasses import dataclass
+from collections.abc import Iterable
 
 import itertools
 import logging
@@ -381,43 +382,43 @@ class UpdatedDtype:
     new_dtype: np.dtype
 
 
-def _pick_dtype(name: str, data, old_dtype: np.dtype, target_dtype: list | np.dtype):
-    if isinstance(target_dtype, list):
-        if all(np.issubdtype(t, np.signedinteger) for t in target_dtype) and np.issubdtype(
-            old_dtype, np.unsignedinteger
-        ):
-            # target signed, currently unsigned
-            for dtype in [np.int8, np.int16, np.int32, np.int64]:
-                if data.max() < np.iinfo(dtype).max:
+SIGNED_DTYPES = [np.int8, np.int16, np.int32, np.int64]
+
+
+def _pick_dtype(name: str, data, old_dtype: np.dtype, target_dtype: Iterable[np.dtype] | np.dtype):
+    """Pick a suitable datatype, depending on the data"""
+    data_max = data.max()
+    if isinstance(target_dtype, Iterable) and not isinstance(target_dtype, str):
+        # if isinstance(target_dtype, list):
+        assert not all(np.issubdtype(t, np.floating) for t in target_dtype), (
+            "Floating point lists not supported"
+        )
+        if all(np.issubdtype(t, np.signedinteger) for t in target_dtype):
+            # target signed
+            data_min = data.min()
+            for dtype in SIGNED_DTYPES:
+                info = np.iinfo(dtype)
+                if info.min < data_min and data_max < info.max:
                     target_dtype = dtype
                     break
-        elif all(np.issubdtype(t, np.unsignedinteger) for t in target_dtype) and np.issubdtype(
-            old_dtype, np.signedinteger
-        ):
-            # target unsigned, currently signed
+        elif all(np.issubdtype(t, np.unsignedinteger) for t in target_dtype):
+            # target unsigned
             if data.min() < 0:
                 msg = f"`{name}` has values below 0, cannot convert to unsigned"
                 raise RuntimeError(msg)
-            target_dtype = np.min_scalar_type(data.max())
-        else:
-            dtype = np.min_scalar_type(data.max())
-            if dtype not in target_dtype:
-                msg = (
-                    f"The minimum dtype `{dtype} for `{name}` is not provided in the "
-                    f"list of acceptable dtypes: `{target_dtype}`. No other heuristics are given."
-                )
-                raise RuntimeError(msg)
-            target_dtype = dtype
+            target_dtype = np.min_scalar_type(data_max)
     elif np.issubdtype(target_dtype, np.integer):
         info = np.iinfo(target_dtype)
-        if data.min() < info.min or data.max() > info.max:
+        if data.min() < info.min or data_max > info.max:
             msg = f"Data in {name} of dtype {old_dtype} does not fit in {target_dtype}"
             raise RuntimeError(msg)
 
     return target_dtype
 
 
-def _update_dtype(parent_h5: h5py.Group, name: str, target_dtype: np.dtype) -> UpdatedDtype | None:
+def _update_dtype(
+    parent_h5: h5py.Group, name: str, target_dtype: np.dtype | Iterable[np.dtype]
+) -> UpdatedDtype | None:
     """Update dtype of the `parent_h5[name]` h5py dataset to `target_dtype`.
 
     If a list is passed as `target_dtype`, the tightest fit will be chosen.
@@ -426,10 +427,10 @@ def _update_dtype(parent_h5: h5py.Group, name: str, target_dtype: np.dtype) -> U
     h5 = parent_h5[name]
     attrs = dict(h5.attrs)
     old_dtype = h5.dtype
-    L.debug("convert_dtype: %s: %s -> %s", h5.name, old_dtype, target_dtype)
 
     data = h5[:]
     target_dtype = _pick_dtype(name, data, old_dtype, target_dtype)
+    L.debug("convert_dtype: %s: %s -> %s", h5.name, old_dtype, target_dtype)
     new = np.asarray(data, dtype=target_dtype)
 
     if target_dtype == old_dtype:
@@ -478,16 +479,15 @@ def resize_datatypes(h5_path, population_name, population_type, attributes) -> l
             if updated := _update_dtype(parent_h5, attr, dtypes):
                 updates.append(updated)
 
-        unsigned = [np.uint8, np.uint16, np.uint32, np.uint64]
-        signed = [np.int8, np.int16, np.int32, np.int64]
+        unsigned = (np.uint8, np.uint16, np.uint32, np.uint64)
 
         if typ_ == "nodes" and "node_type_id" in attributes:
             parent_h5 = h5[typ_][population_name]
-            if updated := _update_dtype(parent_h5, "node_type_id", signed):
+            if updated := _update_dtype(parent_h5, "node_type_id", SIGNED_DTYPES):
                 updates.append(updated)
         elif typ_ == "edges":
             for attr, dtypes in (
-                ("edge_type_id", signed),
+                ("edge_type_id", SIGNED_DTYPES),
                 ("source_node_id", unsigned),
                 ("target_node_id", unsigned),
             ):

@@ -196,6 +196,32 @@ def test_check_morphology_invariants():
     assert have_unifurcations == {"wrong-order-with-unifurcations"}
 
 
+UNSIGNED = [np.uint8, np.uint16, np.uint32, np.uint64]
+SIGNED = [np.int8, np.int16, np.int32, np.int64]
+
+@pytest.mark.parametrize("name, data, old_dtype, target, expected", [
+        ("u2u", [1, 300], np.uint64, UNSIGNED, np.uint16),
+        ("u2s", [1, 300], np.uint64, SIGNED, np.int16),
+        ("s2u", [0, 200], np.int64, UNSIGNED, np.uint8),
+        ("s2s", [-1, 200], np.int64, SIGNED, np.int16),
+        ("list_exact", [0, 5], np.uint8, UNSIGNED, np.uint8),
+        ("scalar_fit", [0, 100], np.int64, np.int8, np.int8),
+        ("f64tof32", [1.0, 2.0], np.float64, np.float32, np.float32),
+    ])
+def test_pick_dtype_success(name, data, old_dtype, target, expected):
+    res = curate._pick_dtype(name, np.array(data, dtype=old_dtype), np.dtype(old_dtype), target)
+    assert res == expected
+
+
+@pytest.mark.parametrize("name, data, old_dtype, target, match", [
+        ("neg", [-1, 2], np.int64, [np.uint8, np.uint16], "values below 0"),
+        ("overflow", [0, 300], np.int64, np.int8, "does not fit"),
+    ])
+def test_pick_dtype_error(name, data, old_dtype, target, match):
+    with pytest.raises(RuntimeError, match=match):
+        curate._pick_dtype(name, np.array(data, dtype=old_dtype), np.dtype(old_dtype), target)
+
+
 def test__update_dtype(tmp_path):
     with h5py.File(tmp_path / "test__update_dtype.h5", "w") as h5:
         dset = h5.create_dataset("ints", (100,), dtype="i8")
@@ -230,8 +256,6 @@ def test__update_dtype(tmp_path):
         h5.create_dataset("overflow", data=np.array([0, 300], dtype=np.int64))
         with pytest.raises(RuntimeError, match="does not fit"):
             curate._update_dtype(h5, "overflow", np.int8)
-
-
 
 
 def test_update_node_dtypes(tmp_path):
