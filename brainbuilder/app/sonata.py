@@ -444,7 +444,7 @@ def resize_datatypes(file, population_name, population_type, attributes):
     )
 
     updates = "\n".join(
-        f"\t{attr} {old_dtype} -> {new_dtype}" for attr, old_dtype, new_dtype in updates
+        f"\t{u.name} {u.old_dtype} -> {u.new_dtype}" for u in updates
     )
 
     click.secho(f"The following updates were performed:\n{updates}")
