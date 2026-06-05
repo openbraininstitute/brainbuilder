@@ -389,7 +389,6 @@ def _pick_dtype(name: str, data, old_dtype: np.dtype, target_dtype: Iterable[np.
     """Pick a suitable datatype, depending on the data"""
     data_max = data.max()
     if isinstance(target_dtype, Iterable) and not isinstance(target_dtype, str):
-        # if isinstance(target_dtype, list):
         assert not all(np.issubdtype(t, np.floating) for t in target_dtype), (
             "Floating point lists not supported"
         )
@@ -398,11 +397,12 @@ def _pick_dtype(name: str, data, old_dtype: np.dtype, target_dtype: Iterable[np.
             data_min = data.min()
             for dtype in SIGNED_DTYPES:
                 info = np.iinfo(dtype)
-                if info.min < data_min and data_max < info.max:
+                if info.min <= data_min and data_max <= info.max:
                     target_dtype = dtype
                     break
-        elif all(np.issubdtype(t, np.unsignedinteger) for t in target_dtype):
+        else:
             # target unsigned
+            assert all(np.issubdtype(t, np.unsignedinteger) for t in target_dtype)
             if data.min() < 0:
                 msg = f"`{name}` has values below 0, cannot convert to unsigned"
                 raise RuntimeError(msg)
@@ -502,7 +502,7 @@ def resize_datatypes(h5_path, population_name, population_type, attributes) -> l
                     ("node_id_to_ranges", "range_to_edge_id"),
                 ):
                     parent_h5 = h5[typ_][population_name]["indices"][base]
-                    if updated := _update_dtype(parent_h5, name, dtypes):
+                    if updated := _update_dtype(parent_h5, name, unsigned):
                         updates.append(updated)
 
     return updates
@@ -541,7 +541,8 @@ def update_node_dtypes(h5_file, population_name, population_type) -> list[Update
                 parent = group
 
             if target_dtype != parent[attribute_name].dtype or isinstance(target_dtype, list):
-                converted.append(_update_dtype(parent, attribute_name, target_dtype))
+                if update := _update_dtype(parent, attribute_name, target_dtype):
+                    converted.append(update)
 
         if "dynamics_params" in group:
             parent = group["dynamics_params"]
@@ -551,7 +552,8 @@ def update_node_dtypes(h5_file, population_name, population_type) -> list[Update
 
                 target_dtype = dynamics_params[param]
                 if target_dtype != parent[param].dtype or isinstance(target_dtype, list):
-                    converted.append(_update_dtype(parent, param, target_dtype))
+                    if update := _update_dtype(parent, param, target_dtype):
+                        converted.append(update)
 
     return converted
 
@@ -576,7 +578,8 @@ def update_edge_dtypes(h5_file, population_name, population_type, virtual) -> li
             ("edge_type_id", np.int64),
         ):
             if group[name].dtype != expected:
-                converted.append(_update_dtype(group, name, expected))
+                if update := _update_dtype(group, name, expected):
+                    converted.append(update)
 
         group = group["0"]
 
@@ -590,6 +593,7 @@ def update_edge_dtypes(h5_file, population_name, population_type, virtual) -> li
                 continue
 
             if target_dtype != group[attribute_name].dtype or isinstance(target_dtype, list):
-                converted.append(_update_dtype(group, attribute_name, target_dtype))
+                if update := _update_dtype(group, attribute_name, target_dtype):
+                    converted.append(update)
 
     return converted
