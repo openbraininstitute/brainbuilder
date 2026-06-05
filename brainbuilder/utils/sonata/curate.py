@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Collection of functions to curate/edit SONATA circuits."""
 
+import itertools
 import logging
+from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
 
 import h5py
 import morphio
@@ -371,34 +375,66 @@ def check_morphology_invariants(h5_morph_dir, morph_names):
     return incorrect_ordering, have_unifurcations
 
 
-def _update_dtype(parent_h5, name, target_dtype):
+@dataclass
+class UpdatedDtype:
+    name: str
+    old_dtype: np.dtype
+    new_dtype: np.dtype
+
+
+def _pick_dtype_from_list(
+    name: str, target_dtypes: list[np.dtype], data_min: int, data_max: int
+) -> np.dtype:
+    """Return the dtype that fits the min/max value, raise RuntimeError otherwise"""
+    for dtype in target_dtypes:
+        info = np.iinfo(dtype)
+        if info.min <= data_min and data_max <= info.max:
+            target_dtype = dtype
+            break
+    else:
+        msg = f"`{name}` does not fit of the bounds of any in `{target_dtypes}`"
+        raise RuntimeError(msg)
+    return target_dtype
+
+
+def _pick_dtype(name: str, data, target_dtype: Iterable[np.dtype] | np.dtype):
+    """Pick a suitable datatype, depending on the data"""
+    if isinstance(target_dtype, Iterable) and not isinstance(target_dtype, str):
+        target_dtype = list(target_dtype)
+        assert not all(np.issubdtype(t, np.floating) for t in target_dtype), (
+            "Floating point lists not supported"
+        )
+        data_min = data.min()
+        if data_min < 0 and all(np.issubdtype(t, np.unsignedinteger) for t in target_dtype):
+            msg = f"`{name}` has values below 0, cannot convert to unsigned"
+            raise RuntimeError(msg)
+
+        target_dtype = _pick_dtype_from_list(name, list(target_dtype), data_min, data.max())
+    elif np.issubdtype(target_dtype, np.integer):
+        target_dtype = _pick_dtype_from_list(name, [target_dtype], data.min(), data.max())
+
+    return target_dtype
+
+
+def _update_dtype(
+    parent_h5: h5py.Group, name: str, target_dtype: np.dtype | Iterable[np.dtype]
+) -> UpdatedDtype | None:
     """Update dtype of the `parent_h5[name]` h5py dataset to `target_dtype`.
 
     If a list is passed as `target_dtype`, the tightest fit will be chosen.
+    If no change, None is returned
     """
     h5 = parent_h5[name]
     attrs = dict(h5.attrs)
     old_dtype = h5.dtype
-    L.debug("convert_dtype: %s: %s -> %s", h5.name, h5.dtype, target_dtype)
 
     data = h5[:]
-
-    if isinstance(target_dtype, list):
-        dtype = np.min_scalar_type(data.max())
-        if dtype not in target_dtype:
-            msg = (
-                "The minimum dtype is not provided in the list of acceptable dtypes."
-                " No other heuristics are given"
-            )
-            raise RuntimeError(msg)
-        target_dtype = dtype
-    elif np.issubdtype(target_dtype, np.integer):
-        info = np.iinfo(target_dtype)
-        if data.min() < info.min or data.max() > info.max:
-            msg = f"Data in {name} of dtype {old_dtype} does not fit in {target_dtype}"
-            raise RuntimeError(msg)
-
+    target_dtype = _pick_dtype(name, data, target_dtype)
+    L.debug("convert_dtype: %s: %s -> %s", h5.name, old_dtype, target_dtype)
     new = np.asarray(data, dtype=target_dtype)
+
+    if target_dtype == old_dtype:
+        return None
 
     del parent_h5[name]
     parent_h5[name] = new
@@ -406,10 +442,10 @@ def _update_dtype(parent_h5, name, target_dtype):
     for k, v in attrs.items():
         parent_h5[name].attrs[k] = v
 
-    return (parent_h5[name].name, target_dtype)
+    return UpdatedDtype(parent_h5[name].name, old_dtype, target_dtype)
 
 
-def resize_datatypes(h5_path, population_name, population_type, attributes):
+def resize_datatypes(h5_path, population_name, population_type, attributes) -> list[UpdatedDtype]:
     with h5py.File(h5_path, "r") as h5:
         if f"nodes/{population_name}" not in h5 and f"edges/{population_name}" not in h5:
             raise ValueError(f'"{population_name}" dose not exist in `nodes` and `edges`')
@@ -440,30 +476,46 @@ def resize_datatypes(h5_path, population_name, population_type, attributes):
     with h5py.File(h5_path, "r+") as h5:
         parent_h5 = h5[typ_][population_name]["0"]
         for attr, dtypes in to_update.items():
-            old_dtype = parent_h5[attr].dtype
-            if isinstance(dtypes, list):
-                max_ = np.max(parent_h5[attr][:])
-                dtype = np.min_scalar_type(max_)
-                if dtype in dtypes and dtype != old_dtype:
-                    _update_dtype(parent_h5, attr, np.dtype(dtype))
-                    updates.append((attr, old_dtype, np.dtype(dtype)))
-            elif old_dtype != dtypes:
-                _update_dtype(parent_h5, attr, np.dtype(dtypes))
-                updates.append((attr, old_dtype, np.dtype(dtypes)))
+            if updated := _update_dtype(parent_h5, attr, dtypes):
+                updates.append(updated)
+
+        unsigned = (np.uint8, np.uint16, np.uint32, np.uint64)
+        signed_dtypes = (np.int8, np.int16, np.int32, np.int64)
+
+        if typ_ == "nodes" and "node_type_id" in attributes:
+            parent_h5 = h5[typ_][population_name]
+            if updated := _update_dtype(parent_h5, "node_type_id", signed_dtypes):
+                updates.append(updated)
+        elif typ_ == "edges":
+            for attr, dtypes in (
+                ("edge_type_id", signed_dtypes),
+                ("source_node_id", unsigned),
+                ("target_node_id", unsigned),
+            ):
+                if attr in attributes:
+                    parent_h5 = h5[typ_][population_name]
+                    if updated := _update_dtype(parent_h5, attr, dtypes):
+                        updates.append(updated)
+
+            if "indices" in attributes:
+                for base, name in itertools.product(
+                    ("source_to_target", "target_to_source"),
+                    ("node_id_to_ranges", "range_to_edge_id"),
+                ):
+                    parent_h5 = h5[typ_][population_name]["indices"][base]
+                    if updated := _update_dtype(parent_h5, name, unsigned):
+                        updates.append(updated)
 
     return updates
 
 
-def update_node_dtypes(h5_file, population_name, population_type):
+def update_node_dtypes(h5_file, population_name, population_type) -> list[UpdatedDtype]:
     """Update the datatypes of the attributes within a node population to the SONATA spec.
 
     Args:
         h5_file(path): to h5 file containing nodes
         population_name(str): name of the population to modify
         population_type(str): type (ex: biophysical) of the node population
-
-    Returns:
-        dict of names -> dtype of converted attributes
     """
     converted = []
     property_types, dynamics_params = schemas.nodes_schema_types(population_type)
@@ -490,7 +542,8 @@ def update_node_dtypes(h5_file, population_name, population_type):
                 parent = group
 
             if target_dtype != parent[attribute_name].dtype or isinstance(target_dtype, list):
-                converted.append(_update_dtype(parent, attribute_name, target_dtype))
+                if update := _update_dtype(parent, attribute_name, target_dtype):
+                    converted.append(update)
 
         if "dynamics_params" in group:
             parent = group["dynamics_params"]
@@ -500,22 +553,22 @@ def update_node_dtypes(h5_file, population_name, population_type):
 
                 target_dtype = dynamics_params[param]
                 if target_dtype != parent[param].dtype or isinstance(target_dtype, list):
-                    converted.append(_update_dtype(parent, param, target_dtype))
+                    if update := _update_dtype(parent, param, target_dtype):
+                        converted.append(update)
 
-    return dict(converted)
+    return converted
 
 
-def update_edge_dtypes(h5_file, population_name, population_type, virtual):
+def update_edge_dtypes(
+    h5_file: str | Path, population_name: str, population_type: str, virtual: bool
+) -> list[UpdatedDtype]:
     """Update the datatypes of the attributes within an edge population to the SONATA spec.
 
     Args:
-        h5_file(path): to h5 file containing nodes
-        population_name(str): name of the population to modify
-        population_type(str): type (ex: biophysical) of the node population
-        virtual(bool): Whether the population is virtual
-
-    Returns:
-        dict of names -> dtype of converted attributes
+        h5_file: to h5 file containing nodes
+        population_name: name of the population to modify
+        population_type: type (ex: biophysical) of the node population
+        virtual: Whether the population is virtual
     """
     property_types = schemas.edges_schema_types(population_type, virtual=virtual)
     converted = []
@@ -528,7 +581,8 @@ def update_edge_dtypes(h5_file, population_name, population_type, virtual):
             ("edge_type_id", np.int64),
         ):
             if group[name].dtype != expected:
-                converted.append(_update_dtype(group, name, expected))
+                if update := _update_dtype(group, name, expected):
+                    converted.append(update)
 
         group = group["0"]
 
@@ -542,6 +596,7 @@ def update_edge_dtypes(h5_file, population_name, population_type, virtual):
                 continue
 
             if target_dtype != group[attribute_name].dtype or isinstance(target_dtype, list):
-                converted.append(_update_dtype(group, attribute_name, target_dtype))
+                if update := _update_dtype(group, attribute_name, target_dtype):
+                    converted.append(update)
 
-    return dict(converted)
+    return converted
