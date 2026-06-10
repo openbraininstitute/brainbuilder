@@ -1280,6 +1280,16 @@ def split_subcircuit(
     # Write virtual nodes
     for population_name, ids in virt_node_ids.items():
         df = circuit.nodes[population_name].get(ids)
+        if "model_template" in df.columns:
+            non_empty = df["model_template"].replace("", pd.NA).dropna()
+            if not non_empty.empty:
+                L.warning(
+                    "Population '%s': 'model_template' has non-empty values for virtual nodes"
+                    " and will be ignored: %s",
+                    population_name,
+                    non_empty.unique().tolist(),
+                )
+            df = df.drop(columns=["model_template"])
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
@@ -1288,6 +1298,16 @@ def split_subcircuit(
         if population_name in ext_nodes:
             continue  # Nodes will be written from the merged id_mapping below
         df = circuit.nodes[population_name].get(ids)
+        if "model_template" in df.columns:
+            non_empty = df["model_template"].replace("", pd.NA).dropna()
+            if not non_empty.empty:
+                L.warning(
+                    "Population '%s': 'model_template' has non-empty values for virtual nodes"
+                    " and will be ignored: %s",
+                    population_name,
+                    non_empty.unique().tolist(),
+                )
+            df = df.drop(columns=["model_template"])
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
@@ -1298,6 +1318,8 @@ def split_subcircuit(
             source_ids = df.index.to_numpy()
             frames.append(circuit.nodes[source_pop].get(source_ids))
         combined_df = pd.concat(frames)
+        if "model_template" in combined_df.columns:
+            combined_df = combined_df.drop(columns=["model_template"])
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(
             nodes_path, combined_df, population_name

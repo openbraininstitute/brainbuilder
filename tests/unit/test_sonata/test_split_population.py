@@ -673,6 +673,60 @@ def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
     assert virtual_pop == {"V2__C": {"type": "chemical"}}
 
 
+def test_split_subcircuit_strips_model_template_from_virtual(tmp_path):
+    """model_template should be stripped from virtual populations during extraction."""
+    # Copy fixture and inject model_template into virtual node files
+    fixture = tmp_path / "fixture"
+    shutil.copytree(SPLIT_SUBCIRCUIT_DATA_PATH, fixture)
+
+    # Add model_template with empty strings to V1 (backward-compat case)
+    with h5py.File(fixture / "networks/nodes/virtual_nodes_V1.h5", "a") as h5:
+        h5.create_dataset("/nodes/V1/0/model_template", data=[""] * 4)
+
+    # Add model_template with non-empty values to V2 (should trigger warning)
+    with h5py.File(fixture / "networks/nodes/virtual_nodes_V2.h5", "a") as h5:
+        h5.create_dataset("/nodes/V2/0/model_template", data=["hoc:unexpected"])
+
+    output = tmp_path / "output"
+    split_population.split_subcircuit(
+        output,
+        "mtype_a",
+        str(fixture / "circuit_config.json"),
+        do_virtual=True,
+        create_external=False,
+    )
+
+    # Verify model_template is absent from all extracted virtual populations
+    with h5py.File(output / "V1" / "nodes.h5", "r") as h5:
+        assert "model_template" not in h5["nodes/V1/0"]
+        assert "model_type" in h5["nodes/V1/0"]
+
+    with h5py.File(output / "V2" / "nodes.h5", "r") as h5:
+        assert "model_template" not in h5["nodes/V2/0"]
+        assert "model_type" in h5["nodes/V2/0"]
+
+
+def test_split_subcircuit_strips_model_template_from_externals(tmp_path):
+    """model_template should be stripped from newly-externalized populations."""
+    output = tmp_path / "output"
+    split_population.split_subcircuit(
+        output,
+        "mtype_a",
+        str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"),
+        do_virtual=False,
+        create_external=True,
+    )
+
+    # external_A nodes are biophysical nodes turned virtual — model_template must be gone
+    with h5py.File(output / "external_A/nodes.h5", "r") as h5:
+        assert "model_template" not in h5["nodes/external_A/0"]
+        assert "model_type" in h5["nodes/external_A/0"]
+
+    with h5py.File(output / "external_B/nodes.h5", "r") as h5:
+        assert "model_template" not in h5["nodes/external_B/0"]
+        assert "model_type" in h5["nodes/external_B/0"]
+
+
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [
