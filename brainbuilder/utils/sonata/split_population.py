@@ -92,6 +92,7 @@ def _isin_worker(elements, test_elements, sl, invert):
 
 def _isin(elements, test_elements, invert=False):
     """parallelized version of nump.isin"""
+    L.warning("_is_in: %s %s", len(elements), len(test_elements))
     h5_chunksize = _h5_get_read_chunk_size()
 
     if len(elements) < h5_chunksize:
@@ -100,11 +101,12 @@ def _isin(elements, test_elements, invert=False):
     parallel = Parallel(
         backend="loky",
         n_jobs=-2,
-        # verbose=51,
+        verbose=51,
     )
 
     # arbitrary chunk_size; 1e6 with the default H5_READ_CHUNKSIZE seems about right
     chunk_size = max(500, int(h5_chunksize / 500))
+    L.warning("_isin: len(elements): %s check_size: %s [%s]", len(elements), chunk_size, h5_chunksize)
     ret = parallel(
         delayed(_isin_worker)(elements, test_elements, sl, invert)
         for sl in _create_chunked_slices(len(elements), chunk_size)
@@ -172,7 +174,7 @@ def _save_sonata_nodes(nodes_path, df, population_name):
     cell_collection.save_sonata(str(nodes_path), mode="a")
     # restore the original index
     df.index -= 1
-    L.debug("Wrote %s nodes to %s", len(df), nodes_path)
+    L.warning("Wrote %s nodes to %s", len(df), nodes_path)
     return nodes_path
 
 
@@ -220,7 +222,9 @@ def _populate_edge_group(orig_group, new_group, sl, mask, overrides):
         overrides (dict[str, np.ndarray]): Optional mapping of dataset
             name to precomputed values to append instead of ds[sl][mask].
     """
+    L.warning("_populate_edge_group: sl: %s[%s]", sl, mask.shape)
     for name, ds in orig_group.items():
+        L.warning("\tCopying %s", name)
         if isinstance(ds, h5py.Dataset):
             if name in overrides:
                 hdf5.append_to_dataset(new_group[name], overrides[name])
@@ -345,7 +349,7 @@ def _copy_filtered_edges(
                     _init_edge_group(_get_unique_group(orig_edges), new_group, additional_attrs)
 
                 total_chunks = math.ceil(len(orig_edges["source_node_id"]) / h5_read_chunk_size)
-                L.debug(
+                L.warning(
                     "Processing %s edges in %s chunks of size %s [src_edge_name=%s]",
                     len(orig_edges["source_node_id"]),
                     total_chunks,
@@ -479,7 +483,7 @@ def _write_masked_edges(
 ):
     """Apply masks per chunk to write edges to HDF5 and populate edge groups."""
     for sl, mask in sl_and_masks:
-        L.debug("Processing chunk %s", sl)
+        L.warning("Processing chunk %s: %s", sl, mask.shape)
         sgids = orig_edges["source_node_id"][sl]
         tgids = orig_edges["target_node_id"][sl]
         hdf5.append_to_dataset(
@@ -557,14 +561,14 @@ def _write_edges(
             h5_read_chunk_size=h5_read_chunk_size,
         )
 
-        L.debug("Writing to  %s", write_edge_config.output_path)
+        L.warning("Writing to  %s", write_edge_config.output_path)
         edge_count = _copy_filtered_edges(
             write_edge_config=write_edge_config,
             id_mapping=id_mapping,
         )
 
         if edge_count > 0:
-            L.debug("Wrote %s edges to %s", edge_count, write_edge_config.output_path)
+            L.warning("Wrote %s edges to %s", edge_count, write_edge_config.output_path)
             written_edges += edge_count
 
     if expect_to_use_all_edges:
@@ -606,7 +610,7 @@ def _split_population_by_attribute(nodes_path, attribute):
         dict: new_population -> df containing attributes for that new population
     """
     nodes = _load_sonata_nodes(nodes_path)
-    L.debug("Splitting population on %s -> %s", attribute, nodes[attribute].unique())
+    L.warning("Splitting population on %s -> %s", attribute, nodes[attribute].unique())
     split_nodes = dict(tuple(nodes.groupby(attribute)))
     return split_nodes
 
@@ -644,7 +648,7 @@ def _write_circuit_config(output, split_nodes):
 
     filepath = Path(output) / "circuit_config.json"
     utils.dump_json(filepath, tmpl)
-    L.debug("Written circuit config %s", filepath)
+    L.warning("Written circuit config %s", filepath)
 
 
 def split_population(output, attribute, nodes_path, edges_path):
@@ -717,7 +721,7 @@ def _write_subcircuit_edges(
     """
     output_path = write_edge_config.output_path
 
-    L.debug(
+    L.warning(
         "Writing edges %s -> %s [%s]",
         write_edge_config.src_node_name,
         write_edge_config.dst_edge_name,
@@ -731,7 +735,7 @@ def _write_subcircuit_edges(
     )
 
     if edge_count > 0:
-        L.debug("Wrote %s edges to %s", edge_count, output_path)
+        L.warning("Wrote %s edges to %s", edge_count, output_path)
         return output_path
     elif not Path(output_path).exists():
         # _copy_filtered_edges deletes the file when all populations are empty
@@ -903,15 +907,15 @@ def _gather_subcircuit_external(
 
             new_name = f"external_{name}"
             while new_name in existing_edge_pop_names:
-                L.debug("%s already exists as an edge population", new_name)
+                L.warning("%s already exists as an edge population", new_name)
                 new_name = "external_" + new_name
             new_source_pop_name = f"external_{edge.source.name}"
             while new_source_pop_name in existing_node_pop_names:
-                L.debug("%s already exists as an node population", new_source_pop_name)
+                L.warning("%s already exists as an node population", new_source_pop_name)
                 new_source_pop_name = "external_" + new_source_pop_name
 
             output_path = output / (new_name + ".h5")
-            L.debug(
+            L.warning(
                 "Gathering edges %s for %s -> %s [%s]",
                 name,
                 edge.source.name,
