@@ -261,7 +261,7 @@ def _h5_get_read_chunk_size():
 
 
 
-def _merge_sl_and_masks(sl_and_masks, min_batch=50000):
+def _merge_sl_and_masks(sl_and_masks, min_batch=10000):
     """Merge adjacent (slice, idx) pairs until each has at least min_batch rows."""
     merged = []
     pending_start = None
