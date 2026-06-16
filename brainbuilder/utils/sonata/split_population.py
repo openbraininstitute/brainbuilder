@@ -105,7 +105,7 @@ def _isin(elements, test_elements, invert=False):
     )
 
     # arbitrary chunk_size; 1e6 with the default H5_READ_CHUNKSIZE seems about right
-    chunk_size = max(500, int(h5_chunksize / 500))
+    chunk_size = max(500, int(h5_chunksize / 100))
     L.warning("_isin: len(elements): %s check_size: %s [%s]", len(elements), chunk_size, h5_chunksize)
     ret = parallel(
         delayed(_isin_worker)(elements, test_elements, sl, invert)
@@ -260,6 +260,27 @@ def _h5_get_read_chunk_size():
     return int(os.environ.get("H5_READ_CHUNKSIZE", H5_READ_CHUNKSIZE))
 
 
+
+def _merge_sl_and_masks(sl_and_masks, min_batch=50000):
+    """Merge adjacent (slice, idx) pairs until each has at least min_batch rows."""
+    merged = []
+    pending_start = None
+    pending_idxs = []
+
+    for sl, idxs in sl_and_masks:
+        if pending_start is None:
+            pending_start = sl.start
+        pending_idxs.append(idxs + (sl.start - pending_start))
+        if sum(len(x) for x in pending_idxs) >= min_batch:
+            merged.append((slice(pending_start, sl.stop), np.concatenate(pending_idxs)))
+            pending_start = None
+            pending_idxs = []
+
+    if pending_idxs:
+        merged.append((slice(pending_start, sl.stop), np.concatenate(pending_idxs)))
+
+    return merged
+
 def _copy_filtered_edges(
     write_edge_config: WriteEdgeConfig,
     id_mapping: IdMapping,
@@ -365,6 +386,8 @@ def _copy_filtered_edges(
                     edge_mappings=edge_mappings,
                     is_neuroglial=is_neuroglial,
                 )
+
+                sl_and_masks = _merge_sl_and_masks(sl_and_masks)
 
                 if edge_mappings is not None and is_neuroglial:
                     # Record old→new edge ID mapping so that downstream neuroglial
