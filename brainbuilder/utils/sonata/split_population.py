@@ -207,7 +207,7 @@ def _init_edge_group(orig_group: h5py.Group, new_group: h5py.Group, additional_a
             raise ValueError('Only "dynamics_params" group is expected')
 
 
-def _populate_edge_group(orig_group, new_group, sl, mask, overrides):
+def _populate_edge_group(orig_group, new_group, idx, overrides):
     """Append filtered data from orig_group datasets into new_group.
 
     Copies data chunk-by-chunk using the provided slice and boolean mask.
@@ -222,18 +222,18 @@ def _populate_edge_group(orig_group, new_group, sl, mask, overrides):
         overrides (dict[str, np.ndarray]): Optional mapping of dataset
             name to precomputed values to append instead of ds[sl][mask].
     """
-    L.warning("_populate_edge_group: sl: %s[%s]", sl, mask.shape)
+    L.warning("_populate_edge_group: %s", idx.shape)
     for name, ds in orig_group.items():
         L.warning("\tCopying %s", name)
         if isinstance(ds, h5py.Dataset):
             if name in overrides:
                 hdf5.append_to_dataset(new_group[name], overrides[name])
             else:
-                hdf5.append_to_dataset(new_group[name], ds[sl][mask])
+                hdf5.append_to_dataset(new_group[name], ds[idx])
         elif isinstance(ds, h5py.Group) and name == "dynamics_params":
             for k, values in ds.items():
                 if isinstance(values, h5py.Dataset):
-                    hdf5.append_to_dataset(new_group[name][k], values[sl][mask])
+                    hdf5.append_to_dataset(new_group[name][k], values[idx])
         elif isinstance(ds, h5py.Group) and name == "@library":
             raise NotImplementedError(
                 "@library group is defined by the spec but not currently supported"
@@ -507,13 +507,14 @@ def _write_masked_edges(
     """Apply masks per chunk to write edges to HDF5 and populate edge groups."""
     for sl, mask in sl_and_masks:
         L.warning("Processing chunk %s: %s", sl, mask.shape)
-        sgids = orig_edges["source_node_id"][sl]
-        tgids = orig_edges["target_node_id"][sl]
+        idx = sl.start + mask
+        sgids = orig_edges["source_node_id"][idx]
+        tgids = orig_edges["target_node_id"][idx]
         hdf5.append_to_dataset(
-            new_edges["source_node_id"], src_mapping.loc[sgids[mask]][NEW_IDS].to_numpy()
+            new_edges["source_node_id"], src_mapping.loc[sgids][NEW_IDS].to_numpy()
         )
         hdf5.append_to_dataset(
-            new_edges["target_node_id"], dst_mapping.loc[tgids[mask]][NEW_IDS].to_numpy()
+            new_edges["target_node_id"], dst_mapping.loc[tgids][NEW_IDS].to_numpy()
         )
         overrides = {}
         if is_neuroglial:
@@ -523,7 +524,7 @@ def _write_masked_edges(
             syn_ids = orig_edges[GROUP_NAME]["synapse_id"][sl]
             overrides["synapse_id"] = edge_mapping.loc[syn_ids[mask]][NEW_IDS].to_numpy()
 
-        _populate_edge_group(orig_edges[GROUP_NAME], new_edges[GROUP_NAME], sl, mask, overrides)
+        _populate_edge_group(orig_edges[GROUP_NAME], new_edges[GROUP_NAME], idx, overrides)
 
 
 def _get_node_counts(
