@@ -170,14 +170,13 @@ def _drop_column_with_warning(df: pd.DataFrame, column: str, population_name: st
     """
     if column not in df.columns:
         return df
-      has_content = df[column].str.len() > 0
-      if has_content.any():
-          L.warning(
-              "Population '%s': '%s' has non-empty values that will be dropped: %s",
-              population_name,
-              column,
-              df[column][has_content].unique().tolist(),
-          )
+    has_content = df[column].str.len() > 0
+    if has_content.any():
+        L.warning(
+            "Population '%s': '%s' has non-empty values that will be dropped: %s",
+            population_name,
+            column,
+            df[column][has_content].unique().tolist(),
         )
     return df.drop(columns=[column])
 
