@@ -209,10 +209,14 @@ def _populate_edge_group(
     orig_group: h5py.Group,
     new_group: h5py.Group,
     sl: slice,
-    idx: np.array,
-    overrides: dict[str, np.array],
+    idx: np.ndarray,
+    overrides: dict[str, np.ndarray],
 ):
     """Append filtered data from orig_group datasets into new_group.
+
+    Copies data chunk-by-chunk using the provided slice and index.
+    Dataset values can be replaced via overrides instead of being read from
+    the source. Also handles the "dynamics_params" subgroup.
 
     Args:
         orig_group: Source edge group to read from.
@@ -423,7 +427,7 @@ def _copy_filtered_edges(
     return edge_count
 
 
-def _compute_edge_mapping(sl_and_idxs: list[tuple[slice, np.array]], offset: int = 0):
+def _compute_edge_mapping(sl_and_idxs: list[tuple[slice, np.ndarray]], offset: int = 0):
     """Build a pandas DataFrame mapping absolute indices to NEW_IDS.
 
     Args:
@@ -958,7 +962,7 @@ def _gather_subcircuit_virtual_typed(
     Returns:
         tuple: (write_edge_configs, pop_used_source_node_ids)
             - write_edge_configs: list[WriteEdgeConfig]
-            - pop_used_source_node_ids: dict[str, np.array] mapping pop name to node IDs
+            - pop_used_source_node_ids: dict[str, np.ndarray] mapping pop name to node IDs
     """
     virtual_populations = {
         name: edge
