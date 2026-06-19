@@ -673,6 +673,110 @@ def test_split_subcircuit_with_virtual(tmp_path, circuit, from_subcircuit):
     assert virtual_pop == {"V2__C": {"type": "chemical"}}
 
 
+def test_split_subcircuit_strips_model_template_from_virtual(tmp_path):
+    """model_template should be stripped from virtual populations during extraction."""
+    # Copy fixture and inject model_template into virtual node files
+    fixture = tmp_path / "fixture"
+    shutil.copytree(SPLIT_SUBCIRCUIT_DATA_PATH, fixture)
+
+    # Add model_template with empty strings to V1 (backward-compat case)
+    with h5py.File(fixture / "networks/nodes/virtual_nodes_V1.h5", "a") as h5:
+        h5.create_dataset("/nodes/V1/0/model_template", data=[""] * 4)
+
+    # Add model_template with non-empty values to V2 (should trigger warning)
+    with h5py.File(fixture / "networks/nodes/virtual_nodes_V2.h5", "a") as h5:
+        h5.create_dataset("/nodes/V2/0/model_template", data=["hoc:unexpected"])
+
+    output = tmp_path / "output"
+    split_population.split_subcircuit(
+        output,
+        "mtype_a",
+        str(fixture / "circuit_config.json"),
+        do_virtual=True,
+        create_external=False,
+    )
+
+    # Verify model_template is absent from all extracted virtual populations
+    with h5py.File(output / "V1" / "nodes.h5", "r") as h5:
+        assert "model_template" not in h5["nodes/V1/0"]
+        assert "model_type" in h5["nodes/V1/0"]
+
+    with h5py.File(output / "V2" / "nodes.h5", "r") as h5:
+        assert "model_template" not in h5["nodes/V2/0"]
+        assert "model_type" in h5["nodes/V2/0"]
+
+
+def test_split_subcircuit_strips_model_template_from_externals(tmp_path):
+    """model_template should be stripped from newly-externalized populations."""
+    output = tmp_path / "output"
+    split_population.split_subcircuit(
+        output,
+        "mtype_a",
+        str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"),
+        do_virtual=False,
+        create_external=True,
+    )
+
+    # external_A nodes are biophysical nodes turned virtual — model_template must be gone
+    with h5py.File(output / "external_A/nodes.h5", "r") as h5:
+        assert "model_template" not in h5["nodes/external_A/0"]
+        assert "model_type" in h5["nodes/external_A/0"]
+
+    with h5py.File(output / "external_B/nodes.h5", "r") as h5:
+        assert "model_template" not in h5["nodes/external_B/0"]
+        assert "model_type" in h5["nodes/external_B/0"]
+
+
+def test_split_subcircuit_strips_model_template_from_legacy_externals(tmp_path):
+    """model_template should be stripped from pre-existing external populations (legacy files).
+
+    Simulates a legacy circuit where external nodes still carry model_template
+    (created before the stripping logic existed). Extracts a sub-subcircuit and
+    verifies model_template is removed from the carried-forward external population.
+    """
+    # Step 1: Extract with create_external to get a circuit with external_A
+    c1_output = tmp_path / "c1"
+    split_population.split_subcircuit(
+        c1_output,
+        "mtype_a",
+        str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"),
+        do_virtual=False,
+        create_external=True,
+    )
+
+    # Step 2: Inject model_template into external_A to simulate a legacy file
+    ext_a_path = c1_output / "external_A" / "nodes.h5"
+    with h5py.File(ext_a_path, "a") as h5:
+        n_nodes = len(h5["nodes/external_A/0/model_type"])
+        h5.create_dataset(
+            "/nodes/external_A/0/model_template", data=["hoc:legacy"] * n_nodes
+        )
+
+    # Step 3: Re-extract from c1, keeping all biophysical A nodes so external_A
+    # passes through the existing-external path (not merged with new externals).
+    # Remove one B node to make create_external meaningful.
+    node_set_def = {
+        "legacy_test": ["legacy_test_popA", "legacy_test_popB", "legacy_test_popC"],
+        "legacy_test_popA": {"population": "A", "node_id": [0, 1, 2]},
+        "legacy_test_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
+        "legacy_test_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
+    }
+
+    c2_output = _split_custom_subcircuit(
+        tmp_path / "c2",
+        str(c1_output / "circuit_config.json"),
+        "legacy_test",
+        node_set_def,
+        do_virtual=False,
+        create_external=True,
+    )
+
+    # Step 4: Verify model_template is stripped from the carried-forward external_A
+    with h5py.File(c2_output / "external_A" / "nodes.h5", "r") as h5:
+        assert "model_template" not in h5["nodes/external_A/0"]
+        assert "model_type" in h5["nodes/external_A/0"]
+
+
 @pytest.mark.parametrize(
     "circuit,from_subcircuit",
     [

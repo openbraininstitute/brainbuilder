@@ -225,8 +225,6 @@ def _create_source_nodes(population_name, size, output_dir):
     L.debug("_create_source_nodes: %s(%d)", population_name, size)
     cells = voxcell.CellCollection()
     cells.properties["model_type"] = ["virtual"] * size
-    # '' stands for NULL value in SONATA https://github.com/AllenInstitute/sonata/issues/122
-    cells.properties["model_template"] = [""] * size
     cells.population_name = population_name
     output = output_dir / f"nodes_{population_name}.h5"
     cells.save(output)

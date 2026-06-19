@@ -157,6 +157,30 @@ def _load_sonata_nodes(nodes_path):
     return df
 
 
+def _drop_column_with_warning(df: pd.DataFrame, column: str, population_name: str) -> pd.DataFrame:
+    """Drop a column from a DataFrame, warning if it contains non-empty values.
+
+    Args:
+        df: DataFrame to modify.
+        column: Column name to drop.
+        population_name: Population name for the warning message.
+
+    Returns:
+        DataFrame with the column removed, or unchanged if column is absent.
+    """
+    if column not in df.columns:
+        return df
+    has_content = df[column].str.len() > 0
+    if has_content.any():
+        L.warning(
+            "Population '%s': '%s' has non-empty values that will be dropped: %s",
+            population_name,
+            column,
+            df[column][has_content].unique().tolist(),
+        )
+    return df.drop(columns=[column])
+
+
 def _save_sonata_nodes(nodes_path, df, population_name):
     """Save a dataframe of nodes (0-based IDs) to sonata file.
 
@@ -209,10 +233,14 @@ def _populate_edge_group(
     orig_group: h5py.Group,
     new_group: h5py.Group,
     sl: slice,
-    idx: np.array,
-    overrides: dict[str, np.array],
+    idx: np.ndarray,
+    overrides: dict[str, np.ndarray],
 ):
     """Append filtered data from orig_group datasets into new_group.
+
+    Copies data chunk-by-chunk using the provided slice and index.
+    Dataset values can be replaced via overrides instead of being read from
+    the source. Also handles the "dynamics_params" subgroup.
 
     Args:
         orig_group: Source edge group to read from.
@@ -423,7 +451,7 @@ def _copy_filtered_edges(
     return edge_count
 
 
-def _compute_edge_mapping(sl_and_idxs: list[tuple[slice, np.array]], offset: int = 0):
+def _compute_edge_mapping(sl_and_idxs: list[tuple[slice, np.ndarray]], offset: int = 0):
     """Build a pandas DataFrame mapping absolute indices to NEW_IDS.
 
     Args:
@@ -958,7 +986,7 @@ def _gather_subcircuit_virtual_typed(
     Returns:
         tuple: (write_edge_configs, pop_used_source_node_ids)
             - write_edge_configs: list[WriteEdgeConfig]
-            - pop_used_source_node_ids: dict[str, np.array] mapping pop name to node IDs
+            - pop_used_source_node_ids: dict[str, np.ndarray] mapping pop name to node IDs
     """
     virtual_populations = {
         name: edge
@@ -1278,6 +1306,7 @@ def split_subcircuit(
     # Write virtual nodes
     for population_name, ids in virt_node_ids.items():
         df = circuit.nodes[population_name].get(ids)
+        df = _drop_column_with_warning(df, "model_template", population_name)
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
@@ -1286,6 +1315,7 @@ def split_subcircuit(
         if population_name in ext_nodes:
             continue  # Nodes will be written from the merged id_mapping below
         df = circuit.nodes[population_name].get(ids)
+        df = _drop_column_with_warning(df, "model_template", population_name)
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
@@ -1296,6 +1326,7 @@ def split_subcircuit(
             source_ids = df.index.to_numpy()
             frames.append(circuit.nodes[source_pop].get(source_ids))
         combined_df = pd.concat(frames)
+        combined_df = _drop_column_with_warning(combined_df, "model_template", population_name)
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(
             nodes_path, combined_df, population_name
