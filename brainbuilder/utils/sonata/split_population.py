@@ -466,13 +466,13 @@ def _compute_edge_mapping(sl_and_idxs: list[tuple[slice, np.ndarray]], offset: i
         starting from ``offset``.
     """
     if not sl_and_idxs:
-        return pd.DataFrame(columns=[NEW_IDS], dtype=np.int64)
+        return pd.DataFrame(columns=[NEW_IDS], dtype=np.uint64)
 
     chunk_indices = [sl.start + idx for sl, idx in sl_and_idxs]
-    flat_idxs = np.hstack(chunk_indices).astype(np.int64)
+    flat_idxs = np.hstack(chunk_indices).astype(np.uint64)
 
     edge_mapping = pd.DataFrame(
-        {NEW_IDS: np.arange(len(flat_idxs), dtype=np.int64) + offset}, index=flat_idxs
+        {NEW_IDS: np.arange(len(flat_idxs), dtype=np.uint64) + offset}, index=flat_idxs
     )
     return edge_mapping
 
@@ -496,7 +496,7 @@ def _compute_slice_and_indices(
 
         idx = np.flatnonzero(mask)
         if len(idx):
-            sl_and_idxs.append((sl, idx.astype(np.int64)))
+            sl_and_idxs.append((sl, idx.astype(np.uint64)))
 
     return sl_and_idxs
 
