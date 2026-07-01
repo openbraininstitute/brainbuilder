@@ -1477,3 +1477,82 @@ def test_check_no_reserved_external_populations(tmp_path):
         do_virtual=False,
         create_external=False,
     )
+
+
+def test_external_populations_preserve_nonstandard_synapse_type(tmp_path):
+    """External populations must preserve the original synapse type, not default to 'chemical'.
+
+    When a circuit has non-standard synapse types (e.g., 'Exp2Syn_synapse'), extracting
+    a subcircuit with create_external=True should carry that type into the external
+    population entries in circuit_config.json.
+
+    Also verifies that re-extracting from the result (sub-subcircuit) still preserves
+    the original type through multiple levels of nesting.
+    """
+    custom_type = "Exp2Syn_synapse"
+
+    # --- Setup: copy fixture and change all edge types to a non-standard type ---
+    fixture = tmp_path / "fixture"
+    shutil.copytree(SPLIT_SUBCIRCUIT_DATA_PATH, fixture)
+
+    config = load_json(fixture / "circuit_config.json")
+    for edge_entry in config["networks"]["edges"]:
+        for pop_name in edge_entry["populations"]:
+            edge_entry["populations"][pop_name]["type"] = custom_type
+    dump_json(fixture / "circuit_config.json", config)
+
+    # --- First extraction (c1 -> c2): keep A:{1,2,3,5}, B:all, C:all ---
+    node_set_def_c2 = {
+        "c2_set": ["c2_popA", "c2_popB", "c2_popC"],
+        "c2_popA": {"population": "A", "node_id": [1, 2, 3, 5]},
+        "c2_popB": {"population": "B", "node_id": [0, 1, 2, 3, 4, 5]},
+        "c2_popC": {"population": "C", "node_id": [0, 1, 2, 3, 4, 5]},
+    }
+
+    node_sets = load_json(fixture / "node_sets.json")
+    node_sets.update(node_set_def_c2)
+    dump_json(fixture / "node_sets.json", node_sets)
+
+    output_c2 = tmp_path / "c2"
+    split_population.split_subcircuit(
+        output_c2, "c2_set", str(fixture / "circuit_config.json"),
+        do_virtual=True, create_external=True
+    )
+
+    # Verify all edge populations in c2 have the custom type (not 'chemical')
+    config_c2 = load_json(output_c2 / "circuit_config.json")
+    for edge_entry in config_c2["networks"]["edges"]:
+        for pop_name, pop_config in edge_entry["populations"].items():
+            assert pop_config.get("type") == custom_type, (
+                f"Population '{pop_name}' has type '{pop_config.get('type')}' "
+                f"but expected '{custom_type}'"
+            )
+
+    # --- Second extraction (c2 -> c3): sub-subcircuit ---
+    # Remove more A nodes so they become external in c3
+    node_set_def_c3 = {
+        "c3_set": ["c3_popA", "c3_popB", "c3_popC"],
+        "c3_popA": {"population": "A", "node_id": [0, 1, 2]},
+        "c3_popB": {"population": "B", "node_id": [1, 2, 3, 4, 5]},
+        "c3_popC": {"population": "C", "node_id": [0, 1, 2, 5]},
+    }
+
+    # Need to inject node sets into c2's fixture
+    node_sets_c2 = load_json(output_c2 / "node_sets.json")
+    node_sets_c2.update(node_set_def_c3)
+    dump_json(output_c2 / "node_sets.json", node_sets_c2)
+
+    output_c3 = tmp_path / "c3"
+    split_population.split_subcircuit(
+        output_c3, "c3_set", str(output_c2 / "circuit_config.json"),
+        do_virtual=True, create_external=True
+    )
+
+    # Verify all edge populations in c3 still have the custom type
+    config_c3 = load_json(output_c3 / "circuit_config.json")
+    for edge_entry in config_c3["networks"]["edges"]:
+        for pop_name, pop_config in edge_entry["populations"].items():
+            assert pop_config.get("type") == custom_type, (
+                f"Sub-subcircuit: Population '{pop_name}' has type '{pop_config.get('type')}' "
+                f"but expected '{custom_type}'"
+            )
