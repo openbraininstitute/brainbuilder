@@ -1092,6 +1092,15 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
             for _entry in old_population_list
             if new_pop_name in _entry["populations"]
         ]
+        # If not found and name starts with 'external_', look up the source edge
+        # population to inherit its config (including synapse type).
+        if not matched_originals and type_ == "edges" and new_pop_name.startswith("external_"):
+            orig_name = new_pop_name.removeprefix("external_")
+            matched_originals = [
+                _entry["populations"][orig_name]
+                for _entry in old_population_list
+                if orig_name in _entry["populations"]
+            ]
         assert 0 <= len(matched_originals) <= 1
         entry = {
             str_type: str(Path("$BASE_DIR") / updated_path),
