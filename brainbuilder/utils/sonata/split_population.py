@@ -181,11 +181,55 @@ def _drop_column_with_warning(df: pd.DataFrame, column: str, population_name: st
     return df.drop(columns=[column])
 
 
-def _save_sonata_nodes(nodes_path, df, population_name):
+def _get_enumeration_names(nodes_path, population_name):
+    """Return the set of property names stored as @library (categorical) in a nodes file.
+
+    Uses libsonata to inspect the node population and return which properties
+    are stored as enumerations (i.e. categorical / @library).
+
+    Args:
+        nodes_path: Path to the source SONATA nodes HDF5 file.
+        population_name: Name of the node population to inspect.
+
+    Returns:
+        set of str: Property names that are stored as enumerations.
+    """
+    storage = libsonata.NodeStorage(str(nodes_path))
+    pop = storage.open_population(population_name)
+    return set(pop.enumeration_names)
+
+
+def _build_forced_library_map(nodes_path, population_names):
+    """Build a forced_library_map for populations originating from a single nodes file.
+
+    Reads the categorical property names from the first population in the source
+    file and maps them to all given population names.
+
+    Args:
+        nodes_path: Path to the source SONATA nodes HDF5 file.
+        population_names: Iterable of new population names that will be written.
+
+    Returns:
+        dict: population_name -> set of property names to force as categorical.
+    """
+    storage = libsonata.NodeStorage(str(nodes_path))
+    src_pop_name = next(iter(storage.population_names))
+    src_enumeration_names = _get_enumeration_names(nodes_path, src_pop_name)
+    return {pop_name: src_enumeration_names for pop_name in population_names}
+
+
+def _save_sonata_nodes(nodes_path, df, population_name, forced_library=None):
     """Save a dataframe of nodes (0-based IDs) to sonata file.
 
     Note: using voxcell >= 2.7.1 to load the dataframe and save the result to sonata,
     CellCollection will save the orientation using the default format (quaternions).
+
+    Args:
+        nodes_path: Path where the output SONATA nodes file will be written.
+        df: DataFrame of node properties (0-based index).
+        population_name: Name of the node population.
+        forced_library: Iterable of property names to force as categorical
+            (@library). If None, voxcell uses its default heuristic.
     """
     Path(nodes_path).parent.mkdir(parents=True, exist_ok=True)
     df = df.reset_index(drop=True)
@@ -193,7 +237,7 @@ def _save_sonata_nodes(nodes_path, df, population_name):
     df.index += 1
     cell_collection = voxcell.CellCollection.from_dataframe(df)
     cell_collection.population_name = population_name
-    cell_collection.save_sonata(str(nodes_path), mode="a")
+    cell_collection.save_sonata(str(nodes_path), mode="a", forced_library=forced_library or None)
     # restore the original index
     df.index -= 1
     L.debug("Wrote %s nodes to %s", len(df), nodes_path)
@@ -598,23 +642,33 @@ def _write_edges(
             _check_all_edges_used(h5in, written_edges)
 
 
-def _write_nodes(output, split_nodes, population_to_path=None):
+def _write_nodes(output, split_nodes, population_to_path=None, forced_library_map=None):
     """create all new node populations in separate files
 
     Args:
         output(str): base directory to write node files
         split_nodes(dict): new_population_name -> df
         population_to_path(dict): population_name -> output path
+        forced_library_map(dict): population_name -> iterable of property names
+            to force as categorical (@library). If None or missing key, voxcell
+            uses its default heuristic.
     """
     if population_to_path is None:
         population_to_path = {}
+    if forced_library_map is None:
+        forced_library_map = {}
 
     ret = {}
     for new_population, df in split_nodes.items():
         nodes_path = Path(output) / population_to_path.get(
             new_population, _get_node_file_name(new_population)
         )
-        ret[new_population] = _save_sonata_nodes(nodes_path, df, population_name=new_population)
+        ret[new_population] = _save_sonata_nodes(
+            nodes_path,
+            df,
+            population_name=new_population,
+            forced_library=forced_library_map.get(new_population),
+        )
 
     return ret
 
@@ -690,7 +744,12 @@ def split_population(output, attribute, nodes_path, edges_path):
 
     """
     split_populations = _split_population_by_attribute(nodes_path, attribute)
-    _write_nodes(output, split_populations)
+
+    # Discover which properties are categorical in the source file and preserve
+    # that storage format in all resulting sub-populations.
+    forced_library_map = _build_forced_library_map(nodes_path, split_populations)
+
+    _write_nodes(output, split_populations, forced_library_map=forced_library_map)
 
     id_mapping = IdMapping()
     for pop_name, df in split_populations.items():
@@ -723,7 +782,10 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
     """
     split_populations = _split_population_by_node_set(nodes_path, node_set_name, node_set_path)
 
-    _write_nodes(output, split_populations)
+    # Preserve categorical storage from the source file
+    forced_library_map = _build_forced_library_map(nodes_path, split_populations)
+
+    _write_nodes(output, split_populations, forced_library_map=forced_library_map)
 
     id_mapping = IdMapping()
     for pop_name, df in split_populations.items():
@@ -1273,7 +1335,16 @@ def split_subcircuit(
         )
 
     # --- WRITE phase ---
-    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths)
+
+    # Build forced_library_map: for each population being written, discover which
+    # properties were stored as categorical (@library) in the parent circuit so that
+    # the same storage format is preserved in the subcircuit.
+    forced_library_map = {}
+    for pop_name in split_populations:
+        snap_pop = circuit.nodes[pop_name]
+        forced_library_map[pop_name] = _get_enumeration_names(snap_pop.h5_filepath, pop_name)
+
+    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths, forced_library_map)
 
     # Write biophysical + virtual edges together (they share edge_mappings for neuroglial)
     bio_virt_edge_configs = bio_edge_configs + virt_edge_configs
@@ -1317,7 +1388,12 @@ def split_subcircuit(
         df = circuit.nodes[population_name].get(ids)
         df = _drop_column_with_warning(df, "model_template", population_name)
         nodes_path = Path(output) / population_name / "nodes.h5"
-        new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
+        forced_library = _get_enumeration_names(
+            circuit.nodes[population_name].h5_filepath, population_name
+        )
+        new_node_files[population_name] = _save_sonata_nodes(
+            nodes_path, df, population_name, forced_library=forced_library
+        )
 
     # Write existing external nodes (filtered from parent, skip if biophysical gather handles it)
     for population_name, ids in existing_ext_node_ids.items():
@@ -1326,19 +1402,28 @@ def split_subcircuit(
         df = circuit.nodes[population_name].get(ids)
         df = _drop_column_with_warning(df, "model_template", population_name)
         nodes_path = Path(output) / population_name / "nodes.h5"
-        new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
+        forced_library = _get_enumeration_names(
+            circuit.nodes[population_name].h5_filepath, population_name
+        )
+        new_node_files[population_name] = _save_sonata_nodes(
+            nodes_path, df, population_name, forced_library=forced_library
+        )
 
     # Write newly-externalized nodes
     for population_name, orig_population_name in ext_nodes.items():
         frames = []
+        forced_library = set()
         for source_pop, df in id_mapping.data[population_name].items():
             source_ids = df.index.to_numpy()
             frames.append(circuit.nodes[source_pop].get(source_ids))
+            forced_library |= _get_enumeration_names(
+                circuit.nodes[source_pop].h5_filepath, source_pop
+            )
         combined_df = pd.concat(frames)
         combined_df = _drop_column_with_warning(combined_df, "model_template", population_name)
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(
-            nodes_path, combined_df, population_name
+            nodes_path, combined_df, population_name, forced_library=forced_library
         )
 
     provenance = circuit.config.get("components", {}).get("provenance", {})
