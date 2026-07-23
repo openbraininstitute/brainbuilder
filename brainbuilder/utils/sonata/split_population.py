@@ -202,7 +202,7 @@ def _get_enumeration_names(nodes_path, population_name):
 def _build_forced_library_map(nodes_path, population_names):
     """Build a forced_library_map for populations originating from a single nodes file.
 
-    Reads the categorical property names from the first population in the source
+    Reads the categorical property names from the unique population in the source
     file and maps them to all given population names.
 
     Args:
@@ -213,7 +213,7 @@ def _build_forced_library_map(nodes_path, population_names):
         dict: population_name -> set of property names to force as categorical.
     """
     storage = libsonata.NodeStorage(str(nodes_path))
-    src_pop_name = next(iter(storage.population_names))
+    src_pop_name = _get_unique_population(storage.population_names)
     src_enumeration_names = _get_enumeration_names(nodes_path, src_pop_name)
     return {pop_name: src_enumeration_names for pop_name in population_names}
 
