@@ -1333,7 +1333,9 @@ def split_subcircuit(
         snap_pop = circuit.nodes[pop_name]
         forced_library_map[pop_name] = _get_enumeration_names(snap_pop.h5_filepath, pop_name)
 
-    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths, forced_library=forced_library_map)
+    new_node_files = _write_nodes(
+        output, split_populations, node_pop_to_paths, forced_library=forced_library_map
+    )
 
     # Write biophysical + virtual edges together (they share edge_mappings for neuroglial)
     bio_virt_edge_configs = bio_edge_configs + virt_edge_configs
