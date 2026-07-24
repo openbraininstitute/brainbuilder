@@ -199,25 +199,6 @@ def _get_enumeration_names(nodes_path, population_name):
     return set(pop.enumeration_names)
 
 
-def _build_forced_library_map(nodes_path, population_names):
-    """Build a forced_library_map for populations originating from a single nodes file.
-
-    Reads the categorical property names from the unique population in the source
-    file and maps them to all given population names.
-
-    Args:
-        nodes_path: Path to the source SONATA nodes HDF5 file.
-        population_names: Iterable of new population names that will be written.
-
-    Returns:
-        dict: population_name -> set of property names to force as categorical.
-    """
-    storage = libsonata.NodeStorage(str(nodes_path))
-    src_pop_name = _get_unique_population(storage.population_names)
-    src_enumeration_names = _get_enumeration_names(nodes_path, src_pop_name)
-    return {pop_name: src_enumeration_names for pop_name in population_names}
-
-
 def _save_sonata_nodes(nodes_path, df, population_name, forced_library=None):
     """Save a dataframe of nodes (0-based IDs) to sonata file.
 
@@ -642,21 +623,26 @@ def _write_edges(
             _check_all_edges_used(h5in, written_edges)
 
 
-def _write_nodes(output, split_nodes, population_to_path=None, forced_library_map=None):
+def _write_nodes(output, split_nodes, population_to_path=None, forced_library=None):
     """create all new node populations in separate files
 
     Args:
         output(str): base directory to write node files
         split_nodes(dict): new_population_name -> df
         population_to_path(dict): population_name -> output path
-        forced_library_map(dict): population_name -> iterable of property names
-            to force as categorical (@library). If None or missing key, voxcell
-            uses its default heuristic.
+        forced_library(dict | set | None): If a dict, maps population_name ->
+            iterable of property names to force as categorical. If a set (or list),
+            the same property names are used for all populations.
+            If None, voxcell uses its default heuristic.
     """
     if population_to_path is None:
         population_to_path = {}
-    if forced_library_map is None:
-        forced_library_map = {}
+
+    # Normalize: if forced_library is not a dict, treat it as a shared set for all populations
+    if isinstance(forced_library, dict):
+        forced_library_map = forced_library
+    else:
+        forced_library_map = {pop: forced_library for pop in split_nodes}
 
     ret = {}
     for new_population, df in split_nodes.items():
@@ -745,11 +731,12 @@ def split_population(output, attribute, nodes_path, edges_path):
     """
     split_populations = _split_population_by_attribute(nodes_path, attribute)
 
-    # Discover which properties are categorical in the source file and preserve
-    # that storage format in all resulting sub-populations.
-    forced_library_map = _build_forced_library_map(nodes_path, split_populations)
+    # Preserve categorical properties from the source file in all resulting sub-populations.
+    storage = libsonata.NodeStorage(str(nodes_path))
+    src_pop_name = _get_unique_population(storage.population_names)
+    forced_library = _get_enumeration_names(nodes_path, src_pop_name)
 
-    _write_nodes(output, split_populations, forced_library_map=forced_library_map)
+    _write_nodes(output, split_populations, forced_library=forced_library)
 
     id_mapping = IdMapping()
     for pop_name, df in split_populations.items():
@@ -783,9 +770,11 @@ def simple_split_subcircuit(output, node_set_name, node_set_path, nodes_path, ed
     split_populations = _split_population_by_node_set(nodes_path, node_set_name, node_set_path)
 
     # Preserve categorical storage from the source file
-    forced_library_map = _build_forced_library_map(nodes_path, split_populations)
+    storage = libsonata.NodeStorage(str(nodes_path))
+    src_pop_name = _get_unique_population(storage.population_names)
+    forced_library = _get_enumeration_names(nodes_path, src_pop_name)
 
-    _write_nodes(output, split_populations, forced_library_map=forced_library_map)
+    _write_nodes(output, split_populations, forced_library=forced_library)
 
     id_mapping = IdMapping()
     for pop_name, df in split_populations.items():
@@ -1344,7 +1333,7 @@ def split_subcircuit(
         snap_pop = circuit.nodes[pop_name]
         forced_library_map[pop_name] = _get_enumeration_names(snap_pop.h5_filepath, pop_name)
 
-    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths, forced_library_map)
+    new_node_files = _write_nodes(output, split_populations, node_pop_to_paths, forced_library=forced_library_map)
 
     # Write biophysical + virtual edges together (they share edge_mappings for neuroglial)
     bio_virt_edge_configs = bio_edge_configs + virt_edge_configs
