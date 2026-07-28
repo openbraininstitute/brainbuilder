@@ -45,11 +45,11 @@ def progress_finalize():
 def check_individual_file(nrn_file):
     first_file = f"{nrn_file}.0"
     if not os.path.exists(first_file):
-        print((f">WARNING {first_file} ... does not exist ... SKIP"))
+        print(f">WARNING {first_file} ... does not exist ... SKIP")
         return False
 
     if os.path.exists(nrn_file):
-        print((f">WARNING {nrn_file} ... already exist ... SKIP"))
+        print(f">WARNING {nrn_file} ... already exist ... SKIP")
         return False
 
     return True
@@ -65,13 +65,13 @@ def list_nrnfiles(nrn_dir):
         "nrn_efferent.h5",
     ]
 
-    list_files = ["".join([nrn_dir, os.sep, f]) for f in name_files]
+    list_files = [f"{nrn_dir}{os.sep}{f}" for f in name_files]
     return filter(check_individual_file, list_files)
 
 
 def get_nrnfiles(nrn_dir, only):
     if only != "":
-        return ["".join([nrn_dir, os.sep, only])]
+        return [f"{nrn_dir}{os.sep}{only}"]
     return list_nrnfiles(nrn_dir)
 
 
@@ -106,7 +106,7 @@ def create_merged_file(filename, link=False):
     n = 0
     t1 = time.time()
     progress_print(">>")
-    for i in range(0, total_files):
+    for i in range(total_files):
         n += get_all_dataset(filename, i, dset)
         progress_print(f">> got all keys for file {filename}.{i}")
     progress_finalize()
@@ -115,7 +115,7 @@ def create_merged_file(filename, link=False):
     t1 = time.time()
     progress_print(">>")
     with h5py.File(filename, "w") as merged:
-        for i in range(0, total_files):
+        for i in range(total_files):
             chunk_filename = f"{filename}.{i}"
             if link:
                 progress_print(f">> create external references file {chunk_filename}")
@@ -204,7 +204,7 @@ def _make_nrn_h5_properties(mapping, properties, range_):
     """create the 19 column dataset expected in the nrn.h5 file"""
     dst = np.full((len(range_), 19), fill_value=-1, dtype=np.float64)
 
-    for prop in properties.keys():
+    for prop in properties:
         if prop in mapping:
             dst[:, mapping[prop]] = properties[prop][range_]
     return dst

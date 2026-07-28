@@ -1,10 +1,11 @@
-from pathlib import Path
-from brainbuilder import utils
-import bluepysnap
 import logging
 import shutil
+from pathlib import Path
 
-from brainbuilder.utils.sonata import split_population, clip
+import bluepysnap
+
+from brainbuilder import utils
+from brainbuilder.utils.sonata import clip, split_population
 
 L = logging.getLogger(__name__)
 
