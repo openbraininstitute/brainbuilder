@@ -4,6 +4,7 @@ from pathlib import Path
 
 import bluepysnap
 import h5py
+import libsonata
 import numpy as np
 import pandas as pd
 import pytest
@@ -1556,3 +1557,250 @@ def test_external_populations_preserve_nonstandard_synapse_type(tmp_path):
                 f"Sub-subcircuit: Population '{pop_name}' has type '{pop_config.get('type')}' "
                 f"but expected '{custom_type}'"
             )
+
+
+def test_save_sonata_nodes_preserves_forced_library(tmp_path):
+    """Properties listed in forced_library remain categorical; others stay non-categorical."""
+    import voxcell
+
+    # Create a source nodes file where 'mtype' is categorical (@library) but 'label' is not.
+    # Heuristic: #unique < 0.5 * #total
+    #   mtype: 2 unique / 6 total -> 2 < 3 -> categorical
+    #   label: 5 unique / 6 total -> 5 < 3 -> NOT categorical
+    df_source = pd.DataFrame({
+        "mtype": ["a", "b", "a", "b", "a", "b"],
+        "label": ["x1", "x2", "x3", "x4", "x5", "x1"],
+    })
+    df_source.index += 1
+    cc = voxcell.CellCollection.from_dataframe(df_source)
+    cc.population_name = "pop"
+    src_path = tmp_path / "source_nodes.h5"
+    cc.save_sonata(str(src_path))
+
+    # Verify the source has mtype in @library but not label
+    with h5py.File(src_path, "r") as h5:
+        assert "@library" in h5["nodes/pop/0"]
+        assert "mtype" in h5["nodes/pop/0/@library"]
+        assert "label" not in h5["nodes/pop/0/@library"]
+
+    # Now extract a small subset (2 nodes). Without forced_library, voxcell's heuristic
+    # would NOT create @library for mtype (2 unique / 2 total -> 2 < 1 is False).
+    forced_library = split_population._get_enumeration_names(src_path, "pop")
+    assert forced_library == {"mtype"}
+
+    df_subset = pd.DataFrame({
+        "mtype": ["a", "b"],
+        "label": ["x1", "x2"],
+    })
+    output_path = tmp_path / "output" / "nodes.h5"
+    split_population._save_sonata_nodes(
+        output_path, df_subset, population_name="pop", forced_library=forced_library
+    )
+
+    # Verify: mtype is still categorical, label is still non-categorical
+    with h5py.File(output_path, "r") as h5:
+        assert "@library" in h5["nodes/pop/0"]
+        assert "mtype" in h5["nodes/pop/0/@library"]
+        assert "label" not in h5["nodes/pop/0/@library"]
+        # Verify the actual values are correct
+        mtypes = sonata_utils.get_property(h5["nodes/pop/0"], h5["nodes/pop/0/mtype"][:], "mtype")
+        assert set(mtypes) == {b"a", b"b"}
+        labels = h5["nodes/pop/0/label"][:]
+        assert set(labels) == {b"x1", b"x2"}
+
+
+
+def _create_categorical_circuit(path):
+    """Create a minimal circuit where nodes have categorical properties.
+
+    Population:
+        A: 6 biophysical nodes (IDs 0-5)
+            - mtype: ["a","b","a","b","a","b"] -> 2 unique / 6 total -> categorical
+            - label: 6 unique values -> NOT categorical
+        V1: 4 virtual nodes (IDs 0-3)
+            - model_type: ["virtual"] * 4 -> 1 unique / 4 total -> categorical
+
+    Edges:
+        A (intra): A nodes {2,3,4,5} target A nodes {0,1,0,1} (creates externals)
+        V1->A: V1 nodes {0,1} target A nodes {0,1}
+
+    Node set:
+        "subset": selects A nodes [0, 1] (2 nodes).
+        With 2 nodes and 2 unique mtype values, the heuristic (2 < 1) would NOT
+        make mtype categorical. This is where forced_library is essential.
+    """
+    import voxcell
+
+    path.mkdir(parents=True, exist_ok=True)
+    nodes_dir = path / "networks" / "nodes"
+    edges_dir = path / "networks" / "edges"
+    nodes_dir.mkdir(parents=True)
+    edges_dir.mkdir(parents=True)
+
+    # --- Biophysical nodes ---
+    df = pd.DataFrame({
+        "mtype": ["a", "b", "a", "b", "a", "b"],
+        "label": [f"A_{i}" for i in range(6)],
+        "model_type": ["biophysical"] * 6,
+    })
+    df.index += 1
+    cc = voxcell.CellCollection.from_dataframe(df)
+    cc.population_name = "A"
+    cc.save_sonata(str(nodes_dir / "nodes.h5"))
+
+    # --- Virtual nodes ---
+    df_v = pd.DataFrame({"model_type": ["virtual"] * 4})
+    df_v.index += 1
+    cc_v = voxcell.CellCollection.from_dataframe(df_v)
+    cc_v.population_name = "V1"
+    cc_v.save_sonata(str(nodes_dir / "virtual_nodes_V1.h5"))
+
+    # --- Verify source has @library set up correctly ---
+    with h5py.File(nodes_dir / "nodes.h5", "r") as h5:
+        assert "mtype" in h5["nodes/A/0/@library"]
+        assert "label" not in h5["nodes/A/0/@library"]
+
+    # --- Edges ---
+    # A intra-population: nodes {2,3,4,5} target nodes {0,1,0,1}
+    # Ensures nodes 2-5 project into subset {0,1} and get externalized.
+    with h5py.File(edges_dir / "edges.h5", "w") as h5:
+        ds = h5.create_dataset(
+            "/edges/A/source_node_id", data=np.array([2, 3, 4, 5], dtype=int)
+        )
+        ds.attrs["node_population"] = "A"
+        ds = h5.create_dataset(
+            "/edges/A/target_node_id", data=np.array([0, 1, 0, 1], dtype=int)
+        )
+        ds.attrs["node_population"] = "A"
+        h5.create_dataset("/edges/A/0/delay", data=[0.5] * 4)
+        h5.create_dataset("/edges/A/edge_type_id", data=[-1] * 4)
+
+    libsonata.EdgePopulation.write_indices(
+        str(edges_dir / "edges.h5"), "A", source_node_count=6, target_node_count=6
+    )
+
+    # V1->A: nodes {0,1} target A nodes {0,1} (both in subset)
+    with h5py.File(edges_dir / "virtual_edges_V1.h5", "w") as h5:
+        ds = h5.create_dataset("/edges/V1__A/source_node_id", data=np.array([0, 1], dtype=int))
+        ds.attrs["node_population"] = "V1"
+        ds = h5.create_dataset("/edges/V1__A/target_node_id", data=np.array([0, 1], dtype=int))
+        ds.attrs["node_population"] = "A"
+        h5.create_dataset("/edges/V1__A/0/delay", data=[0.5] * 2)
+        h5.create_dataset("/edges/V1__A/edge_type_id", data=[-1] * 2)
+
+    libsonata.EdgePopulation.write_indices(
+        str(edges_dir / "virtual_edges_V1.h5"), "V1__A",
+        source_node_count=4, target_node_count=6
+    )
+
+    # --- Node set ---
+    node_sets = {
+        "subset": {"population": "A", "node_id": [0, 1]},
+    }
+    dump_json(path / "node_sets.json", node_sets)
+
+    # --- Circuit config ---
+    config = {
+        "version": 2,
+        "manifest": {
+            "$BASE_DIR": ".",
+            "$NETWORK_NODES_DIR": "$BASE_DIR/networks/nodes",
+            "$NETWORK_EDGES_DIR": "$BASE_DIR/networks/edges",
+        },
+        "components": {
+            "morphologies_dir": "$BASE_DIR/morphologies",
+            "biophysical_neuron_models_dir": "$BASE_DIR/emodels",
+        },
+        "node_sets_file": "$BASE_DIR/node_sets.json",
+        "networks": {
+            "nodes": [
+                {
+                    "nodes_file": "$NETWORK_NODES_DIR/nodes.h5",
+                    "populations": {
+                        "A": {"type": "biophysical"},
+                    },
+                },
+                {
+                    "nodes_file": "$NETWORK_NODES_DIR/virtual_nodes_V1.h5",
+                    "populations": {
+                        "V1": {"type": "virtual"},
+                    },
+                },
+            ],
+            "edges": [
+                {
+                    "edges_file": "$NETWORK_EDGES_DIR/edges.h5",
+                    "populations": {
+                        "A": {"type": "chemical"},
+                    },
+                },
+                {
+                    "edges_file": "$NETWORK_EDGES_DIR/virtual_edges_V1.h5",
+                    "populations": {
+                        "V1__A": {"type": "chemical"},
+                    },
+                },
+            ],
+        },
+    }
+    dump_json(path / "circuit_config.json", config)
+    return path / "circuit_config.json"
+
+
+def test_split_subcircuit_preserves_categorical_biophysical(tmp_path):
+    """Biophysical: mtype stays in @library even when subset is too small for the heuristic."""
+    circuit_config = _create_categorical_circuit(tmp_path / "fixture")
+
+    output = tmp_path / "output"
+    split_population.split_subcircuit(
+        output, "subset", str(circuit_config), do_virtual=False, create_external=False
+    )
+
+    # Extracted 2 nodes. mtype has 2 unique / 2 total -> heuristic (2 < 1) would NOT make it
+    # categorical. This verifies forced_library is working.
+    with h5py.File(output / "A" / "nodes.h5", "r") as h5:
+        group = h5["nodes/A/0"]
+        assert "@library" in group, "A: @library should exist"
+        assert "mtype" in group["@library"], "A: mtype should be in @library"
+        assert "label" not in group["@library"], "A: label should NOT be in @library"
+
+
+def test_split_subcircuit_preserves_categorical_virtual(tmp_path):
+    """Virtual: model_type stays in @library after extraction."""
+    circuit_config = _create_categorical_circuit(tmp_path / "fixture")
+
+    output = tmp_path / "output"
+    split_population.split_subcircuit(
+        output, "subset", str(circuit_config), do_virtual=True, create_external=False
+    )
+
+    # V1 nodes {0,1} target A subset {0,1}, so both V1 nodes are extracted.
+    # model_type has 1 unique / 2 total -> heuristic (1 < 1) would NOT make it categorical.
+    # This verifies forced_library is working for virtual populations.
+    v1_path = output / "V1" / "nodes.h5"
+    assert v1_path.exists(), "V1 nodes should be extracted"
+    with h5py.File(v1_path, "r") as h5:
+        group = h5["nodes/V1/0"]
+        assert "@library" in group, "V1: @library should exist"
+        assert "model_type" in group["@library"], "V1: model_type should be in @library"
+
+
+def test_split_subcircuit_preserves_categorical_external(tmp_path):
+    """External: mtype stays in @library for externalized nodes."""
+    circuit_config = _create_categorical_circuit(tmp_path / "fixture")
+
+    output = tmp_path / "output"
+    split_population.split_subcircuit(
+        output, "subset", str(circuit_config), do_virtual=False, create_external=True
+    )
+
+    # A nodes {2,3,4,5} project into subset {0,1} but are not in it -> externalized.
+    # mtype has 2 unique / 4 total -> heuristic (2 < 2) would NOT make it categorical.
+    # This verifies forced_library is working for externalized populations.
+    ext_path = output / "external_A" / "nodes.h5"
+    assert ext_path.exists(), "external_A should be created"
+    with h5py.File(ext_path, "r") as h5:
+        group = h5["nodes/external_A/0"]
+        assert "@library" in group, "external_A: @library should exist"
+        assert "mtype" in group["@library"], "external_A: mtype should be in @library"
+        assert "label" not in group["@library"], "external_A: label should NOT be in @library"
