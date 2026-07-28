@@ -17,7 +17,7 @@ REQUIRED_PATH = click.Path(exists=True, readable=True, dir_okay=False, resolve_p
 DEFAULT_PATH = "/synapses/default/"
 PROPERTIES_PATH = os.path.join(DEFAULT_PATH, "properties")
 
-DEFAULT_CHECK_PROPERTIES = ",".join(
+DEFAULT_CHECK_PROPERTIES = ",".join(  # noqa: FLY002
     [
         "conductance",
         "connected_neurons_post",
@@ -50,7 +50,7 @@ def _get_property_dtypes(path):
     ret = {}
     with h5py.File(path, "r") as h5:
         prop = h5[PROPERTIES_PATH]
-        for p in prop.keys():
+        for p in prop:
             ret[p] = prop[p].dtype
     return ret
 

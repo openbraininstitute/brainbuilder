@@ -2,7 +2,6 @@
 """Tools for working with MVD3"""
 
 import shutil
-from builtins import input  # pylint: disable=redefined-builtin
 
 import click
 import numpy as np

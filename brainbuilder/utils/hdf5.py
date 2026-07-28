@@ -39,7 +39,13 @@ def copy_h5_filtered(src, dst, exclude_paths=None):
             g = g.require_group(part)
         return g
 
-    def walk(src_group, src_rel=PurePosixPath(), dst_rel=PurePosixPath()):
+    def walk(src_group, src_rel=None, dst_rel=None):
+        if src_rel is None:
+            src_rel = PurePosixPath()
+
+        if dst_rel is None:
+            dst_rel = PurePosixPath()
+
         for name, obj in src_group.items():
             src_path = src_rel / name
             src_path_str = str(src_path)

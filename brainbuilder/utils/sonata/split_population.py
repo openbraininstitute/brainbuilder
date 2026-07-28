@@ -21,8 +21,7 @@ from joblib import Parallel, delayed
 from brainbuilder import utils
 from brainbuilder.utils import hdf5
 from brainbuilder.utils.sonata import _layout
-from brainbuilder.utils.sonata.id_mapping import IdMapping, NEW_IDS
-
+from brainbuilder.utils.sonata.id_mapping import NEW_IDS, IdMapping
 
 L = logging.getLogger(__name__)
 
@@ -268,7 +267,7 @@ def _populate_edge_group(
                 raise ValueError(msg)
         else:
             msg = f"Unknown type: {type(ds)}, {name}"
-            raise ValueError(msg)
+            raise TypeError(msg)
 
 
 def _finalize_edges(new_edges):
@@ -1002,7 +1001,7 @@ def _gather_subcircuit_virtual_typed(
     # gather the ids of the virtual populations that are used; within a circuit
     # it's possible that a virtual population points to multiple target populations
     pop_used_source_node_ids = collections.defaultdict(list)
-    for name, edge in virtual_populations.items():
+    for edge in virtual_populations.values():
         target_node_ids = pd.concat(id_mapping.data[edge.target.name].values()).index.to_numpy()
         target_node_ids = bluepysnap.circuit_ids.CircuitNodeIds.from_dict(
             {edge.target.name: target_node_ids}
@@ -1067,8 +1066,7 @@ def _update_config_with_new_paths(output, config, new_population_files, type_):
     def _strip_base_path(path):
         assert path.startswith(output), f"missing output path ({output}) in {path}"
         path = path[len(output) :]
-        if path.startswith("/"):
-            path = path[1:]
+        path = path.removeprefix("/")
         return path
 
     str_type = f"{type_}_file"
@@ -1222,7 +1220,7 @@ def split_subcircuit(
     split_populations = {
         pop_name: pop.get(pop.ids(node_set_name, raise_missing_property=False))
         for pop_name, pop in circuit.nodes.items()
-        if not pop.type == "virtual"
+        if pop.type != "virtual"
     }
     split_populations = {pop_name: df for pop_name, df in split_populations.items() if not df.empty}
 
@@ -1303,8 +1301,7 @@ def split_subcircuit(
         merged_ext_edge_configs.append(cfg)
 
     # Add remaining existing-external configs that have no newly-externalized counterpart
-    for cfg in existing_ext_by_dst.values():
-        merged_ext_edge_configs.append(cfg)
+    merged_ext_edge_configs.extend(existing_ext_by_dst.values())
 
     if merged_ext_edge_configs:
         ext_edge_files = _orchestrate_write_subcircuit_edges(
@@ -1329,7 +1326,7 @@ def split_subcircuit(
         new_node_files[population_name] = _save_sonata_nodes(nodes_path, df, population_name)
 
     # Write newly-externalized nodes
-    for population_name, orig_population_name in ext_nodes.items():
+    for population_name in ext_nodes:
         frames = []
         for source_pop, df in id_mapping.data[population_name].items():
             source_ids = df.index.to_numpy()

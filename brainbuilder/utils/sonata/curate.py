@@ -111,7 +111,7 @@ def add_edge_type_id(edges_file, population_name):
     """
     with h5py.File(edges_file, "r+") as h5f:
         group = h5f[f"edges/{population_name}"]
-        var = list(group["0"])[0]
+        var = next(iter(group["0"]))
         size = group["0"][f"{var}"].size
         if "edge_type_id" not in group:
             group.create_dataset(
@@ -141,6 +141,7 @@ def set_group_attribute(file, root, population, group, attr_name, attr_value, ov
         for key in group_h5:
             if isinstance(group_h5[key], h5py.Dataset):
                 any_ds = group_h5[key]
+        assert any_ds, "could not find Dataset"
         count = len(any_ds)
         if isinstance(attr_value, str):
             if "@library" not in group_h5:
@@ -523,7 +524,7 @@ def update_node_dtypes(h5_file, population_name, population_type) -> list[Update
         if "@library" in group:
             library = set(group["@library"])
 
-        for attribute_name in group.keys():
+        for attribute_name in group:
             if attribute_name in ("@library", "dynamics_params"):
                 continue
             if attribute_name not in property_types:
@@ -539,20 +540,22 @@ def update_node_dtypes(h5_file, population_name, population_type) -> list[Update
             else:
                 parent = group
 
-            if target_dtype != parent[attribute_name].dtype or isinstance(target_dtype, list):
-                if update := _update_dtype(parent, attribute_name, target_dtype):
-                    converted.append(update)
+            if (
+                target_dtype != parent[attribute_name].dtype or isinstance(target_dtype, list)
+            ) and (update := _update_dtype(parent, attribute_name, target_dtype)):
+                converted.append(update)
 
         if "dynamics_params" in group:
             parent = group["dynamics_params"]
-            for param in parent.keys():
+            for param in parent:
                 if param not in dynamics_params:
                     continue
 
                 target_dtype = dynamics_params[param]
-                if target_dtype != parent[param].dtype or isinstance(target_dtype, list):
-                    if update := _update_dtype(parent, param, target_dtype):
-                        converted.append(update)
+                if (target_dtype != parent[param].dtype or isinstance(target_dtype, list)) and (
+                    update := _update_dtype(parent, param, target_dtype)
+                ):
+                    converted.append(update)
 
     return converted
 
@@ -578,13 +581,12 @@ def update_edge_dtypes(
             ("target_node_id", np.uint64),
             ("edge_type_id", np.int64),
         ):
-            if group[name].dtype != expected:
-                if update := _update_dtype(group, name, expected):
-                    converted.append(update)
+            if group[name].dtype != expected and (update := _update_dtype(group, name, expected)):
+                converted.append(update)
 
         group = group["0"]
 
-        for attribute_name in group.keys():
+        for attribute_name in group:
             if attribute_name not in property_types:
                 L.info("Unknown property '%s', leaving alone", attribute_name)
                 continue
@@ -593,8 +595,9 @@ def update_edge_dtypes(
             if target_dtype is str:
                 continue
 
-            if target_dtype != group[attribute_name].dtype or isinstance(target_dtype, list):
-                if update := _update_dtype(group, attribute_name, target_dtype):
-                    converted.append(update)
+            if (target_dtype != group[attribute_name].dtype or isinstance(target_dtype, list)) and (
+                update := _update_dtype(group, attribute_name, target_dtype)
+            ):
+                converted.append(update)
 
     return converted

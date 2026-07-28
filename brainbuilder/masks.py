@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The masks that used to live in voxcell.build."""
 
+import itertools
+
 import numpy as np
 
 
@@ -78,7 +80,7 @@ def regular_convex_polygon_mask(shape, radius, vertex_count):
     mask = np.zeros(shape, dtype=bool)
     point_idx = np.arange(vertex_count + 1)
 
-    for i0, i1 in zip(point_idx[:-1], point_idx[1:]):
+    for i0, i1 in itertools.pairwise(point_idx):
         m = triangular_mask(shape, points[i0], center, points[i1])
         mask |= m
 

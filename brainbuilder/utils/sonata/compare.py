@@ -58,7 +58,7 @@ def assert_circuits_equal(path_a, path_b, strict_node_order=False, strict_edge_o
         f"Node populations differ: {set(circ_a.nodes.keys())} vs {set(circ_b.nodes.keys())}"
     )
 
-    for pop_name in circ_a.nodes.keys():
+    for pop_name in circ_a.nodes:
         orig_a = np.asarray(mapping_a[pop_name]["original_id"], dtype=np.int64)
         orig_b = np.asarray(mapping_b[pop_name]["original_id"], dtype=np.int64)
         if strict_node_order:
@@ -75,7 +75,7 @@ def assert_circuits_equal(path_a, path_b, strict_node_order=False, strict_edge_o
         f"Edge populations differ: {set(circ_a.edges.keys())} vs {set(circ_b.edges.keys())}"
     )
 
-    for edge_name in circ_a.edges.keys():
+    for edge_name in circ_a.edges:
         edge_a = circ_a.edges[edge_name]
         edge_b = circ_b.edges[edge_name]
         src_pop = edge_a.source.name
