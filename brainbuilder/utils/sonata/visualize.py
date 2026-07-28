@@ -128,7 +128,7 @@ def draw_circuit(
             )
 
     # Edges — group duplicates and show count
-    for edge_name, edge in circuit.edges.items():
+    for edge in circuit.edges.values():
         src_name = edge.source.name
         tgt_name = edge.target.name
         src_detailed = src_name in detailed_pops

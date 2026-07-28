@@ -91,7 +91,7 @@ def load_cell_composition(filepath):
 
     https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html#cell-composition-yaml
     """
-    doc_url = "https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html#cell-composition-yaml"  # noqa
+    doc_url = "https://bbpteam.epfl.ch/documentation/projects/circuit-build/latest/bioname.html#cell-composition-yaml"
     content = load_yaml(filepath)
 
     if not (content["version"].startswith("v2") and "neurons" in content):

@@ -283,7 +283,7 @@ def update_projection_efferent_section_type(population, edge_file):
 
     with h5py.File(edge_file, "r+") as h5:
         pop0 = h5["edges"][population]["0"]
-        datalen = len(pop0[list(pop0)[0]])
+        datalen = len(pop0[next(iter(pop0))])
         types = np.full(datalen, int(SectionType.axon))
         reindex.backup_and_create_dataset(pop0, "efferent_section_type", types, np.uint32)
 

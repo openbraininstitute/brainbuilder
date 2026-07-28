@@ -215,7 +215,7 @@ def _column_hierarchy(column_label, layers, region_ids):
 
 def _mosaic_hierarchy(width, layers, region_ids):
     """Build 'hierarchy' dict for 'mosaic' atlas."""
-    columns = sorted(set(col for col, _ in region_ids))
+    columns = sorted({col for col, _ in region_ids})
     return OrderedDict(
         [
             ("id", 65535),
@@ -277,7 +277,7 @@ def app(ctx, layer_names, thickness, voxel_side, output_dir):
     ctx.ensure_object(dict)
     output_dir = os.path.abspath(output_dir)
 
-    logging.basicConfig(level=logging.WARN)
+    logging.basicConfig(level=logging.WARNING)
     L.setLevel(logging.INFO)
 
     names = layer_names.split(",")

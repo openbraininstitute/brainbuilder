@@ -147,13 +147,12 @@ def _write_edge_population(population, source, target, out):
 
 def write_edges_from_syn2(syn2_path, population, source, target, out_h5_path):
     """Export SYN2 to SONATA edge collection."""
-    with h5py.File(syn2_path, "r") as syn2:
-        with h5py.File(out_h5_path, "w") as h5f:
-            assert len(syn2["/synapses"]) == 1
-            syn2_population = next(iter(syn2["/synapses"].values()))
-            _write_edge_population(
-                syn2_population, source, target, h5f.create_group(f"/edges/{population}")
-            )
+    with h5py.File(syn2_path, "r") as syn2, h5py.File(out_h5_path, "w") as h5f:
+        assert len(syn2["/synapses"]) == 1
+        syn2_population = next(iter(syn2["/synapses"].values()))
+        _write_edge_population(
+            syn2_population, source, target, h5f.create_group(f"/edges/{population}")
+        )
 
 
 def validate_node_set(node_set, cells):
@@ -230,7 +229,7 @@ def write_node_set_from_targets(target_files, output_file, cells_path):
     from bluepy import Circuit  # pylint: disable=import-error,import-outside-toplevel
 
     cells = Circuit({"cells": cells_path, "targets": target_files}).cells
-    if not os.path.basename(output_file) == "node_sets.json":
+    if os.path.basename(output_file) != "node_sets.json":
         basename = os.path.basename(output_file)
         L.warning(
             'basename "%s" is not "node_sets.json" change your config file accordingly.', basename
