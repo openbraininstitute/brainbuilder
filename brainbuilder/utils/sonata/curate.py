@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Collection of functions to curate/edit SONATA circuits."""
 
+import copy
 import itertools
 import logging
 from collections.abc import Iterable
@@ -601,3 +602,24 @@ def update_edge_dtypes(
                 converted.append(update)
 
     return converted
+
+
+def remove_populations(circuit_config: dict, network_type: str, names: Iterable[str]) -> dict:
+    """Remove populations by name from 'nodes' or 'edges'.
+
+    Args:
+        circuit_config: circuit config contents
+        network_type: Either "nodes" or "edges".
+        names: List of population names to remove.
+    """
+    names: set = set(names)
+    circuit_config = copy.deepcopy(circuit_config)
+    entries = circuit_config["networks"][network_type]
+
+    for entry in entries:
+        for name in names:
+            entry["populations"].pop(name, None)
+
+    circuit_config["networks"][network_type] = [e for e in entries if e["populations"]]
+
+    return circuit_config

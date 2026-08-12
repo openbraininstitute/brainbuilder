@@ -335,3 +335,56 @@ def test_resize_datatypes(tmp_path):
         curate.UpdatedDtype("/edges/not-default/indices/target_to_source/node_id_to_ranges", np.uint64, np.uint8),
         curate.UpdatedDtype("/edges/not-default/indices/target_to_source/range_to_edge_id", np.uint64, np.uint8),
     ]
+
+
+def test_remove_populations():
+    config = {
+        "networks": {
+            "nodes": [
+                {
+                    "nodes_file": "$NETWORK_NODES_DIR/nodes.h5",
+                    "populations": {
+                        "A": {"type": "biophysical"},
+                        "B": {"type": "biophysical"},
+                        "C": {"type": "biophysical"},
+                    },
+                },
+                {
+                    "nodes_file": "$NETWORK_NODES_DIR/virtual_nodes_V2.h5",
+                    "populations": {"V2": {"type": "virtual"}},
+                },
+            ],
+            "edges": [
+                {
+                    "edges_file": "$NETWORK_EDGES_DIR/edges.h5",
+                    "populations": {
+                        "A__A": {"type": "chemical"},
+                    },
+                },
+                {
+                    "edges_file": "$NETWORK_EDGES_DIR/virtual_edges_V2.h5",
+                    "populations": {"V2__C": {"type": "chemical"}},
+                },
+            ],
+        }
+    }
+    res = curate.remove_populations(config, "nodes", ["B"])
+    pops = res["networks"]["nodes"][0]["populations"]
+    assert "B" not in pops
+    assert "A" in pops
+    assert "C" in pops
+
+    res = curate.remove_populations(config, "nodes", ["A", "B", "C"])
+    assert len(res["networks"]["nodes"]) == 1
+    assert "V2" in res["networks"]["nodes"][0]["populations"]
+
+    res = curate.remove_populations(config, "nodes", ["V2"])
+    assert len(res["networks"]["nodes"]) == 1
+    remaining_files = [e["nodes_file"] for e in res["networks"]["nodes"]]
+    assert "$NETWORK_NODES_DIR/virtual_nodes_V2.h5" not in remaining_files
+
+    res = curate.remove_populations(config, "nodes", ["DOES_NOT_EXIST"])
+    assert config == res
+
+    res = curate.remove_populations(config, "nodes", [])
+    assert config == res
