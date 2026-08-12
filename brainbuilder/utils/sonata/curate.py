@@ -616,15 +616,10 @@ def remove_populations(circuit_config: dict, network_type: str, names: Iterable[
     circuit_config = copy.deepcopy(circuit_config)
     entries = circuit_config["networks"][network_type]
 
-    to_delete = []
-    for i, entry in enumerate(entries):
-        pops = entry["populations"]
+    for entry in entries:
         for name in names:
-            pops.pop(name, None)
-        if not pops:
-            to_delete.append(i)
+            entry["populations"].pop(name, None)
 
-    for i in reversed(to_delete):
-        del entries[i]
+    circuit_config["networks"][network_type] = [e for e in entries if e["populations"]]
 
     return circuit_config
