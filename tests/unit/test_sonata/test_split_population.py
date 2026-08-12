@@ -419,7 +419,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             assert src in nodes
             mtypes = sonata_utils.get_property(nodes[src]["0"], nodes[src]["0/mtype"][:], "mtype")
             assert np.all(mtypes == b"a")
-                
+
 
         assert len(nodes["A/node_type_id"]) == 3
         assert len(nodes["B/node_type_id"]) == 4
@@ -481,7 +481,7 @@ def _check_biophysical_nodes(path, has_virtual, has_external, from_subcircuit=Fa
             "B__B": {"type": "chemical"},
             "B__C": {"type": "chemical"},
             "C__A": {"type": "chemical"},
-        }   
+        }
 
         virtual_node_count = sum(
             population["type"] == "virtual"
@@ -866,7 +866,7 @@ def test_split_subcircuit_with_empty_virtual(tmp_path, circuit, from_subcircuit)
         assert list(h5["edges/V1__B/target_node_id"]) == [0]
 
     assert not (tmp_path / "edges" / "virtual_edges_V2.h5").exists()
-    
+
     config = load_json(tmp_path / "circuit_config.json")
 
     assert "manifest" in config
