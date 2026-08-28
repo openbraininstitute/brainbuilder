@@ -728,6 +728,26 @@ def test_split_subcircuit_strips_model_template_from_externals(tmp_path):
         assert "model_type" in h5["nodes/external_B/0"]
 
 
+def test_split_subcircuit_external_model_type_is_virtual(tmp_path):
+    """Newly-externalized populations must have model_type set to 'virtual'."""
+    output = tmp_path / "output"
+    split_population.split_subcircuit(
+        output,
+        "mtype_a",
+        str(SPLIT_SUBCIRCUIT_DATA_PATH / "circuit_config.json"),
+        do_virtual=False,
+        create_external=True,
+    )
+
+    for pop_name in ("external_A", "external_B"):
+        with h5py.File(output / pop_name / "nodes.h5", "r") as h5:
+            group = h5[f"nodes/{pop_name}/0"]
+            model_types = sonata_utils.get_property(group, group["model_type"][:], "model_type")
+            assert all(v == b"virtual" for v in model_types), (
+                f"{pop_name}: expected all model_type values to be 'virtual', got {list(model_types)}"
+            )
+
+
 def test_split_subcircuit_strips_model_template_from_legacy_externals(tmp_path):
     """model_template should be stripped from pre-existing external populations (legacy files).
 
