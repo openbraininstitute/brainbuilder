@@ -1409,6 +1409,7 @@ def split_subcircuit(
             )
         combined_df = pd.concat(frames)
         combined_df = _drop_column_with_warning(combined_df, "model_template", population_name)
+        combined_df["model_type"] = "virtual"
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(
             nodes_path, combined_df, population_name, forced_library=forced_library
