@@ -1824,3 +1824,205 @@ def test_split_subcircuit_preserves_categorical_external(tmp_path):
         assert "@library" in group, "external_A: @library should exist"
         assert "mtype" in group["@library"], "external_A: mtype should be in @library"
         assert "label" not in group["@library"], "external_A: label should NOT be in @library"
+
+
+def test_drop_non_common_columns():
+    """Only columns present in every frame survive; the rest are dropped."""
+    frame_a = pd.DataFrame({"shared": [1, 2], "only_a": ["x", "y"]})
+    frame_b = pd.DataFrame({"shared": [3, 4], "only_b": ["p", "q"]})
+
+    result = split_population._drop_non_common_columns([frame_a, frame_b], "pop")
+
+    assert [list(df.columns) for df in result] == [["shared"], ["shared"]]
+    # Column order within each frame is preserved and values are untouched.
+    assert list(result[0]["shared"]) == [1, 2]
+    assert list(result[1]["shared"]) == [3, 4]
+
+
+def test_drop_non_common_columns_single_frame_unchanged():
+    """A single frame is returned unchanged (nothing to intersect)."""
+    frame = pd.DataFrame({"a": [1], "b": [2]})
+    result = split_population._drop_non_common_columns([frame], "pop")
+    assert result[0] is frame
+
+
+def _create_preexisting_external_circuit(path):
+    """Create a circuit that already contains a virtual external_A population.
+
+    This mirrors the real-circuit bug: a biophysical population 'A' carries a
+    categorical (@library) property that the pre-existing virtual 'external_A'
+    population does not have. When a subcircuit is extracted with
+    create_external=True, the newly-externalized biophysical nodes are merged
+    with the carried-forward existing external_A nodes. Before the fix, the
+    biophysical-only categorical column got the uint32 fill code 0xFFFFFFFF for
+    the rows coming from external_A, producing out-of-range enum codes.
+
+    Populations:
+        A (biophysical, IDs 0-5):
+            - mtype: categorical (2 unique / 6)
+            - me_combo: categorical, biophysical-only (3 unique / 6)
+            - model_type: "biophysical"
+        external_A (virtual, IDs 0-1):
+            - mtype: categorical
+            - model_type: "virtual"
+            (NO me_combo -> schema differs from biophysical A)
+
+    Edges:
+        A__A: A nodes {2,3,4,5} -> A nodes {0,1,0,1} (externalize 2-5 into subset)
+        external_A__A: external_A nodes {0,1} -> A nodes {0,1}
+
+    Node set:
+        "subset": A nodes [0, 1].
+    """
+    import voxcell
+
+    path.mkdir(parents=True, exist_ok=True)
+    nodes_dir = path / "networks" / "nodes"
+    edges_dir = path / "networks" / "edges"
+    nodes_dir.mkdir(parents=True)
+    edges_dir.mkdir(parents=True)
+
+    # --- Biophysical nodes: carry a biophysical-only categorical 'me_combo' ---
+    df = pd.DataFrame({
+        "mtype": ["a", "b", "a", "b", "a", "b"],
+        "me_combo": ["c0", "c1", "c2", "c0", "c1", "c2"],
+        "model_type": ["biophysical"] * 6,
+    })
+    df.index += 1
+    cc = voxcell.CellCollection.from_dataframe(df)
+    cc.population_name = "A"
+    cc.save_sonata(str(nodes_dir / "nodes.h5"), forced_library=["mtype", "me_combo"])
+
+    # --- Pre-existing virtual external population (reduced schema, no me_combo) ---
+    df_ext = pd.DataFrame({
+        "mtype": ["a", "b"],
+        "model_type": ["virtual"] * 2,
+    })
+    df_ext.index += 1
+    cc_ext = voxcell.CellCollection.from_dataframe(df_ext)
+    cc_ext.population_name = "external_A"
+    cc_ext.save_sonata(str(nodes_dir / "external_A.h5"), forced_library=["mtype"])
+
+    with h5py.File(nodes_dir / "nodes.h5", "r") as h5:
+        assert "me_combo" in h5["nodes/A/0/@library"]
+    with h5py.File(nodes_dir / "external_A.h5", "r") as h5:
+        assert "me_combo" not in h5["nodes/external_A/0"]
+
+    # --- Edges ---
+    with h5py.File(edges_dir / "edges.h5", "w") as h5:
+        ds = h5.create_dataset("/edges/A__A/source_node_id", data=np.array([2, 3, 4, 5], dtype=int))
+        ds.attrs["node_population"] = "A"
+        ds = h5.create_dataset("/edges/A__A/target_node_id", data=np.array([0, 1, 0, 1], dtype=int))
+        ds.attrs["node_population"] = "A"
+        h5.create_dataset("/edges/A__A/0/delay", data=[0.5] * 4)
+        h5.create_dataset("/edges/A__A/edge_type_id", data=[-1] * 4)
+    libsonata.EdgePopulation.write_indices(
+        str(edges_dir / "edges.h5"), "A__A", source_node_count=6, target_node_count=6
+    )
+
+    with h5py.File(edges_dir / "external_A__A.h5", "w") as h5:
+        ds = h5.create_dataset(
+            "/edges/external_A__A/source_node_id", data=np.array([0, 1], dtype=int)
+        )
+        ds.attrs["node_population"] = "external_A"
+        ds = h5.create_dataset(
+            "/edges/external_A__A/target_node_id", data=np.array([0, 1], dtype=int)
+        )
+        ds.attrs["node_population"] = "A"
+        h5.create_dataset("/edges/external_A__A/0/delay", data=[0.5] * 2)
+        h5.create_dataset("/edges/external_A__A/edge_type_id", data=[-1] * 2)
+    libsonata.EdgePopulation.write_indices(
+        str(edges_dir / "external_A__A.h5"), "external_A__A",
+        source_node_count=2, target_node_count=6
+    )
+
+    dump_json(path / "node_sets.json", {"subset": {"population": "A", "node_id": [0, 1]}})
+
+    # A pre-existing external_* population requires an id_mapping in provenance,
+    # otherwise _check_no_reserved_external_populations rejects the circuit.
+    dump_json(path / "id_mapping.json", {})
+
+    config = {
+        "version": 2,
+        "manifest": {
+            "$BASE_DIR": ".",
+            "$NETWORK_NODES_DIR": "$BASE_DIR/networks/nodes",
+            "$NETWORK_EDGES_DIR": "$BASE_DIR/networks/edges",
+        },
+        "components": {
+            "morphologies_dir": "$BASE_DIR/morphologies",
+            "biophysical_neuron_models_dir": "$BASE_DIR/emodels",
+            "provenance": {"id_mapping": "id_mapping.json"},
+        },
+        "node_sets_file": "$BASE_DIR/node_sets.json",
+        "networks": {
+            "nodes": [
+                {
+                    "nodes_file": "$NETWORK_NODES_DIR/nodes.h5",
+                    "populations": {"A": {"type": "biophysical"}},
+                },
+                {
+                    "nodes_file": "$NETWORK_NODES_DIR/external_A.h5",
+                    "populations": {"external_A": {"type": "virtual"}},
+                },
+            ],
+            "edges": [
+                {
+                    "edges_file": "$NETWORK_EDGES_DIR/edges.h5",
+                    "populations": {"A__A": {"type": "chemical"}},
+                },
+                {
+                    "edges_file": "$NETWORK_EDGES_DIR/external_A__A.h5",
+                    "populations": {"external_A__A": {"type": "chemical"}},
+                },
+            ],
+        },
+    }
+    dump_json(path / "circuit_config.json", config)
+    return path / "circuit_config.json"
+
+
+def _enum_out_of_range_counts(nodes_file):
+    """Return {property: n_out_of_range_codes} for every @library enum in a nodes file."""
+    counts = {}
+    with h5py.File(nodes_file, "r") as h5:
+        pop = next(iter(h5["nodes"].keys()))
+        group = h5[f"nodes/{pop}/0"]
+        library = group.get("@library")
+        for prop in library or []:
+            codes = group[prop][:]
+            n_categories = len(library[prop].asstr()[:])
+            if np.issubdtype(codes.dtype, np.integer):
+                counts[prop] = int((codes >= n_categories).sum() + (codes < 0).sum())
+    return counts
+
+
+def test_split_subcircuit_external_merge_no_out_of_range_enums(tmp_path):
+    """Merging sources with different schemas must not create out-of-range enum codes.
+
+    The newly-externalized biophysical nodes (carrying a biophysical-only
+    categorical 'me_combo') are merged with the pre-existing virtual external_A
+    nodes (which lack 'me_combo'). Columns not shared by all merged sources must
+    be dropped so no node ends up with the 0xFFFFFFFF enum fill code.
+    """
+    circuit_config = _create_preexisting_external_circuit(tmp_path / "fixture")
+
+    output = tmp_path / "output"
+    split_population.split_subcircuit(
+        output, "subset", str(circuit_config), do_virtual=False, create_external=True
+    )
+
+    ext_path = output / "external_A" / "nodes.h5"
+    assert ext_path.exists(), "external_A should be created"
+
+    oor = _enum_out_of_range_counts(ext_path)
+    assert all(count == 0 for count in oor.values()), (
+        f"Out-of-range enum codes found in external_A: {oor}"
+    )
+
+    # me_combo is only on some of the merged sources -> it must be dropped,
+    # while mtype (present on all sources) is retained as a categorical.
+    with h5py.File(ext_path, "r") as h5:
+        group = h5["nodes/external_A/0"]
+        assert "me_combo" not in group, "biophysical-only me_combo should be dropped"
+        assert "mtype" in group["@library"], "shared mtype should remain categorical"
