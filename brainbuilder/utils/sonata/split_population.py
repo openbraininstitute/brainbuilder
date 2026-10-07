@@ -180,7 +180,9 @@ def _drop_column_with_warning(df: pd.DataFrame, column: str, population_name: st
     return df.drop(columns=[column])
 
 
-def _drop_non_common_columns(frames: list[pd.DataFrame], population_name: str) -> list[pd.DataFrame]:
+def _drop_non_common_columns(
+    frames: list[pd.DataFrame], population_name: str
+) -> list[pd.DataFrame]:
     """Restrict every frame to the columns present in all of them.
 
     When frames from sources with different schemas are concatenated, the columns
