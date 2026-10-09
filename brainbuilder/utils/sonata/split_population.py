@@ -185,13 +185,6 @@ def _drop_non_common_columns(
 ) -> list[pd.DataFrame]:
     """Restrict every frame to the columns present in all of them.
 
-    When frames from sources with different schemas are concatenated, the columns
-    that only some frames carry end up with placeholder values (NaN, or the uint32
-    0xFFFFFFFF fill code once written as a categorical/@library enum) for the rows
-    that lacked them. Those placeholders are invalid and break SONATA/SNAP
-    validation, so any column that is not shared by every frame is dropped before
-    the concat.
-
     Args:
         frames: List of DataFrames that are about to be concatenated.
         population_name: Population name, used only for the warning message.
@@ -1445,17 +1438,10 @@ def split_subcircuit(
             forced_library |= _get_enumeration_names(
                 circuit.nodes[source_pop].h5_filepath, source_pop
             )
-        # Only keep properties present in every source frame. A property missing from
-        # some frames would get placeholder values (NaN / the uint32 0xFFFFFFFF enum
-        # fill code) for the rows that lacked it after the concat, producing a circuit
-        # that fails SONATA/SNAP validation. This matters when an external population is
-        # fed by sources with different schemas, e.g. a biophysical source (carrying
-        # morphology/me_combo/...) merged with an existing virtual external source.
         frames = _drop_non_common_columns(frames, population_name)
         combined_df = pd.concat(frames)
         combined_df = _drop_column_with_warning(combined_df, "model_template", population_name)
         combined_df["model_type"] = "virtual"
-        # Don't force dropped columns as @library enums.
         forced_library &= set(combined_df.columns)
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(
