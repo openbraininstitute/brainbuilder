@@ -180,6 +180,37 @@ def _drop_column_with_warning(df: pd.DataFrame, column: str, population_name: st
     return df.drop(columns=[column])
 
 
+def _drop_non_common_columns(
+    frames: list[pd.DataFrame], population_name: str
+) -> list[pd.DataFrame]:
+    """Restrict every frame to the columns present in all of them.
+
+    Args:
+        frames: List of DataFrames that are about to be concatenated.
+        population_name: Population name, used only for the warning message.
+
+    Returns:
+        The frames restricted to their common columns (order preserved). If there
+        is a single frame, it is returned unchanged.
+    """
+    if len(frames) <= 1:
+        return frames
+
+    common = set(frames[0].columns)
+    for df in frames[1:]:
+        common &= set(df.columns)
+
+    dropped = sorted(set().union(*(df.columns for df in frames)) - common)
+    if dropped:
+        L.warning(
+            "Population '%s': dropping properties not present in all merged sources: %s",
+            population_name,
+            dropped,
+        )
+
+    return [df[[col for col in df.columns if col in common]] for df in frames]
+
+
 def _get_enumeration_names(nodes_path, population_name):
     """Return the set of property names stored as @library (categorical) in a nodes file.
 
@@ -1407,9 +1438,11 @@ def split_subcircuit(
             forced_library |= _get_enumeration_names(
                 circuit.nodes[source_pop].h5_filepath, source_pop
             )
+        frames = _drop_non_common_columns(frames, population_name)
         combined_df = pd.concat(frames)
         combined_df = _drop_column_with_warning(combined_df, "model_template", population_name)
         combined_df["model_type"] = "virtual"
+        forced_library &= set(combined_df.columns)
         nodes_path = Path(output) / population_name / "nodes.h5"
         new_node_files[population_name] = _save_sonata_nodes(
             nodes_path, combined_df, population_name, forced_library=forced_library
